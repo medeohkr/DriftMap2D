@@ -1,0 +1,47 @@
+[package]
+name = "proteus"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# WebAssembly bindings
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+
+# HTTP requests in WASM
+gloo-net = { version = "0.5", features = ["http"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde-wasm-bindgen = "0.6"
+
+# Random numbers (WASM-compatible)
+rand = "0.8"
+rand_distr = "0.4"
+getrandom = { version = "0.2", features = ["js"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Half-precision floats
+half = "2.4"
+
+# Optional: parallelism (native only, not WASM)
+rayon = { version = "1.10", optional = true }
+
+web-sys = { version = "0.3", features = ["console"] }
+
+[features]
+default = []
+parallel = ["dep:rayon"]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1

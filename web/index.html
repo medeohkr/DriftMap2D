@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Driftmap - PROTEUS Engine</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            background: #1a1a2e;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas" width="800" height="600"></canvas>
+    <div>
+        <button id="stepBtn">Step</button>
+        <button id="animateBtn">Animate</button>
+        <span id="particleCount">Particles: 0</span>
+    </div>
+
+    <script type="module">
+        import init, { Driftmap } from './assets/pkg/proteus.js';
+
+        async function run() {
+            await init();
+            
+            const driftmap = new Driftmap();
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            const stepBtn = document.getElementById('stepBtn');
+            const animateBtn = document.getElementById('animateBtn');
+            const particleCountSpan = document.getElementById('particleCount');
+            
+            let animating = false;
+            let animationId = null;
+            
+            function draw() {
+                const positions = driftmap.get_positions();
+                console.log('Positions count:', positions.length);
+                if (positions.length >= 2) {
+                    console.log('First particle:', positions[0], positions[1]);
+                }
+                console.log("6. Got " + positions.length + " position values");
+                const count = driftmap.active_particle_count();
+                particleCountSpan.textContent = `Particles: ${count}`;
+                
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Simple projection (adjust based on your coordinate system)
+                for (let i = 0; i < positions.length; i += 2) {
+                    const x = positions[i];
+                    const y = positions[i + 1];
+                    
+                    // Scale and center (adjust these numbers to your coordinate range)
+                    const screenX = canvas.width / 2 + x * 2;
+                    const screenY = canvas.height / 2 - y * 2;
+                    
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY, 2, 0, 2 * Math.PI);
+                    ctx.fillStyle = '#4fc3f7';
+                    ctx.fill();
+                }
+            }
+            
+            async function animate() {
+                if (!animating) return;
+                driftmap.step(10);  // 0.1 days per frame
+                const positions = driftmap.get_positions();  // Get fresh each frame
+                draw();
+                animationId = requestAnimationFrame(animate);
+            }
+            
+            stepBtn.addEventListener('click', () => {
+                driftmap.step(10);
+                console.log(`Stepped. Active particles: ${driftmap.active_particle_count()}`);
+                const positions = driftmap.get_positions();  // Get fresh each frame
+                draw();
+            });
+            
+            animateBtn.addEventListener('click', () => {
+                if (animating) {
+                    animating = false;
+                    if (animationId) cancelAnimationFrame(animationId);
+                    animateBtn.textContent = 'Animate';
+                } else {
+                    animating = true;
+                    animateBtn.textContent = 'Stop';
+                    animate();
+                }
+            });
+            
+            draw();
+        }
+        
+        run();
+    </script>
+</body>
+</html>

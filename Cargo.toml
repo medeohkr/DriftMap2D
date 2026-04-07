@@ -1,0 +1,13 @@
+[workspace]
+members = ["proteus"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Leo Ying <leoying.bc@gmail.com>"]
+license = "GPL-3.0"
+repository = "https://github.com/medeohkr/DriftMap"
+
+[workspace.dependencies]
+# Shared dependencies across workspace members can be defined here
