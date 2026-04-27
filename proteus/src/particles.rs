@@ -6,20 +6,7 @@ pub struct Particles {
     // Core position fields (hot — accessed every step)
     pub x: Vec<f32>,
     pub y: Vec<f32>,
-    pub depth: Vec<f32>,
-    
-    // Tracer fields (accessed frequently)
-    pub concentration: Vec<f32>,
-    pub mass: Vec<f32>,
-    pub age: Vec<f32>,
-    
-    // State fields
     pub active: Vec<bool>,
-    
-    // History trails (optional, for visualization)
-    pub history: Vec<Vec<(f32, f32)>>,  // Each particle stores recent positions
-    
-    // Metadata
     pub len: usize,
     pub capacity: usize,
 }
@@ -33,12 +20,7 @@ impl Particles {
         Self {
             x: Vec::with_capacity(capacity),
             y: Vec::with_capacity(capacity),
-            depth: Vec::with_capacity(capacity),
-            concentration: Vec::with_capacity(capacity),
-            mass: Vec::with_capacity(capacity),
-            age: Vec::with_capacity(capacity),
             active: Vec::with_capacity(capacity),
-            history: Vec::with_capacity(capacity),
             len: 0,
             capacity,
         }
@@ -51,21 +33,11 @@ impl Particles {
         &mut self,
         x: f32,
         y: f32,
-        depth: f32,
-        concentration: f32,
-        mass: f32,
-        age: f32,
         active: bool,
-        history: Vec<(f32, f32)>,
     ) -> usize {
         self.x.push(x);
         self.y.push(y);
-        self.depth.push(depth);
-        self.concentration.push(concentration);
-        self.mass.push(mass);
-        self.age.push(age);
         self.active.push(active);
-        self.history.push(history);
         self.len += 1;
         self.len - 1
     }
@@ -83,23 +55,13 @@ impl Particles {
             // Swap with last element
             self.x.swap(index, last);
             self.y.swap(index, last);
-            self.depth.swap(index, last);
-            self.concentration.swap(index, last);
-            self.mass.swap(index, last);
-            self.age.swap(index, last);
             self.active.swap(index, last);
-            self.history.swap(index, last);
         }
         
         // Pop the last element
         self.x.pop();
         self.y.pop();
-        self.depth.pop();
-        self.concentration.pop();
-        self.mass.pop();
-        self.age.pop();
         self.active.pop();
-        self.history.pop();
         
         self.len -= 1;
     }
@@ -127,12 +89,7 @@ impl Particles {
     pub fn clear(&mut self) {
         self.x.clear();
         self.y.clear();
-        self.depth.clear();
-        self.concentration.clear();
-        self.mass.clear();
-        self.age.clear();
         self.active.clear();
-        self.history.clear();
         self.len = 0;
     }
     
@@ -182,13 +139,6 @@ impl Particles {
     pub fn add_to_y(&mut self, delta_y: &[f32]) {
         for i in 0..self.len {
             self.y[i] += delta_y[i];
-        }
-    }
-    
-    /// Scale all concentrations by a factor (e.g., decay).
-    pub fn scale_concentration(&mut self, factor: f32) {
-        for i in 0..self.len {
-            self.concentration[i] *= factor;
         }
     }
     
@@ -258,92 +208,6 @@ impl Particles {
     pub fn reserve(&mut self, additional: usize) {
         self.x.reserve(additional);
         self.y.reserve(additional);
-        self.depth.reserve(additional);
-        self.concentration.reserve(additional);
-        self.mass.reserve(additional);
-        self.age.reserve(additional);
         self.active.reserve(additional);
-        self.history.reserve(additional);
-    }
-    
-    /// Update history for a particle (add current position, limit length).
-    pub fn update_history(&mut self, index: usize, max_len: usize) {
-        if index >= self.len {
-            return;
-        }
-        
-        let current = (self.x[index], self.y[index]);
-        let hist = &mut self.history[index];
-        
-        hist.push(current);
-        if hist.len() > max_len {
-            hist.remove(0);
-        }
-    }
-    
-    /// Update history for all active particles.
-    pub fn update_all_histories(&mut self, max_len: usize) {
-        for i in 0..self.len {
-            if self.active[i] {
-                self.update_history(i, max_len);
-            }
-        }
-    }
-}
-
-// ========== TESTS ==========
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_add_particle() {
-        let mut particles = Particles::new(10);
-        let idx = particles.add_particle(1.0, 2.0, 0.0, 1.0, 1.0, 0.0, true, vec![]);
-        
-        assert_eq!(particles.len, 1);
-        assert_eq!(particles.x[idx], 1.0);
-        assert_eq!(particles.y[idx], 2.0);
-    }
-    
-    #[test]
-    fn test_remove_particle() {
-        let mut particles = Particles::new(10);
-        particles.add_particle(1.0, 2.0, 0.0, 1.0, 1.0, 0.0, true, vec![]);
-        particles.add_particle(3.0, 4.0, 0.0, 1.0, 1.0, 0.0, true, vec![]);
-        
-        assert_eq!(particles.len, 2);
-        
-        particles.remove_particle(0);
-        
-        assert_eq!(particles.len, 1);
-        assert_eq!(particles.x[0], 3.0);
-        assert_eq!(particles.y[0], 4.0);
-    }
-    
-    #[test]
-    fn test_active_count() {
-        let mut particles = Particles::new(10);
-        particles.add_particle(1.0, 2.0, 0.0, 1.0, 1.0, 0.0, true, vec![]);
-        particles.add_particle(3.0, 4.0, 0.0, 1.0, 1.0, 0.0, false, vec![]);
-        particles.add_particle(5.0, 6.0, 0.0, 1.0, 1.0, 0.0, true, vec![]);
-        
-        assert_eq!(particles.active_count(), 2);
-    }
-    
-    #[test]
-    fn test_bounding_box() {
-        let mut particles = Particles::new(10);
-        particles.add_particle(1.0, 2.0, 0.0, 1.0, 1.0, 0.0, true, vec![]);
-        particles.add_particle(10.0, 20.0, 0.0, 1.0, 1.0, 0.0, true, vec![]);
-        particles.add_particle(100.0, 200.0, 0.0, 1.0, 1.0, 0.0, false, vec![]);
-        
-        let (xmin, xmax, ymin, ymax) = particles.bounding_box();
-        
-        assert_eq!(xmin, 1.0);
-        assert_eq!(xmax, 10.0);
-        assert_eq!(ymin, 2.0);
-        assert_eq!(ymax, 20.0);
     }
 }
