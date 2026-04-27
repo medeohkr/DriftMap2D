@@ -30,7 +30,7 @@ LAT_MIN = -80.0
 LAT_MAX = 90.0
 
 # Your 4 depth levels (values as they appear in filenames)
-DEPTH_VALUES = [0, 40, 92, 318]     # meters
+DEPTH_VALUES = [0]     # meters
 
 # Number of tiles
 N_LON_TILES = int(360 / TILE_SIZE)   # 72

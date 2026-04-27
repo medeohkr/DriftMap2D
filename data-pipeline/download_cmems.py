@@ -1,20 +1,20 @@
 import copernicusmarine
-from datetime import datetime
+from datetime import datetime, timedelta
 
 copernicusmarine.login()
 
-DEPTHS = [0.49402499198913574, 40.344051361083984, 92.3260726928711, 318.1274108886719,]
-DATE_TIME_START = datetime(2011, 1, 1)
-DATE_TIME_END = datetime(2013, 12, 31)
+DEPTHS = [0.49402499198913574]
+DATE_TIME_START = datetime(2015, 11, 1)
+DATE_TIME_END = datetime(2015, 12, 31)
 
 current_date = DATE_TIME_START
 
 while current_date <= DATE_TIME_END:
     # End of month
     if current_date.month == 12:
-        end_date = datetime(current_date.year + 1, 1, 1)
+        end_date = datetime(current_date.year + 1, 1, 1) - timedelta(days=1)
     else:
-        end_date = datetime(current_date.year, current_date.month + 1, 1)
+        end_date = datetime(current_date.year, current_date.month + 1, 1) - timedelta(days=1)
     
     start_str = current_date.strftime("%Y-%m-%dT%H:%M:%S")
     end_str = end_date.strftime("%Y-%m-%dT%H:%M:%S")
@@ -24,7 +24,7 @@ while current_date <= DATE_TIME_END:
         
         copernicusmarine.subset(
             dataset_id="cmems_mod_glo_phy_my_0.083deg_P1D-m",
-            variables=["vo", "uo"],
+            variables=["vo", "uo", "mlotst"],
             minimum_longitude=-180,
             maximum_longitude=179.9166717529297,
             minimum_latitude=-80,
@@ -33,10 +33,10 @@ while current_date <= DATE_TIME_END:
             end_datetime=end_str,
             minimum_depth=depth,
             maximum_depth=depth,
-            output_directory="glorys_3yr_global",
+            output_directory="data/glorys_10yr_global",
             output_filename=f"glorys_{current_date.strftime('%Y%m')}_depth_{depth:.0f}.nc"
         )
     
-    current_date = end_date
+    current_date = end_date + timedelta(days=1)
 
 print("All downloads finished!")

@@ -1,0 +1,140 @@
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        .sidebar {
+            position: absolute;
+            height: 100vh;
+            left: 0px;
+            top: 0px;
+            width: 250px;
+            background: rgb(27, 27, 27);
+            box-shadow: 2px 0px 5px rgb(0, 0, 0);
+        }
+
+        .header-container {
+            background-color: rgb(18, 18, 18);
+            width: 250px;
+            margin-bottom: 30px;
+        }
+        .logo-container {
+            display: inline-block;
+            padding: 15px;
+            width: 50px;
+        }
+        .logo {
+            width: 50px;
+        }
+        .title-container {
+            display: inline-block;
+            padding-top: 25px;
+            padding-left: 8px;
+            width: 100px;
+            vertical-align: top;
+        }
+        .title-text{
+            color: white;
+            font-family: Montserrat;
+            font-size: 30px;
+            font-weight: 500;
+        }
+        .release-display-container {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgb(40, 40, 40);
+            padding: 10px;
+            padding-left: 20px;
+            padding-right: 20px;
+            white-space: nowrap;
+            height: 95px;
+            margin-bottom: 30px;
+            box-shadow: 3px 3px 5px black;
+        }
+        .lat-field {
+            position: absolute;
+            top: 40px;
+            right: 10px;
+            width: 50px;
+            display: flex;
+            background: rgba(0, 0, 0, 0.702);
+            color: white;
+            padding: 5px;
+            z-index: 1000;
+            font-family: monospace;
+            white-space: nowrap;
+            text-align: center;
+            font-size: 12px;
+            border: none;
+        }
+        .lon-field {
+            position: absolute;
+            top: 75px;
+            right: 10px;
+            width: 50px;
+            display: flex;
+            background: rgba(0, 0, 0, 0.702);
+            color: white;
+            padding: 5px;
+            z-index: 1000;
+            font-family: monospace;
+            white-space: nowrap;
+            text-align: center;
+            font-size: 12px;
+            border: none;
+        }
+        
+        .release-text {
+            font-family: Montserrat;
+            font-weight: 300;
+            color: rgb(167, 167, 167);
+            display: flex;
+            justify-content: center;
+        }
+
+        .lat-text {
+            position: absolute;
+            top: 40px;
+            left: 30px;
+            width: 50px;
+            color: rgb(187, 187, 187);
+            font-family: Montserrat;
+            font-size: 12px;
+        }
+        .lon-text {
+            position: absolute;
+            top: 75px;
+            left: 30px;
+            width: 50px;
+            color: rgb(187, 187, 187);
+            font-family: Montserrat;
+            font-size: 12px;
+        }
+        .btn-primary {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #244886;
+            border: none;
+            color: white;
+            padding: 15px;
+            border-radius: 2px;
+            font-family: Montserrat;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            margin-top: 10px;
+            white-space: nowrap;
+            box-shadow: 1.5px 1.5px 5px rgb(0, 0, 0);
+        }
+
+        .btn-primary:hover {
+            opacity: 0.7;
+}
