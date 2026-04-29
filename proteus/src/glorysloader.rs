@@ -98,10 +98,10 @@ impl GlorysLoader {
             }
             
             self.pending.insert(tile.clone());
-            web_sys::console::log_1(&format!(
-                "CACHE INSERT: ({}, {}) day={}. Cache size now: {}", 
-                tile.lon_idx, tile.lat_idx, tile.day, self.cache.len()
-            ).into());
+            // web_sys::console::log_1(&format!(
+            //     "CACHE INSERT: ({}, {}) day={}. Cache size now: {}", 
+            //     tile.lon_idx, tile.lat_idx, tile.day, self.cache.len()
+            // ).into());
             let url = self.tile_url(date, tile);
             
             match self.load_tile(&url).await {
@@ -296,7 +296,7 @@ pub fn get_velocity(&self, lon: f32, lat: f32, depth_m: f32, day: u32) -> Option
     }
     
     async fn load_tile(&self, url: &str) -> Result<TileData, LoaderError> {
-        web_sys::console::log_1(&format!("Trying to load: {}", url).into());
+        // web_sys::console::log_1(&format!("Trying to load: {}", url).into());
         let response = Request::get(url)
             .send()
             .await

@@ -32,7 +32,7 @@ impl Proteus {
             lat: lat,
             schedule: Schedule::Instant,
             total_mass_bq: 16.0e15,
-            particle_count: 1000,
+            particle_count: 5000,
             spread_km: 20.0,
             depth_m: 0.0,
         };
@@ -157,5 +157,11 @@ impl Proteus {
         // TODO: Clear particles and reinitialize
         //web_sys::console::log_1("Simulation reset".into());
     }
-
+    pub fn current_date_int(&self) -> u32 {
+        let current_date = self.start_date + Days::new(self.days_since_start as u64);
+        let year = current_date.year();
+        let month = current_date.month();
+        let day = current_date.day();
+        (year as u32 * 10000) + (month * 100) + day
+    }
 }

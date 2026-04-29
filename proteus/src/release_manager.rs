@@ -96,11 +96,6 @@ impl ReleaseManager {
             .map(|_| {
                 let dx = self.normal.sample(&mut self.rng);
                 let dy = self.normal.sample(&mut self.rng);
-                web_sys::console::log_1(&format!(
-                        "DEBUG: dx{:.6}, dy={:.6}",
-                        dx, 
-                        dy,
-                    ).into());
                 let lon = self.config.lon + dx * km_to_deg;
                 let lat = self.config.lat + dy * km_to_deg;
                 
