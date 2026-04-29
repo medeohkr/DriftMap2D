@@ -1,9 +1,11 @@
 import xarray as xr
 from pathlib import Path
 
-input = Path("data\glorys_10yr_global\glorys_201001_depth_0.nc")
+input = Path("data/forecast/glorys_202505.nc")
 
 ds = xr.open_dataset(input)
-depths = ds['depth'].values
+time = ds['time'].values
+lon = ds['longitude'].values
 print(ds.dims)
-print(depths)
+print(time)
+print(lon)

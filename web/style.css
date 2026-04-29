@@ -10,6 +10,10 @@
 
         .sidebar {
             position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            row-gap: 20px;
             height: 100vh;
             left: 0px;
             top: 0px;
@@ -21,7 +25,6 @@
         .header-container {
             background-color: rgb(18, 18, 18);
             width: 250px;
-            margin-bottom: 30px;
         }
         .logo-container {
             display: inline-block;
@@ -45,28 +48,47 @@
             font-weight: 500;
         }
         .release-display-container {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
+            display: grid;
             background-color: rgb(40, 40, 40);
-            padding: 10px;
-            padding-left: 20px;
-            padding-right: 20px;
             white-space: nowrap;
-            height: 95px;
-            margin-bottom: 30px;
+            height: 100px;
+            width: 175px;
             box-shadow: 3px 3px 5px black;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: 1fr 0.3fr 1fr;
+            place-items: center;
+        }
+        .release-text {
+            grid-column: span 2;
+            grid-row-start: 1;
+            font-family: Montserrat;
+            font-weight: 500;
+            color: rgb(167, 167, 167);
+        }
+
+        .lat-text {
+            grid-column-start: 1;
+            grid-row-start: 2;
+            color: rgb(187, 187, 187);
+            font-family: Montserrat;
+            font-size: 12px;
+            text-align: center;
+        }
+        .lon-text {
+            grid-column-start: 2;
+            grid-row-start: 2;
+            color: rgb(187, 187, 187);
+            font-family: Montserrat;
+            font-size: 12px;
+            text-align: center;
         }
         .lat-field {
-            position: absolute;
-            top: 40px;
-            right: 10px;
-            width: 50px;
-            display: flex;
+            width: 60px;
+            grid-column-start: 1;
+            grid-row-start: 3;
             background: rgba(0, 0, 0, 0.702);
             color: white;
             padding: 5px;
-            z-index: 1000;
             font-family: monospace;
             white-space: nowrap;
             text-align: center;
@@ -74,15 +96,12 @@
             border: none;
         }
         .lon-field {
-            position: absolute;
-            top: 75px;
-            right: 10px;
-            width: 50px;
-            display: flex;
+            width: 60px;
+            grid-column-start: 2;
+            grid-row-start: 3;
             background: rgba(0, 0, 0, 0.702);
             color: white;
             padding: 5px;
-            z-index: 1000;
             font-family: monospace;
             white-space: nowrap;
             text-align: center;
@@ -90,32 +109,6 @@
             border: none;
         }
         
-        .release-text {
-            font-family: Montserrat;
-            font-weight: 300;
-            color: rgb(167, 167, 167);
-            display: flex;
-            justify-content: center;
-        }
-
-        .lat-text {
-            position: absolute;
-            top: 40px;
-            left: 30px;
-            width: 50px;
-            color: rgb(187, 187, 187);
-            font-family: Montserrat;
-            font-size: 12px;
-        }
-        .lon-text {
-            position: absolute;
-            top: 75px;
-            left: 30px;
-            width: 50px;
-            color: rgb(187, 187, 187);
-            font-family: Montserrat;
-            font-size: 12px;
-        }
         .btn-primary {
             position: absolute;
             bottom: 30px;
@@ -137,4 +130,11 @@
 
         .btn-primary:hover {
             opacity: 0.7;
-}
+        }
+        .simulation-info {
+            color: white;
+            font-family: Montserrat;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
