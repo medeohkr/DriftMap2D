@@ -22,17 +22,17 @@ pub fn setup_panic_hook() {
 #[wasm_bindgen]
 impl Proteus {
     #[wasm_bindgen(constructor)]
-    pub fn new() -> Self {
+    pub fn new(lon: f32, lat: f32) -> Self {
         // Set start date to March 1, 2011
         let start_date = NaiveDate::from_ymd_opt(2025, 6, 1).unwrap();
         
         // Configure release (default: Fukushima)
         let release_config = ReleaseConfig {
-            lon: 142.03,
-            lat: 37.42,
+            lon: lon,
+            lat: lat,
             schedule: Schedule::Instant,
             total_mass_bq: 16.0e15,
-            particle_count: 10000,
+            particle_count: 1000,
             spread_km: 20.0,
             depth_m: 0.0,
         };
