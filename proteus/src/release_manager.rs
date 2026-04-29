@@ -90,16 +90,19 @@ impl ReleaseManager {
     
     /// Generate particle seeds with Gaussian spread around release point
     fn generate_particles(&mut self, count: usize) -> Vec<ParticleSeed> {
-        let lon_scale = self.config.spread_km / 111.0;  // km to degrees (approx)
-        let lat_scale = lon_scale;
+        let km_to_deg = 1.0/111.0;
         
         (0..count)
             .map(|_| {
                 let dx = self.normal.sample(&mut self.rng);
                 let dy = self.normal.sample(&mut self.rng);
-                
-                let lon = self.config.lon + dx * lon_scale;
-                let lat = self.config.lat + dy * lat_scale;
+                web_sys::console::log_1(&format!(
+                        "DEBUG: dx{:.6}, dy={:.6}",
+                        dx, 
+                        dy,
+                    ).into());
+                let lon = self.config.lon + dx * km_to_deg;
+                let lat = self.config.lat + dy * km_to_deg;
                 
                 ParticleSeed {
                     lon,

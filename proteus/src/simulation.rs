@@ -33,8 +33,9 @@ impl Simulation {
     }
     
     /// Update all particles using the chosen integrator
-    pub fn update_particles(&mut self, dt: f32, current_day: f32, velocity_fn: impl Fn(f32, f32, f32) -> (f32, f32) + Copy) {
+    pub fn update_particles(&mut self, dt_days: f32, current_day: f32, velocity_fn: impl Fn(f32, f32, f32) -> (f32, f32) + Copy) {
         // Release new particles if any
+        let dt: f32 = dt_days * 86400.0;
         if let Some(seeds) = self.release_manager.update(current_day, dt) {
             for seed in seeds {
                 self.particles.add_particle(
@@ -49,7 +50,7 @@ impl Simulation {
                 );
             }
         }
-        
+
         // Update all active particles
         for i in 0..self.particles.len {
             if !self.particles.active[i] {
