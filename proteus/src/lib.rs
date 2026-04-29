@@ -10,4 +10,5 @@ pub mod wasm;
 pub use particles::Particles;
 pub use integrators::{euler_step, midpoint_step, rk4_step};
 pub use glorysloader::{GlorysLoader, TileKey, TileData, LoaderError};
+pub use release_manager::{ReleaseConfig, Schedule, ReleaseManager};
 pub use simulation::{Simulation, SimulationConfig, Integrator};

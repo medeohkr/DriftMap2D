@@ -4,12 +4,12 @@ from pathlib import Path
 import struct
 
 
-DATA_DIR = Path("data/glorys_10yr_global")
-OUTPUT_DIR = Path("data/glorys_tiles_surface")
+DATA_DIR = Path("data/forecast")
+OUTPUT_DIR = Path("data/forecast_tiles")
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-TILE_SIZE = 10.0                     # degrees
+TILE_SIZE = 5.0                     # degrees
 LON_STEP = 1/12                     # 0.08333 degrees
 LAT_STEP = 1/12
 
@@ -49,7 +49,7 @@ def main():
 
         u = ds['uo'].isel(depth=0)
         v = ds['vo'].isel(depth=0)
-        m = ds['mlotst']
+        # m = ds['mlotst']
         lons = ds['longitude'].values
         lats = ds['latitude'].values
         time = ds.dims['time']
@@ -57,9 +57,9 @@ def main():
         for t in range(time):
             u_t = u.isel(time=t).values
             v_t = v.isel(time=t).values
-            m_t = m.isel(time=t).values
-
-            day_dir = month_dir / f"{t:02d}"
+            # m_t = m.isel(time=t).values
+            day = t + 1
+            day_dir = month_dir / f"{day:02d}"
             day_dir.mkdir(parents=True, exist_ok=True)
 
             for tilex in range(N_LON_TILES):
@@ -74,7 +74,7 @@ def main():
 
                     u_tile = u_t[np.ix_(lats_indices, lons_indices)]
                     v_tile = v_t[np.ix_(lats_indices, lons_indices)]
-                    m_tile = m_t[np.ix_(lats_indices, lons_indices)]
+                    # m_tile = m_t[np.ix_(lats_indices, lons_indices)]
 
                     tile_file = day_dir / f"{tilex:03d}_{tiley:03d}.bin"
 
@@ -83,7 +83,7 @@ def main():
                         f.write(struct.pack('<I', len(lats_indices)))
                         u_tile.astype(np.float16).tofile(f)
                         v_tile.astype(np.float16).tofile(f)
-                        m_tile.astype(np.float16).tofile(f)
+                        # m_tile.astype(np.float16).tofile(f)
         ds.close()
 
 if __name__ == "__main__":

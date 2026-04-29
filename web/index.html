@@ -27,20 +27,23 @@
             </div>
         </div>
         <div class="release-display-container">
-            <input type="text" class="lat-field" value="N/A">
-            <input type="text" class="lon-field" value="N/A">
             <span class="release-text">Release Location:</span>
             <span class="lat-text">Latitude:</span>
             <span class="lon-text">Longitude:</span>
+            <input type="text" class="lat-field" value="N/A">
+            <input type="text" class="lon-field" value="N/A">
+
         </div>
         <div class="simulation-btn-container">
             <button id="start-simulation" class="btn-primary">Start Simulation</button>
         </div>
-
-        
+        <div class="simulation-info">
+            <span>Day:</span>
+            <span id="current-day">0.0</span>
+        </div>
     </div>
 
     <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
 </body>
 </html>

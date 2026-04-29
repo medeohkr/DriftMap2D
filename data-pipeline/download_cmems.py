@@ -4,8 +4,8 @@ from datetime import datetime, timedelta
 copernicusmarine.login()
 
 DEPTHS = [0.49402499198913574]
-DATE_TIME_START = datetime(2015, 11, 1)
-DATE_TIME_END = datetime(2015, 12, 31)
+DATE_TIME_START = datetime(2025, 5, 1)
+DATE_TIME_END = datetime(2026, 4, 30)
 
 current_date = DATE_TIME_START
 
@@ -23,18 +23,18 @@ while current_date <= DATE_TIME_END:
         print(f"Downloading: {start_str} to {end_str}, depth {depth:.0f}m")
         
         copernicusmarine.subset(
-            dataset_id="cmems_mod_glo_phy_my_0.083deg_P1D-m",
-            variables=["vo", "uo", "mlotst"],
+            dataset_id="cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m",
+            variables=["uo", "vo"],
             minimum_longitude=-180,
-            maximum_longitude=179.9166717529297,
+            maximum_longitude=179.91668701171875,
             minimum_latitude=-80,
             maximum_latitude=90,
             start_datetime=start_str,
             end_datetime=end_str,
             minimum_depth=depth,
             maximum_depth=depth,
-            output_directory="data/glorys_10yr_global",
-            output_filename=f"glorys_{current_date.strftime('%Y%m')}_depth_{depth:.0f}.nc"
+            output_directory="data/forecast",
+            output_filename=f"glorys_{current_date.strftime('%Y%m')}.nc"
         )
     
     current_date = end_date + timedelta(days=1)

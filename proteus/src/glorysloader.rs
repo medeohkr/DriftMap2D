@@ -16,7 +16,7 @@ pub struct TileKey {
 pub struct TileData {
     pub u: Vec<f32>,
     pub v: Vec<f32>,
-    pub m: Vec<f32>,
+    pub depths: Vec<f32>,
     pub n_lon: usize,
     pub n_lat: usize,
 }
@@ -71,7 +71,7 @@ impl GlorysLoader {
             lat_step,
             n_lon,
             n_lat,
-            tile_size: 10.0,
+            tile_size: 5.0,
             base_url: base_url.to_string(),
             current_day: 0,
             cache: HashMap::new(),
@@ -98,7 +98,10 @@ impl GlorysLoader {
             }
             
             self.pending.insert(tile.clone());
-
+            web_sys::console::log_1(&format!(
+                "CACHE INSERT: ({}, {}) day={}. Cache size now: {}", 
+                tile.lon_idx, tile.lat_idx, tile.day, self.cache.len()
+            ).into());
             let url = self.tile_url(date, tile);
             
             match self.load_tile(&url).await {
@@ -115,8 +118,9 @@ impl GlorysLoader {
         Ok(())
     }
     
-    pub fn get_velocity(&self, lon: f32, lat: f32, day: u32) -> Option<(f32, f32)> {
+    pub fn get_velocity(&self, lon: f32, lat: f32, depth_m: f32, day: u32) -> Option<(f32, f32)> {
         let key = self.get_tile_key(lon, lat, day);
+
         let tile_data = match self.cache.get(&key) {
             Some(data) => data,
             None => {
@@ -124,17 +128,32 @@ impl GlorysLoader {
                 return None;
             }
         };
-        let (lon_cell, lat_cell) = self.get_cell_index(lon, lat, tile_data);
-        let idx = lat_cell * tile_data.n_lon + lon_cell;
         
-        let u0 = tile_data.u[idx];
-        let v0 = tile_data.v[idx];
-        let u1 = tile_data.u[idx + 1];
-        let v1 = tile_data.v[idx + 1];
-        let u2 = tile_data.u[idx + tile_data.n_lon];
-        let v2 = tile_data.v[idx + tile_data.n_lon];
-        let u3 = tile_data.u[idx + tile_data.n_lon + 1];
-        let v3 = tile_data.v[idx + tile_data.n_lon + 1];
+        let (lon_cell, lat_cell) = self.get_cell_index(lon, lat, tile_data);
+        let (depth_idx, t) = find_depth_indices(&tile_data.depths, depth_m);
+
+        let stride = tile_data.n_lon * tile_data.n_lat;
+        let idx_bot = depth_idx * stride + lat_cell * tile_data.n_lon + lon_cell;
+        
+        let u0 = tile_data.u[idx_bot];
+        let v0 = tile_data.v[idx_bot];
+        let u1 = tile_data.u[idx_bot + 1];
+        let v1 = tile_data.v[idx_bot + 1];
+        let u2 = tile_data.u[idx_bot + tile_data.n_lon];
+        let v2 = tile_data.v[idx_bot + tile_data.n_lon];
+        let u3 = tile_data.u[idx_bot + tile_data.n_lon + 1];
+        let v3 = tile_data.v[idx_bot + tile_data.n_lon + 1];
+        
+        let idx_top = (depth_idx + 1) * stride + lat_cell * tile_data.n_lon + lon_cell;
+        let u_zlerp0 = lerp(u0, tile_data.u[idx_top], t);
+        let v_zlerp0 = lerp(v0, tile_data.v[idx_top], t);
+        let u_zlerp1 = lerp(u1, tile_data.u[idx_top + 1], t);
+        let v_zlerp1 = lerp(v1, tile_data.v[idx_top + 1], t);
+        let u_zlerp2 = lerp(u2, tile_data.u[idx_top + tile_data.n_lon], t);
+        let v_zlerp2 = lerp(v2, tile_data.v[idx_top + tile_data.n_lon], t);
+        let u_zlerp3 = lerp(u3, tile_data.u[idx_top + tile_data.n_lon + 1], t);
+        let v_zlerp3 = lerp(v3, tile_data.v[idx_top + tile_data.n_lon + 1], t);
+
         
         let lon_min = self.min_lon + (key.lon_idx as f32) * self.tile_size;
         let lat_min = self.min_lat + (key.lat_idx as f32) * self.tile_size;
@@ -142,24 +161,27 @@ impl GlorysLoader {
         let x_frac = (lon - lon_min) / self.lon_step;
         let y_frac = (lat - lat_min) / self.lat_step;
         
-        let u_interp = lerp(
-            lerp(u0, u1, x_frac),
-            lerp(u2, u3, x_frac),
+        let u_xyzlerp = lerp(
+            lerp(u_zlerp0, u_zlerp1, x_frac),
+            lerp(u_zlerp2, u_zlerp3, x_frac),
             y_frac,
         );
-        let v_interp = lerp(
-            lerp(v0, v1, x_frac),
-            lerp(v2, v3, x_frac),
+        let v_xyzlerp = lerp(
+            lerp(v_zlerp0, v_zlerp1, x_frac),
+            lerp(v_zlerp2, v_zlerp3, x_frac),
             y_frac,
         );
         
-        Some((u_interp, v_interp))
-
-
+        Some((u_xyzlerp, v_xyzlerp))
     }
     
     fn fetch_tiles(&self, particles: &Particles) -> HashSet<TileKey> {
         let (xmin, xmax, ymin, ymax) = particles.bounding_box();
+        
+        if xmin == f32::MAX {
+            return HashSet::new();
+        }
+        
         let lon_min_idx = ((xmin - self.min_lon) / self.tile_size).floor() as usize;
         let lon_max_idx = ((xmax - self.min_lon) / self.tile_size).ceil() as usize;
         let lat_min_idx = ((ymin - self.min_lat) / self.tile_size).floor() as usize;
@@ -200,11 +222,23 @@ impl GlorysLoader {
         
         let n_lon = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
         let n_lat = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]) as usize;
+        let n_depths = u32::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]) as usize;
+        
+        let mut depths = Vec::with_capacity(n_depths);
+        let mut offset = 12;
+        for _ in 0..n_depths {
+            let depth_val = f32::from_le_bytes([
+                bytes[offset],
+                bytes[offset + 1],
+                bytes[offset + 2],
+                bytes[offset + 3],
+            ]);
+            depths.push(depth_val);
+            offset += 4;
+        }
         
         let n_cells = n_lon * n_lat;
         let data_bytes = n_cells * 2;
-        let offset = 8;
-
         
         let u_start = offset;
         let u_end = u_start + data_bytes;
@@ -236,32 +270,17 @@ impl GlorysLoader {
             })
             .collect();
         
-        let m_start = v_end;
-        let m_end = m_start + data_bytes;
-        if bytes.len() < m_end {
-            return Err("File too short for m data".to_string());
-        }
-        
-        let m_f16 = &bytes[m_start..m_end];
-        let m: Vec<f32> = m_f16
-            .chunks_exact(2)
-            .map(|chunk| {
-                let bits = u16::from_le_bytes([chunk[0], chunk[1]]);
-                f16::from_bits(bits).to_f32()
-            })
-            .collect();
-        
-
         Ok(TileData {
             u,
             v,
-            m,
             n_lon,
             n_lat,
+            depths,
         })
     }
     
     async fn load_tile(&self, url: &str) -> Result<TileData, LoaderError> {
+        web_sys::console::log_1(&format!("Trying to load: {}", url).into());
         let response = Request::get(url)
             .send()
             .await
@@ -288,11 +307,11 @@ impl GlorysLoader {
         let tile_min_lon = self.min_lon + ((lon - self.min_lon) / self.tile_size).floor() * self.tile_size;
         let tile_min_lat = self.min_lat + ((lat - self.min_lat) / self.tile_size).floor() * self.tile_size;
         
-        let lon_cell = ((lon - tile_min_lon) / self.lon_step).round() as usize;
-        let lat_cell = ((lat - tile_min_lat) / self.lat_step).round() as usize;
+        let lon_cell = ((lon - tile_min_lon) / self.lon_step).floor() as usize;
+        let lat_cell = ((lat - tile_min_lat) / self.lat_step).floor() as usize;
         
-        let lon_cell = lon_cell.clamp(0, tile.n_lon - 1);
-        let lat_cell = lat_cell.clamp(0, tile.n_lat - 1);
+        let lon_cell = lon_cell.clamp(0, tile.n_lon - 2);
+        let lat_cell = lat_cell.clamp(0, tile.n_lat - 2);
         
         (lon_cell, lat_cell)
     }

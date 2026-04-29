@@ -14,7 +14,7 @@ js-sys = "0.3"
 
 # HTTP requests in WASM
 gloo-net = { version = "0.5", features = ["http"] }
-
+chrono = "0.4"
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -28,6 +28,7 @@ getrandom = { version = "0.2", features = ["js"] }
 # Error handling
 thiserror = "1.0"
 anyhow = "1.0"
+console_error_panic_hook = "0.1"
 
 # Half-precision floats
 half = "2.4"
