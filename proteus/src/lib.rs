@@ -1,4 +1,5 @@
 pub mod particles;
+pub mod diffusion;
 pub mod integrators;
 pub mod interpolation;
 pub mod glorysloader;
