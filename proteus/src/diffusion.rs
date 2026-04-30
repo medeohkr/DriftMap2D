@@ -2,7 +2,7 @@ use rand::prelude::*;
 use rand_distr::{Normal, Distribution};
 
 pub struct Diffusion {
-    horizontal_k: f32,
+    pub horizontal_k: f32,
     normal: Normal<f32>,
     rng: ThreadRng,
 }
@@ -19,20 +19,19 @@ impl Diffusion {
         }
     }
 
-    pub fn apply_diffusion(&mut self, lon: &mut f32, lat: &mut f32, dt_days: f32) {
-        if self.horizontal_k <= 0.0 {
-            return;
-        }
+    pub fn apply_diffusion(&mut self, dt_days: f32, lat: &f32) -> (f32, f32) {
         let dt_seconds: f32 = dt_days * 86400.0;
         let sigma = (2.0 * self.horizontal_k * dt_seconds).sqrt();
-        let dx_m = self.normal.sample(&mut self.rng) * sigma;
-        let dy_m = self.normal.sample(&mut self.rng) * sigma;
+        let dx = self.normal.sample(&mut self.rng) * sigma;
+        let dy = self.normal.sample(&mut self.rng) * sigma;
         
-        let meters_per_degree_lat = 111_000.0;
-        let meters_per_degree_lon = 111_000.0 * (*lat).to_radians().cos();
+        let meters_per_degree_lat: f32 = 111_000.0;
+        let meters_per_degree_lon: f32 = 111_000.0 * (lat).to_radians().cos();
         
-        *lon += dx_m / meters_per_degree_lon;
-        *lat += dy_m / meters_per_degree_lat;
+        dx / meters_per_degree_lon;
+        dy / meters_per_degree_lat;
+
+        (dx, dy)
     }
     
     pub fn set_k(&mut self, k: f32) {

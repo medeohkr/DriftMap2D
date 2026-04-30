@@ -22,7 +22,7 @@ pub fn setup_panic_hook() {
 #[wasm_bindgen]
 impl Proteus {
     #[wasm_bindgen(constructor)]
-    pub fn new(lon: f32, lat: f32) -> Self {
+    pub fn new(lon: f32, lat: f32, k_value: f32) -> Self {
         // Set start date to March 1, 2011
         let start_date = NaiveDate::from_ymd_opt(2025, 6, 1).unwrap();
         
@@ -32,7 +32,7 @@ impl Proteus {
             lat: lat,
             schedule: Schedule::Instant,
             total_mass_bq: 16.0e15,
-            particle_count: 5000,
+            particle_count: 10000,
             spread_km: 20.0,
             depth_m: 0.0,
         };
@@ -41,6 +41,7 @@ impl Proteus {
             release_config,
             integrator: Integrator::RK4,
             max_particles: 50000,
+            k_value: k_value
         };
         
         let simulation = Simulation::new(sim_config);

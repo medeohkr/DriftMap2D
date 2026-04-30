@@ -1,17 +1,20 @@
 use crate::release_manager::{ReleaseManager, ReleaseConfig, Schedule};
 use crate::particles::Particles;
 use crate::integrators;
+use crate::diffusion::{Diffusion};
 
 pub struct Simulation {
     config: SimulationConfig,
     pub particles: Particles,           // Made pub for testing
     release_manager: ReleaseManager,
+    diffusion: Diffusion,
 }
 
 pub struct SimulationConfig {
     pub release_config: ReleaseConfig,
     pub integrator: Integrator,
     pub max_particles: usize,
+    pub k_value: f32,
 }
 
 pub enum Integrator {
@@ -24,11 +27,13 @@ impl Simulation {
     pub fn new(config: SimulationConfig) -> Self {
         let release_manager = ReleaseManager::new(config.release_config.clone());
         let particles = Particles::new(config.max_particles);
+        let diffusion = Diffusion::new(config.k_value);
         
         Self {
             config,
             particles,
             release_manager,
+            diffusion
         }
     }
     
@@ -60,12 +65,6 @@ impl Simulation {
             let lon = self.particles.x[i];
             let lat = self.particles.y[i];
             let depth = self.particles.depth[i];
-            let (u, v) = velocity_fn(lon, lat, depth);
-            //web_sys::console::log_1(&format!(
-            //    "Particle {}: lon={:.2}, lat={:.2}, u={:.4}, v={:.4}, dt={}",
-            //    i, lon, lat, u, v, dt
-            //).into());
-            // Integrate based on chosen method
             let (new_x, new_y) = match self.config.integrator {
                 Integrator::Euler => {
                     integrators::euler_step(lon, lat, depth, dt, velocity_fn)
@@ -78,8 +77,12 @@ impl Simulation {
                 }
             };
             
-            self.particles.x[i] = new_x;
-            self.particles.y[i] = new_y;
+
+            let (dx, dy) =
+                Diffusion::apply_diffusion(&mut self.diffusion, dt, &lat);
+            self.particles.x[i] = new_x + dx;
+            self.particles.y[i] = new_y + dy;
+
             self.particles.age[i] += dt;
             
             // Update history for visualization
