@@ -1,14 +1,17 @@
         #map {
+            grid-column-start: 2;
             height: 100vh;
-            width: 100%;
         }
 
         body {
+            display: grid;
+            grid-template-columns: 250px 1fr;
             margin: 0;
             padding: 0;
         }
 
         .sidebar {
+            grid-column-start: 1;
             position: absolute;
             display: flex;
             flex-direction: column;
@@ -17,29 +20,20 @@
             height: 100vh;
             left: 0px;
             top: 0px;
-            width: 250px;
             background: rgb(27, 27, 27);
             box-shadow: 2px 0px 5px rgb(0, 0, 0);
         }
 
         .header-container {
+            display: flex;
+            height: 100px;
+            align-items: center;
             background-color: rgb(18, 18, 18);
             width: 250px;
         }
-        .logo-container {
-            display: inline-block;
-            padding: 15px;
-            width: 50px;
-        }
         .logo {
-            width: 50px;
-        }
-        .title-container {
-            display: inline-block;
-            padding-top: 25px;
-            padding-left: 8px;
-            width: 100px;
-            vertical-align: top;
+            margin: 20px;
+            width: 60px;
         }
         .title-text{
             color: white;
@@ -110,11 +104,6 @@
         }
         
         .btn-primary {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: #244886;
             border: none;
             color: white;
             padding: 15px;
@@ -131,10 +120,50 @@
         .btn-primary:hover {
             opacity: 0.7;
         }
+
         .simulation-info {
+            position: absolute;
             color: white;
             font-family: Montserrat;
             font-size: 14px;
-            margin-top: 10px;
+            bottom: 90px;
         }
+
+        .simulation-btn-container {
+            position: absolute;
+            bottom: 30px;
+            display: grid;
+            grid-template-columns: 3fr 1fr;
+            column-gap: 20px;
+            place-items: center;
+        }
+
+        #start-simulation {
+            grid-column-start: 1;
+            display: inline-block;
+            background-color: #244886;
+        }
+        #resume-simulation {
+            grid-column-start: 1;
+            display: none;
+            background-color: #244886;
+        }
+        
+        #stop-simulation {
+            grid-column-start: 1;
+            display: none;
+            background-color: rgb(206, 61, 61);
+        }
+
+        #reset-simulation {
+            padding: 10px;
+            grid-column-start: 2;
+            display: inline-block;
+            background-color: rgb(206, 61, 61);
+        }
+
+        .reset-btn-img {
+            height: 22.5px;
+        }
+
 

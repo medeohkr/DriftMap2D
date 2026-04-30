@@ -1,6 +1,5 @@
-
-
 import init, { Proteus, setup_panic_hook } from './pkg/proteus.js';
+import { preloader } from './preloader.js';
 
 let map = new maplibregl.Map({
     container: 'map',
@@ -27,8 +26,13 @@ let map = new maplibregl.Map({
             maxzoom: 22
         }]
     },
-    center: [165, 25],
-    zoom: 3
+    center: [0, 0],
+    zoom: 0,
+    renderWorldCopies: false,
+    maxBounds: [
+        [-180+(1/12), -80],
+        [180, 85.05]
+    ]
 });
 
 
@@ -36,8 +40,10 @@ let map = new maplibregl.Map({
 const latField = document.querySelector('.lat-field');
 const lonField = document.querySelector('.lon-field');
 const startBtn = document.getElementById('start-simulation');
+const resumeBtn = document.getElementById('resume-simulation')
+const stopBtn = document.getElementById('stop-simulation');
+const resetBtn = document.getElementById('reset-simulation');
 const dayDisplay = document.getElementById('current-day');
-
 // State
 let proteus = null;
 let simulationRunning = false;
@@ -50,13 +56,48 @@ function normalizeLongitude(lon) {
     lon = ((lon + 180) % 360 + 360) % 360 - 180;
     return lon;
 }
+function getTileIndicesFromPositions(positions, tileSize = 5.0) {
+    const tiles = new Set();
+    
+    for (let i = 0; i < positions.length; i += 2) {
+        const lon = positions[i];
+        const lat = positions[i + 1];
+        
+        // Calculate tile index (same as Rust: (lon - min_lon) / tile_size).floor()
+        const minLon = -180;
+        const minLat = -80;
+        
+        const lonIdx = Math.floor((lon - minLon) / tileSize);
+        const latIdx = Math.floor((lat - minLat) / tileSize);
+        
+        // Clamp to valid range
+        if (lonIdx >= 0 && lonIdx < 36 && latIdx >= 0 && latIdx < 34) {
+            tiles.add({ lonIdx, latIdx });
+        }
+    }
+    
+    return Array.from(tiles);
+}
+
+// Get next date (YYYYMMDD)
+function addDays(dateInt, days) {
+    const year = Math.floor(dateInt / 10000);
+    const month = Math.floor((dateInt % 10000) / 100);
+    const day = dateInt % 100;
+    
+    const date = new Date(year, month - 1, day);
+    date.setDate(date.getDate() + days);
+    
+    return date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
+}
 
 // Initialize WASM and UI
 async function initialize() {
     await init();
     setup_panic_hook();
-    proteus = new Proteus();
-    console.log('Proteus engine initialized');
+    let lon = parseFloat(lonField.value);
+    let lat = parseFloat(latField.value);
+    proteus = new Proteus(normalizeLongitude(lon), lat);
     
     // Set initial marker
     updateMarkerFromFields();
@@ -79,37 +120,31 @@ function updateMarkerFromFields() {
     })
     .setLngLat([lon, lat])
     .addTo(map);
-    
-    // Update engine release location (normalized)
-    proteus.set_release_location(normalizeLongitude(lon), lat);
 }
 
-// Run one simulation step
 async function simulationStep() {
     if (!simulationRunning) return;
     
-    // Step forward by 0.5 days
-    await proteus.step(0.5);
+    await proteus.step(1/24);
     
-    // Get positions
+
     const positions = proteus.get_positions();
-    currentPositions = positions;
+    // const currentDate = proteus.current_date_int();  // ← From Rust
+    // const currentTiles = getTileIndicesFromPositions(positions);
+    // const nextStepDate = addDays(currentDate, 1/24);
+    // preloader.preloadTiles(nextStepDate, currentTiles); 
     
-    // Update display
     const day = proteus.current_day();
     if (dayDisplay) {
         dayDisplay.textContent = day.toFixed(1);
     }
     
-    // Update visualization
     updateParticleVisualization(positions);
     
-    // Schedule next step
     if (simulationRunning) {
         animationId = requestAnimationFrame(() => simulationStep());
     }
 }
-
 // Update map with particles
 function updateParticleVisualization(positions) {
     // Remove old markers/circles
@@ -153,8 +188,8 @@ function updateParticleVisualization(positions) {
                 type: 'circle',
                 source: 'particles',
                 paint: {
-                    'circle-radius': 3,
-                    'circle-color': '#ff6b6b',
+                    'circle-radius': 2,
+                    'circle-color': '#ffffff',
                     'circle-opacity': 0.8
                 }
             });
@@ -166,30 +201,68 @@ function updateParticleVisualization(positions) {
 function startSimulation() {
     if (simulationRunning) return;
     
-    // Reset engine
-    proteus.reset();
-    
+    stopBtn.style.display = "inline-flex";
+    resumeBtn.style.display = "none"
+    startBtn.style.display = "none";
+
     // Set release location from current marker
     let lon = parseFloat(lonField.value);
     let lat = parseFloat(latField.value);
-    proteus.set_release_location(normalizeLongitude(lon), lat);
+    proteus = new Proteus(normalizeLongitude(lon), lat);
     
     // Start simulation
     simulationRunning = true;
     simulationStep();
 }
 
-// Stop simulation
-function stopSimulation() {
-    simulationRunning = false;
+function resumeSimulation() {
+    simulationRunning = true;
+    simulationStep();
+    stopBtn.style.display = "inline-flex";
+    resumeBtn.style.display = "none"
+    startBtn.style.display = "none";
     if (animationId) {
         cancelAnimationFrame(animationId);
         animationId = null;
     }
 }
 
+// Stop simulation
+function stopSimulation() {
+    simulationRunning = false;
+    stopBtn.style.display = "none";
+    resumeBtn.style.display = "inline-flex"
+    startBtn.style.display = "none";
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+    }
+}
+
+function resetSimulation() {
+    simulationRunning = false;
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+    }
+    
+    let lon = parseFloat(lonField.value);
+    let lat = parseFloat(latField.value);
+    proteus = new Proteus(normalizeLongitude(lon), lat);
+    
+    updateParticleVisualization([]);  // Clear particles
+    dayDisplay.textContent = "0.0";
+    
+    stopBtn.style.display = "none";
+    resumeBtn.style.display = "none";
+    startBtn.style.display = "inline-flex";
+}
+
 // Event listeners
 startBtn.addEventListener('click', startSimulation);
+resumeBtn.addEventListener('click', resumeSimulation);
+stopBtn.addEventListener('click', stopSimulation);
+resetBtn.addEventListener('click', resetSimulation);
 latField.addEventListener('input', updateMarkerFromFields);
 lonField.addEventListener('input', updateMarkerFromFields);
 
