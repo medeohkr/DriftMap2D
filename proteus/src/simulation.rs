@@ -78,12 +78,13 @@ impl Simulation {
             };
             
 
-            let (dx, dy) =
-                Diffusion::apply_diffusion(&mut self.diffusion, dt, &lat);
+            // Inside the particle loop:
+            let (dx, dy) = self.diffusion.apply_diffusion(dt_days, lat);  // ← Note: dt_days, not dt
+
             self.particles.x[i] = new_x + dx;
             self.particles.y[i] = new_y + dy;
 
-            self.particles.age[i] += dt;
+            self.particles.age[i] += dt_days;  // ← Consistent units (days)
             
             // Update history for visualization
             self.particles.update_history(i, 50);
