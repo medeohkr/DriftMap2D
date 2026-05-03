@@ -28,25 +28,41 @@
             <span class="lon-text">Longitude:</span>
             <input type="text" class="lat-field" value="N/A">
             <input type="text" class="lon-field" value="N/A">
-
+        </div>
+        <div class="oil-display-container">
+            <span class="oil-text">Oil Type:</span>
+            <select name="oil-menu" id="oil-menu">
+            <option value="bonny-light">BONNY LIGHT (Medium Crude)</option>
+            <option value="arabian-light">ARABIAN LIGHT (Light Crude)</option>
+            <option value="ifo-380">IFO 380 (Heavy Fuel Oil)</option>
+            <option value="venezuelan-heavy">VENEZUELAN HEAVY (Extra Heavy)</option>
+            <option value="marine-diesel">MARINE DIESEL (Refined)</option>
+            </select>
         </div>
         <div class="simulation-btn-container">
             <button id="start-simulation" class="btn-primary">Start Simulation</button>
             <button id="stop-simulation" class="btn-primary">Stop Simulation</button>
             <button id="resume-simulation" class="btn-primary">Resume Simulation</button>
-            <button id="reset-simulation" class="btn-primary">
+            <button id="reset-simulation">
                 <img class = "reset-btn-img" src="images/ResetBtn.webp">
             </button>
         </div>
-
+        <div class="simulation-time-container">
+            <span class="start-date-text">Starting Date:</span>
+            <input type="date" id="start-day-selector">
+            <span class="total-day-text">Total Days:</span>
+            <input type="text" id="total-day-field" value="10">
+        </div>
+    </div>
+    <div class="timeline-controls">
         <div class="simulation-info">
             <span>Day:</span>
             <span id="current-day">0.0</span>
         </div>
     </div>
 
+
     <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
-    <script type="module" src="preloader.js"></script>
     <script type="module" src="app.js"></script>
 </body>
 </html>
