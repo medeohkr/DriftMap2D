@@ -1,2 +1,5 @@
-/web/data
-/target
+web/data/
+target/
+web/pkg/
+data/
+data-pipeline/

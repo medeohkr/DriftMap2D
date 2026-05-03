@@ -28,7 +28,8 @@
             display: flex;
             height: 100px;
             align-items: center;
-            background-color: rgb(18, 18, 18);
+            background-color: rgb(20, 20, 20);
+            box-shadow: 0px 2px 5px rgb(0, 0, 0);
             width: 250px;
         }
         .logo {
@@ -45,65 +46,68 @@
             display: grid;
             background-color: rgb(40, 40, 40);
             white-space: nowrap;
-            height: 100px;
-            width: 175px;
+            width: 180px;
             box-shadow: 3px 3px 5px black;
-            grid-template-columns: repeat(2, 1fr);
-            grid-template-rows: 1fr 0.3fr 1fr;
-            place-items: center;
+            grid-template-columns: repeat(1fr);
+            grid-template-rows: 20px 10px 20px;
+            row-gap: 10px;
+            column-gap: 10px;
+            padding: 10px
         }
         .release-text {
             grid-column: span 2;
             grid-row-start: 1;
             font-family: Montserrat;
             font-weight: 500;
-            color: rgb(167, 167, 167);
+            font-size: 14px;
+            color: rgb(180, 180, 180);
         }
 
         .lat-text {
             grid-column-start: 1;
             grid-row-start: 2;
-            color: rgb(187, 187, 187);
+            color: rgb(180, 180, 180);
             font-family: Montserrat;
             font-size: 12px;
-            text-align: center;
         }
         .lon-text {
             grid-column-start: 2;
             grid-row-start: 2;
-            color: rgb(187, 187, 187);
+            color: rgb(180, 180, 180);
             font-family: Montserrat;
             font-size: 12px;
-            text-align: center;
         }
         .lat-field {
             width: 60px;
             grid-column-start: 1;
             grid-row-start: 3;
-            background: rgba(0, 0, 0, 0.702);
-            color: white;
+            background: rgb(255, 255, 255);
+            color: rgb(0, 0, 0);
             padding: 5px;
             font-family: monospace;
             white-space: nowrap;
-            text-align: center;
             font-size: 12px;
-            border: none;
+            border: 1px solid rgb(0, 0, 0, 0.3);
+            border-radius: 2px;
         }
         .lon-field {
             width: 60px;
             grid-column-start: 2;
             grid-row-start: 3;
-            background: rgba(0, 0, 0, 0.702);
-            color: white;
+            background: rgb(255, 255, 255);
+            color: rgb(0, 0, 0);
             padding: 5px;
             font-family: monospace;
             white-space: nowrap;
-            text-align: center;
             font-size: 12px;
-            border: none;
+            border: 1px solid rgb(0, 0, 0, 0.3);
+            border-radius: 2px;
         }
         
         .btn-primary {
+            display: flex;
+            justify-content: center;
+            width: 150px;
             border: none;
             color: white;
             padding: 15px;
@@ -112,13 +116,12 @@
             font-weight: 600;
             font-size: 13px;
             cursor: pointer;
-            margin-top: 10px;
             white-space: nowrap;
             box-shadow: 1.5px 1.5px 5px rgb(0, 0, 0);
         }
 
         .btn-primary:hover {
-            opacity: 0.7;
+            opacity: 0.8;
         }
 
         .simulation-info {
@@ -126,44 +129,101 @@
             color: white;
             font-family: Montserrat;
             font-size: 14px;
-            bottom: 90px;
+            font-weight: 500;
+            bottom: 25px;
+            left: 285px;
         }
 
         .simulation-btn-container {
             position: absolute;
-            bottom: 30px;
-            display: grid;
-            grid-template-columns: 3fr 1fr;
-            column-gap: 20px;
-            place-items: center;
+            width: 100%;
+            background-color:rgb(25, 25, 25);
+            box-shadow: 0px -2px 5px rgb(0, 0, 0);
+            bottom: 0px;
+            padding-top: 20px;
+            padding-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            column-gap: 15px;
+            align-items: center;
         }
 
         #start-simulation {
-            grid-column-start: 1;
             display: inline-block;
             background-color: #244886;
         }
         #resume-simulation {
-            grid-column-start: 1;
             display: none;
             background-color: #244886;
         }
         
         #stop-simulation {
-            grid-column-start: 1;
             display: none;
             background-color: rgb(206, 61, 61);
         }
 
         #reset-simulation {
+            border: none;
             padding: 10px;
-            grid-column-start: 2;
-            display: inline-block;
+            border-radius: 2px;
+            cursor: pointer;
             background-color: rgb(206, 61, 61);
+            box-shadow: 1.5px 1.5px 5px rgb(0, 0, 0);
+        }
+
+        #reset-simulation:hover {
+            opacity: 0.8;
         }
 
         .reset-btn-img {
             height: 22.5px;
         }
 
+        .oil-display-container {
+            width: 180px;
+            display: flex;
+            flex-direction: column;
+            font-family: Montserrat;
+            font-size: 12px;
+            padding: 10px;
+            font-weight: 500;
+            color: rgb(180, 180, 180);
+            row-gap: 10px;
+            background-color: rgb(40, 40, 40);
+            box-shadow: 3px 3px 5px rgb(0, 0, 0);
+        }
+
+        #oil-menu {
+            width: 180px;
+            padding: 8px;
+            background: rgb(255, 255, 255);
+            color: rgb(0, 0, 0);
+            font-family: Montserrat;
+            font-size: 9px;
+            font-weight: 500;
+            border: 1px solid rgba(0, 0, 0, 0.3);
+            border-radius: 2px;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            /* background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>");
+            background-repeat: no-repeat;
+            background-position: right 10px center; */
+            background-size: 14px;
+        }
+        .simulation-time-container {
+            display: flex;
+            flex-direction: column;
+            width: 180px;
+            font-family: Montserrat;
+            font-size: 12px;
+            color: rgb(180, 180, 180);
+            font-weight: 500;
+            background-color: rgb(40, 40, 40);
+            box-shadow: 3px 3px 5px rgb(0, 0, 0);
+            padding: 10px;
+            row-gap: 10px;
+            white-space: nowrap;
+            
+        }
 
