@@ -1,5 +1,6 @@
 import init, { Proteus, setup_panic_hook } from './pkg/proteus.js';
 import { EulerianGrid, createAdaptiveGrid, updateGridFromParticles } from './eulerGrid.js';
+import { preloader } from './preloader.js';
 
 let map = new maplibregl.Map({
     container: 'map',
@@ -78,9 +79,9 @@ let startYear = 2025;
 let startMonth = 5;
 let startDay = 1;
 let stepSize = 1/24;
-let dayCounter = 0;
 let totalDays = 10;
 let isError = false;
+let stepCount = 0;
 
 // Normalize longitude
 function normalizeLongitude(lon) {
@@ -88,6 +89,42 @@ function normalizeLongitude(lon) {
     lon = ((lon + 180) % 360 + 360) % 360 - 180;
     return lon;
 }
+function getTileIndicesFromPositions(positions, tileSize = 10.0) {
+    const tiles = new Set();
+    
+    for (let i = 0; i < positions.length; i += 2) {
+        const lon = positions[i];
+        const lat = positions[i + 1];
+        
+        // Calculate tile index (same as Rust: (lon - min_lon) / tile_size).floor()
+        const minLon = -180;
+        const minLat = -80;
+        
+        const lonIdx = Math.floor((lon - minLon) / tileSize);
+        const latIdx = Math.floor((lat - minLat) / tileSize);
+        
+        // Clamp to valid range
+        if (lonIdx >= 0 && lonIdx < 36 && latIdx >= 0 && latIdx < 34) {
+            tiles.add({ lonIdx, latIdx });
+        }
+    }
+    console.log(Array.from(tiles));
+
+    return Array.from(tiles);
+}
+
+// Get next date (YYYYMMDD)
+function addDays(dateInt, days) {
+    const year = Math.floor(dateInt / 10000);
+    const month = Math.floor((dateInt % 10000) / 100);
+    const day = dateInt % 100;
+    
+    const date = new Date(year, month - 1, day);
+    date.setDate(date.getDate() + days);
+    
+    return date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
+}
+
 
 // Initialize WASM and UI
 async function initialize() {
@@ -107,60 +144,55 @@ async function initialize() {
     updateMarkerFromFields();
 }
 
-// Initialize MapLibre grid layer
 function initGridLayer() {
-    // Add source for concentration grid
-    map.addSource('concentration', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] }
+    map.on('load', () => {
+        map.addSource('concentration', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+        });
+        map.addLayer({
+            id: 'concentration-fill',
+            type: 'fill',
+            source: 'concentration',
+            paint: {
+                'fill-color': [
+                    'interpolate', ['linear'], ['get', 'concentration'],
+                    0, 'rgb(231, 236, 251)',
+                    1, 'rgb(195, 209, 247)',
+                    2, 'rgb(162, 186, 244)',
+                    4, 'rgb(120, 153, 227)',
+                    8, 'rgb(68, 115, 227)',
+                    16, 'rgb(141, 142, 213)',
+                    32, 'rgb(252, 184, 197)',
+                    64, 'rgb(255, 115, 107)',
+                    128, 'rgb(251, 64, 26)',
+                    256, 'rgb(255, 106, 0)',
+                    512, 'rgb(255, 154, 0)',
+                    1024, 'rgb(255, 216, 1)',
+                ],
+                'fill-opacity': 0.7,
+                'fill-antialias': false,
+                'fill-outline-color': 'rgba(0,0,0,0)'
+            }
+        });
+        
+        map.addSource('particles', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+        });
+        map.addLayer({
+            id: 'particles-layer',
+            type: 'circle',
+            source: 'particles',
+            paint: {
+                'circle-radius': 2,
+                'circle-color': '#ff6b6b',
+                'circle-opacity': 0.7
+            }
+        });
+        
+        toggleVisualizationMode();
     });
-    map.addLayer({
-        id: 'concentration-fill',
-        type: 'fill',
-        source: 'concentration',
-        paint: {
-            'fill-color': [
-                'interpolate',
-                ['linear'],
-                ['get', 'concentration'],
-                0, 'rgb(231, 236, 251)',
-                1, 'rgb(195, 209, 247)',
-                2, 'rgb(162, 186, 244)',
-                4, 'rgb(120, 153, 227)',
-                8, 'rgb(68, 115, 227)',
-                16, 'rgb(141, 142, 213)',
-                32, 'rgb(252, 184, 197)',
-                64, 'rgb(255, 115, 107)',
-                128, 'rgb(251, 64, 26)',
-                256, 'rgb(255, 106, 0)',
-                512, 'rgb(255, 154, 0)',
-                1024, 'rgb(255, 216, 1)',
-            ],
-            'fill-opacity': 0.7,
-            'fill-antialias': false,                     // ← No hairline borders
-            'fill-outline-color': 'rgba(0,0,0,0)'        // ← Extra safety
-        }
-    });
-    
-    // Add particle layer (for visualization mode)
-    map.addSource('particles', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] }
-    });
-    
-    map.addLayer({
-        id: 'particles-layer',
-        type: 'circle',
-        source: 'particles',
-        paint: {
-            'circle-radius': 2,
-            'circle-color': '#ff6b6b',
-            'circle-opacity': 0.7
-        }
-    });
-    
-    // Toggle layers based on visualization mode
-    toggleVisualizationMode();
 }
 
 // Toggle between grid and particle visualization
@@ -255,13 +287,12 @@ async function simulationStep(version) {
     }
     
     stepInProgress = true;
-    console.log("Step starting, version:", version);
-    dayCounter += stepSize;
+    stepCount++;
 
     try {
 
         await proteus.step(stepSize);
-        
+
         // Check if simulation was reset during step
         if (version !== simulationVersion) {
             console.log("Step aborted: version changed");
@@ -270,6 +301,15 @@ async function simulationStep(version) {
         
         const positions = proteus.get_positions();
         currentPositions = positions;
+
+        const currentDate = proteus.current_date_int();  // ← From Rust
+
+        if (stepCount % 24 === 0) {
+            const currentTiles = getTileIndicesFromPositions(positions);
+            const nextStepDate = addDays(currentDate, 1);
+            preloader.preloadTiles(nextStepDate, currentTiles); 
+            console.log('preloaded!')
+        }
         
         // Update visualization based on mode
         const now = performance.now();
@@ -287,7 +327,7 @@ async function simulationStep(version) {
             dayDisplay.textContent = day.toFixed(1);
         }
         
-        if (simulationRunning && version === simulationVersion && dayCounter <= totalDays) {
+        if (simulationRunning && version === simulationVersion && day <= totalDays) {
             animationId = requestAnimationFrame(() => simulationStep(version));
         }
     } catch (error) {
@@ -358,7 +398,7 @@ async function resetSimulation() {
     
     simulationRunning = false;
     simulationVersion++;
-    dayCounter = 0;
+    stepCount = 0;
     
     if (animationId) {
         cancelAnimationFrame(animationId);

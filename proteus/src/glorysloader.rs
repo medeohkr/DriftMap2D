@@ -4,8 +4,12 @@ use crate::interpolation::{find_depth_indices, lerp};
 use half::f16;
 use thiserror::Error;
 use gloo_net::http::Request;
-use wasm_bindgen_futures::spawn_local;
 
+macro_rules! log {
+    ( $( $t:tt )* ) => {
+        web_sys::console::log_1(&format!( $( $t )* ).into());
+    }
+}
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct TileKey {
     pub lon_idx: usize,
@@ -24,13 +28,9 @@ pub struct TileData {
 pub struct GlorysLoader {
     // Configuration
     min_lon: f32,
-    max_lon: f32,
     min_lat: f32,
-    max_lat: f32,
     lon_step: f32,
     lat_step: f32,
-    n_lon: usize,
-    n_lat: usize,
     tile_size: f32,
     base_url: String,
     
@@ -56,21 +56,15 @@ pub enum LoaderError {
 }
 
 impl GlorysLoader {
-    pub fn new(base_url: &str, min_lon: f32, max_lon: f32, min_lat: f32, max_lat: f32) -> Self {
+    pub fn new(base_url: &str, min_lon: f32, min_lat: f32) -> Self {
         let lon_step = 1.0 / 12.0;
         let lat_step = 1.0 / 12.0;
-        let n_lon = ((max_lon - min_lon) / lon_step).round() as usize;
-        let n_lat = ((max_lat - min_lat) / lat_step).round() as usize;
         
         Self {
             min_lon,
-            max_lon,
             min_lat,
-            max_lat,
             lon_step,
             lat_step,
-            n_lon,
-            n_lat,
             tile_size: 10.0,
             base_url: base_url.to_string(),
             current_day: 0,
@@ -118,79 +112,79 @@ impl GlorysLoader {
         Ok(())
     }
     
-pub fn get_velocity(&self, lon: f32, lat: f32, depth_m: f32, day: u32) -> Option<(f32, f32)> {
-    let key = self.get_tile_key(lon, lat, day);
+    pub fn get_velocity(&self, lon: f32, lat: f32, depth_m: f32, day: u32) -> Option<(f32, f32)> {
+        let key = self.get_tile_key(lon, lat, day);
 
-    let tile_data = match self.cache.get(&key) {
-        Some(data) => data,
-        None => return None,
-    };
-    
-    let (lon_cell, lat_cell) = self.get_cell_index(lon, lat, tile_data);
-    let (depth_idx, t) = find_depth_indices(&tile_data.depths, depth_m);
-
-    let stride = tile_data.n_lon * tile_data.n_lat;
-    let idx_bot = depth_idx * stride + lat_cell * tile_data.n_lon + lon_cell;
-    
-    // Bottom layer corners
-    let u0 = tile_data.u[idx_bot];
-    let v0 = tile_data.v[idx_bot];
-    let u1 = tile_data.u[idx_bot + 1];
-    let v1 = tile_data.v[idx_bot + 1];
-    let u2 = tile_data.u[idx_bot + tile_data.n_lon];
-    let v2 = tile_data.v[idx_bot + tile_data.n_lon];
-    let u3 = tile_data.u[idx_bot + tile_data.n_lon + 1];
-    let v3 = tile_data.v[idx_bot + tile_data.n_lon + 1];
-
-    // Vertical interpolation
-    let (uz0, vz0, uz1, vz1, uz2, vz2, uz3, vz3) = 
-        if depth_idx + 1 < tile_data.depths.len() {
-            let idx_top = (depth_idx + 1) * stride + lat_cell * tile_data.n_lon + lon_cell;
-            (
-                lerp(u0, tile_data.u[idx_top], t),
-                lerp(v0, tile_data.v[idx_top], t),
-                lerp(u1, tile_data.u[idx_top + 1], t),
-                lerp(v1, tile_data.v[idx_top + 1], t),
-                lerp(u2, tile_data.u[idx_top + tile_data.n_lon], t),
-                lerp(v2, tile_data.v[idx_top + tile_data.n_lon], t),
-                lerp(u3, tile_data.u[idx_top + tile_data.n_lon + 1], t),
-                lerp(v3, tile_data.v[idx_top + tile_data.n_lon + 1], t),
-            )
-        } else {
-            (u0, v0, u1, v1, u2, v2, u3, v3)
+        let tile_data = match self.cache.get(&key) {
+            Some(data) => data,
+            None => return None,
         };
-    
-    // CORRECTED: Get the exact lon/lat of the bottom-left cell
-    let tile_min_lon = self.min_lon + (key.lon_idx as f32) * self.tile_size;
-    let tile_min_lat = self.min_lat + (key.lat_idx as f32) * self.tile_size;
-    
-    let cell_lon_min = tile_min_lon + (lon_cell as f32) * self.lon_step;
-    let cell_lat_min = tile_min_lat + (lat_cell as f32) * self.lat_step;
-    
-    // Fractions are now between 0 and 1
-    let x_frac = (lon - cell_lon_min) / self.lon_step;
-    let y_frac = (lat - cell_lat_min) / self.lat_step;
-    
-    // Bilinear interpolation
-    let u_interp = lerp(
-        lerp(uz0, uz1, x_frac),
-        lerp(uz2, uz3, x_frac),
-        y_frac,
-    );
-    let v_interp = lerp(
-        lerp(vz0, vz1, x_frac),
-        lerp(vz2, vz3, x_frac),
-        y_frac,
-    );
-    let meters_per_degree_lat = 111000.0;  // Approximately constant
-    let meters_per_degree_lon = 111000.0 * lat.to_radians().cos();
-    
-    let u_deg_per_s = u_interp / meters_per_degree_lon;
-    let v_deg_per_s = v_interp / meters_per_degree_lat;
-    
-    Some((u_deg_per_s, v_deg_per_s))
-}
-    
+        
+        let (lon_cell, lat_cell) = self.get_cell_index(lon, lat, tile_data);
+        let (depth_idx, t) = find_depth_indices(&tile_data.depths, depth_m);
+
+        let stride = tile_data.n_lon * tile_data.n_lat;
+        let idx_bot = depth_idx * stride + lat_cell * tile_data.n_lon + lon_cell;
+        
+        // Bottom layer corners
+        let u0 = tile_data.u[idx_bot];
+        let v0 = tile_data.v[idx_bot];
+        let u1 = tile_data.u[idx_bot + 1];
+        let v1 = tile_data.v[idx_bot + 1];
+        let u2 = tile_data.u[idx_bot + tile_data.n_lon];
+        let v2 = tile_data.v[idx_bot + tile_data.n_lon];
+        let u3 = tile_data.u[idx_bot + tile_data.n_lon + 1];
+        let v3 = tile_data.v[idx_bot + tile_data.n_lon + 1];
+
+        // Vertical interpolation
+        let (uz0, vz0, uz1, vz1, uz2, vz2, uz3, vz3) = 
+            if depth_idx + 1 < tile_data.depths.len() {
+                let idx_top = (depth_idx + 1) * stride + lat_cell * tile_data.n_lon + lon_cell;
+                (
+                    lerp(u0, tile_data.u[idx_top], t),
+                    lerp(v0, tile_data.v[idx_top], t),
+                    lerp(u1, tile_data.u[idx_top + 1], t),
+                    lerp(v1, tile_data.v[idx_top + 1], t),
+                    lerp(u2, tile_data.u[idx_top + tile_data.n_lon], t),
+                    lerp(v2, tile_data.v[idx_top + tile_data.n_lon], t),
+                    lerp(u3, tile_data.u[idx_top + tile_data.n_lon + 1], t),
+                    lerp(v3, tile_data.v[idx_top + tile_data.n_lon + 1], t),
+                )
+            } else {
+                (u0, v0, u1, v1, u2, v2, u3, v3)
+            };
+        
+        // CORRECTED: Get the exact lon/lat of the bottom-left cell
+        let tile_min_lon = self.min_lon + (key.lon_idx as f32) * self.tile_size;
+        let tile_min_lat = self.min_lat + (key.lat_idx as f32) * self.tile_size;
+        
+        let cell_lon_min = tile_min_lon + (lon_cell as f32) * self.lon_step;
+        let cell_lat_min = tile_min_lat + (lat_cell as f32) * self.lat_step;
+        
+        // Fractions are now between 0 and 1
+        let x_frac = (lon - cell_lon_min) / self.lon_step;
+        let y_frac = (lat - cell_lat_min) / self.lat_step;
+        
+        // Bilinear interpolation
+        let u_interp = lerp(
+            lerp(uz0, uz1, x_frac),
+            lerp(uz2, uz3, x_frac),
+            y_frac,
+        );
+        let v_interp = lerp(
+            lerp(vz0, vz1, x_frac),
+            lerp(vz2, vz3, x_frac),
+            y_frac,
+        );
+        let meters_per_degree_lat = 111000.0;  // Approximately constant
+        let meters_per_degree_lon = 111000.0 * lat.to_radians().cos();
+        
+        let u_deg_per_s = u_interp / meters_per_degree_lon;
+        let v_deg_per_s = v_interp / meters_per_degree_lat;
+        
+        Some((u_deg_per_s, v_deg_per_s))
+    }
+        
     fn fetch_tiles(&self, particles: &Particles) -> HashSet<TileKey> {
         let (xmin, xmax, ymin, ymax) = particles.bounding_box();
         
@@ -199,9 +193,9 @@ pub fn get_velocity(&self, lon: f32, lat: f32, depth_m: f32, day: u32) -> Option
         }
         
         let lon_min_idx = ((xmin - self.min_lon) / self.tile_size).floor() as usize;
-        let lon_max_idx = ((xmax - self.min_lon) / self.tile_size).ceil() as usize;
+        let lon_max_idx = ((xmax - self.min_lon) / self.tile_size).floor() as usize;
         let lat_min_idx = ((ymin - self.min_lat) / self.tile_size).floor() as usize;
-        let lat_max_idx = ((ymax - self.min_lat) / self.tile_size).ceil() as usize;
+        let lat_max_idx = ((ymax - self.min_lat) / self.tile_size).floor() as usize;
         
         let mut tiles = HashSet::new();
         for lon_idx in lon_min_idx..=lon_max_idx {

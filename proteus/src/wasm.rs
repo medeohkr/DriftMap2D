@@ -3,8 +3,6 @@ use chrono::{NaiveDate, Days, Datelike};
 use crate::simulation::{Simulation, SimulationConfig, Integrator};
 use crate::release_manager::{ReleaseConfig, Schedule};
 use crate::glorysloader::GlorysLoader;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
@@ -61,8 +59,7 @@ impl Proteus {
         // Create loader for your tile server
         let loader = GlorysLoader::new(
             "data/forecast_tiles",
-            -180.0, 180.0,
-            -80.0, 90.0,
+            -180.0, -80.0
         );
         
         Self {
