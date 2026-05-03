@@ -6,6 +6,11 @@ use crate::glorysloader::GlorysLoader;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+macro_rules! log {
+    ( $( $t:tt )* ) => {
+        web_sys::console::log_1(&format!( $( $t )* ).into());
+    }
+}
 #[wasm_bindgen]
 pub struct Proteus {
     simulation: Simulation,
@@ -30,9 +35,9 @@ impl Proteus {
         start_year: i32,
         start_month: u32,
         start_day: u32) -> Self {
-        // Set start date to March 1, 2011
+
         let start_date = NaiveDate::from_ymd_opt(start_year, start_month, start_day).unwrap();
-        
+        log!("{start_year}, {start_month}, {start_day}");
         // Configure release (default: Fukushima)
         let release_config = ReleaseConfig {
             lon: lon,
