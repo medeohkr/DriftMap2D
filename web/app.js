@@ -75,11 +75,11 @@ let simulationVersion = 0;
 let heatmap = null;
 let concentrationGrid = null;
 let lastGridUpdate = 0;
-const GRID_UPDATE_INTERVAL = 100; 
+const GRID_UPDATE_INTERVAL = 200; 
 let visualizationMode = 'grid'; 
 let rawLon = 56.54;
 let rawLat = 26.74;
-let kValue = 50;
+let kValue = 100;
 let particleCount = 20000;
 let spreadKm = 1;
 let oilType = oilMenu ? oilMenu.value : 'arabian_light';
@@ -90,6 +90,8 @@ let stepSize = 1/24;
 let totalDays = 10;
 let isError = false;
 let stepCount = 0;
+let bounding_box = [];
+let gridSize = 0.1;
 // Normalize longitude
 function normalizeLongitude(lon) {
     lon = parseFloat(lon);
@@ -131,7 +133,10 @@ function addDays(dateInt, days) {
     return date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
 }
 
-
+function updateBoundingBox() {
+    bounding_box = proteus.get_particle_bounding_box();
+    console.log(bounding_box);
+}
 // Initialize WASM and UI
 async function initialize() {
     await init();
@@ -159,22 +164,37 @@ function initGridLayer() {
             type: 'fill',
             source: 'concentration',
             paint: {
+                // 'fill-color': [
+                //     'interpolate', ['linear'], ['get', 'concentration'],
+                //     0, 'rgb(231, 236, 251)',
+                //     1, 'rgb(195, 209, 247)',
+                //     2, 'rgb(162, 186, 244)',
+                //     4, 'rgb(120, 153, 227)',
+                //     8, 'rgb(68, 115, 227)',
+                //     16, 'rgb(141, 142, 213)',
+                //     32, 'rgb(252, 184, 197)',
+                //     64, 'rgb(255, 115, 107)',
+                //     128, 'rgb(254, 79, 44)',
+                //     256, 'rgb(255, 106, 0)',
+                //     512, 'rgb(255, 154, 0)',
+                //     1024, 'rgb(255, 216, 1)',
+                // ],
                 'fill-color': [
                     'interpolate', ['linear'], ['get', 'concentration'],
-                    0, 'rgb(231, 236, 251)',
-                    1, 'rgb(195, 209, 247)',
-                    2, 'rgb(162, 186, 244)',
-                    4, 'rgb(120, 153, 227)',
-                    8, 'rgb(68, 115, 227)',
-                    16, 'rgb(141, 142, 213)',
-                    32, 'rgb(252, 184, 197)',
-                    64, 'rgb(255, 115, 107)',
-                    128, 'rgb(254, 79, 44)',
-                    256, 'rgb(255, 106, 0)',
-                    512, 'rgb(255, 154, 0)',
-                    1024, 'rgb(255, 216, 1)',
+                    0, 'rgb(40, 50, 130)',       // Deep but not harsh blue
+                    1, 'rgb(60, 90, 190)',       // Medium blue
+                    2, 'rgb(80, 140, 200)',      // Soft blue
+                    4, 'rgb(90, 175, 195)',      // Muted cyan
+                    8, 'rgb(100, 190, 160)',     // Soft teal
+                    16, 'rgb(140, 200, 120)',    // Sage
+                    32, 'rgb(200, 210, 100)',    // Olive
+                    64, 'rgb(225, 210, 100)',    // Warm yellow
+                    128, 'rgb(225, 170, 90)',    // Amber
+                    256, 'rgb(215, 135, 80)',    // Burnt orange
+                    512, 'rgb(200, 100, 80)',    // Muted red
+                    1024, 'rgb(170, 75, 75)',    // Brick red
                 ],
-                'fill-opacity': 1,
+                'fill-opacity': 1.0,
                 'fill-antialias': false,
                 'fill-outline-color': 'rgba(0,0,0,0)'
             }
@@ -350,6 +370,12 @@ async function simulationStep(version) {
         const now = performance.now();
         if (visualizationMode === 'grid') {
             if (now - lastGridUpdate > GRID_UPDATE_INTERVAL) {
+                updateBoundingBox();
+                let xmin = bounding_box[0];
+                let xmax = bounding_box[1];
+                let ymin = bounding_box[2];
+                let ymax = bounding_box[3];
+                heatmap = new HeatmapGenerator(xmin-gridSize, xmax+gridSize, ymin-gridSize, ymax+gridSize, gridSize);
                 updateGridVisualization(positions);
                 lastGridUpdate = now;
             }

@@ -1,5 +1,3 @@
-// particles.rs
-
 /// Structure of Arrays (SoA) particle storage for cache-efficient simulation.
 /// All fields are public for direct access by integrators and physics modules.
 pub struct Particles {
@@ -205,6 +203,7 @@ impl Particles {
     
     /// Get bounding box of active particles in projected coordinates.
     /// Returns (xmin, xmax, ymin, ymax).
+
     pub fn bounding_box(&self) -> (f32, f32, f32, f32) {
         let mut xmin = f32::MAX;
         let mut xmax = f32::MIN;
@@ -221,6 +220,29 @@ impl Particles {
         }
         
         (xmin, xmax, ymin, ymax)
+    }
+
+    pub fn bounding_box_array(&self) -> Vec<f32> {
+        let mut xmin = f32::MAX;
+        let mut xmax = f32::MIN;
+        let mut ymin = f32::MAX;
+        let mut ymax = f32::MIN;
+        let mut bounding_box = Vec::with_capacity(4);
+        
+        for i in 0..self.len {
+            if self.active[i] {
+                xmin = xmin.min(self.x[i]);
+                xmax = xmax.max(self.x[i]);
+                ymin = ymin.min(self.y[i]);
+                ymax = ymax.max(self.y[i]);
+            }
+        }
+        bounding_box.push(xmin);
+        bounding_box.push(xmax);
+        bounding_box.push(ymin);
+        bounding_box.push(ymax);
+        
+        bounding_box
     }
     
     /// Get bounding box in geographic coordinates (lon/lat).
