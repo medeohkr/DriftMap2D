@@ -185,7 +185,109 @@ impl GlorysLoader {
         Some((u_deg_per_s, v_deg_per_s))
         // None
     }
+    pub fn get_velocities_batch(
+        &self,
+        positions: &[(f32, f32, f32)],  // (lon, lat, depth)
+        day: u32,
+    ) -> Vec<(f32, f32)> {
+        positions.iter().map(|&(lon, lat, depth)| {
+            self.get_velocity(lon, lat, depth, day)
+                .unwrap_or((0.0, 0.0))
+        }).collect()
+    }
+    
+    /// Optimized batch version that groups by tile for better cache locality
+    pub fn get_velocities_batch_grouped(
+        &self,
+        positions: &[(f32, f32, f32)],
+        day: u32,
+    ) -> Vec<(f32, f32)> {
+        // Group positions by tile to maximize cache hits
+        let mut groups: HashMap<TileKey, Vec<(usize, (f32, f32, f32))>> = HashMap::new();
         
+        for (i, &(lon, lat, depth)) in positions.iter().enumerate() {
+            let key = self.get_tile_key(lon, lat, day);
+            groups.entry(key).or_insert_with(Vec::new).push((i, (lon, lat, depth)));
+        }
+        
+        let mut results = vec![(0.0, 0.0); positions.len()];
+        
+        for (key, group) in groups {
+            if let Some(tile) = self.cache.get(&key) {
+                // Pre-calculate tile bounds once per group
+                let tile_min_lon = self.min_lon + (key.lon_idx as f32) * self.tile_size;
+                let tile_min_lat = self.min_lat + (key.lat_idx as f32) * self.tile_size;
+                
+                for (idx, (lon, lat, depth)) in group {
+                    let (lon_cell, lat_cell) = self.get_cell_index(lon, lat, tile);
+                    
+                    // Get the cell corner coordinates once
+                    let cell_lon_min = tile_min_lon + (lon_cell as f32) * self.lon_step;
+                    let cell_lat_min = tile_min_lat + (lat_cell as f32) * self.lat_step;
+                    
+                    // Pre-calculate fractions
+                    let x_frac = ((lon - cell_lon_min) / self.lon_step).clamp(0.0, 1.0);
+                    let y_frac = ((lat - cell_lat_min) / self.lat_step).clamp(0.0, 1.0);
+                    
+                    let (depth_idx, t) = find_depth_indices(&tile.depths, depth);
+                    
+                    let stride = tile.n_lon * tile.n_lat;
+                    let idx_bot = depth_idx * stride + lat_cell * tile.n_lon + lon_cell;
+                    
+                    // Extract all 4 corner values at once
+                    let u0 = tile.u[idx_bot];
+                    let u1 = tile.u[idx_bot + 1];
+                    let u2 = tile.u[idx_bot + tile.n_lon];
+                    let u3 = tile.u[idx_bot + tile.n_lon + 1];
+                    
+                    let v0 = tile.v[idx_bot];
+                    let v1 = tile.v[idx_bot + 1];
+                    let v2 = tile.v[idx_bot + tile.n_lon];
+                    let v3 = tile.v[idx_bot + tile.n_lon + 1];
+                    
+                    // Vertical interpolation
+                    let (uz0, uz1, uz2, uz3, vz0, vz1, vz2, vz3) = 
+                        if depth_idx + 1 < tile.depths.len() {
+                            let idx_top = (depth_idx + 1) * stride + lat_cell * tile.n_lon + lon_cell;
+                            (
+                                lerp(u0, tile.u[idx_top], t),
+                                lerp(u1, tile.u[idx_top + 1], t),
+                                lerp(u2, tile.u[idx_top + tile.n_lon], t),
+                                lerp(u3, tile.u[idx_top + tile.n_lon + 1], t),
+                                lerp(v0, tile.v[idx_top], t),
+                                lerp(v1, tile.v[idx_top + 1], t),
+                                lerp(v2, tile.v[idx_top + tile.n_lon], t),
+                                lerp(v3, tile.v[idx_top + tile.n_lon + 1], t),
+                            )
+                        } else {
+                            (u0, u1, u2, u3, v0, v1, v2, v3)
+                        };
+                    
+                    // Bilinear interpolation
+                    let u_interp = lerp(
+                        lerp(uz0, uz1, x_frac),
+                        lerp(uz2, uz3, x_frac),
+                        y_frac,
+                    );
+                    let v_interp = lerp(
+                        lerp(vz0, vz1, x_frac),
+                        lerp(vz2, vz3, x_frac),
+                        y_frac,
+                    );
+                    
+                    let meters_per_degree_lat = 111000.0;
+                    let meters_per_degree_lon = 111000.0 * lat.to_radians().cos();
+                    
+                    results[idx] = (
+                        u_interp / meters_per_degree_lon,
+                        v_interp / meters_per_degree_lat,
+                    );
+                }
+            }
+        }
+        
+        results
+    }
     fn fetch_tiles(&self, particles: &Particles) -> HashSet<TileKey> {
         let (xmin, xmax, ymin, ymax) = particles.bounding_box();
         
