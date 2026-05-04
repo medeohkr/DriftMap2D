@@ -1,5 +1,4 @@
-import init, { Proteus, setup_panic_hook } from './pkg/proteus.js';
-import { EulerianGrid, createAdaptiveGrid, updateGridFromParticles } from './eulerGrid.js';
+import init, { Proteus, setup_panic_hook, HeatmapGenerator} from './pkg/proteus.js';
 import { preloader } from './preloader.js';
 
 let map = new maplibregl.Map({
@@ -73,9 +72,10 @@ let animationId = null;
 let simulationVersion = 0;
 
 // Grid visualization
+let heatmap = null;
 let concentrationGrid = null;
 let lastGridUpdate = 0;
-const GRID_UPDATE_INTERVAL = 500; 
+const GRID_UPDATE_INTERVAL = 100; 
 let visualizationMode = 'grid'; 
 let rawLon = 56.54;
 let rawLat = 26.74;
@@ -141,9 +141,11 @@ async function initialize() {
     let lat = rawLat
     
     proteus = new Proteus(normalizeLongitude(lon), lat, kValue, particleCount, spreadKm, startYear, startMonth, startDay);
-    
+    heatmap = new HeatmapGenerator(-180, 180, -80, 90, 0.2);
+
     initGridLayer();
     updateMarker();
+    updateTotalDays();
 }
 
 function initGridLayer() {
@@ -172,7 +174,7 @@ function initGridLayer() {
                     512, 'rgb(255, 154, 0)',
                     1024, 'rgb(255, 216, 1)',
                 ],
-                'fill-opacity': 0.7,
+                'fill-opacity': 1,
                 'fill-antialias': false,
                 'fill-outline-color': 'rgba(0,0,0,0)'
             }
@@ -263,30 +265,29 @@ function updateMarker() {
 
 // Update grid visualization from particle positions
 function updateGridVisualization(positions) {
-    if (!positions || positions.length === 0) {
-        return;
+    // Extract lons and lats
+    const lons = [];
+    const lats = [];
+    for (let i = 0; i < positions.length; i += 2) {
+        lons.push(positions[i]);
+        lats.push(positions[i + 1]);
     }
     
-    // Create or resize grid adaptively
-    if (!concentrationGrid) {
-        concentrationGrid = createAdaptiveGrid(positions, 0.1, 100.0);
-    }
+    // Update grid
+    heatmap.clear();
+    heatmap.add_particles(lons, lats, null);
+    heatmap.smooth();
     
-    // Update grid with current particle positions
-    // For oil, use concentration = 1.0 per particle (mass-based)
-    updateGridFromParticles(concentrationGrid, positions, null, true);
+    // Generate contours
+    const thresholds = [0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024];
+    const geojsonStr = heatmap.to_contour_geojson(thresholds);
+    const geojson = JSON.parse(geojsonStr);
+    // console.log("GeoJSON length:", geojsonStr.length);
+    // console.log("First 500 chars:", geojsonStr.substring(0, 500));
     
-    // Apply log scaling for better visualization
-    const range = concentrationGrid.getRange();
-    if (range.max > 0) {
-        // Store original for later, but use log values for color
-        // The GeoJSON uses raw values, map style handles interpolation
-    }
-    
-    // Update map source
-    if (map.getSource('concentration')) {
-        map.getSource('concentration').setData(concentrationGrid.toGeoJSON());
-    }
+    // console.log("Number of features:", geojson.features.length);
+    // console.log("Grid max value:", heatmap.get_max_value());
+    map.getSource('concentration').setData(geojson);
 }
 
 // Update particle visualization (points)
@@ -396,7 +397,7 @@ function startSimulation() {
 
     map.flyTo({
         center: [lon, lat],
-        zoom: 5.5-(totalDays/100),  // Adjust zoom level (lower = further out, higher = closer)
+        zoom: 5-(totalDays/100),  // Adjust zoom level (lower = further out, higher = closer)
         duration: 1500,  // Animation duration in milliseconds
         essential: true  // Ensures the animation happens even if user prefers reduced motion
     });

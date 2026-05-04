@@ -1,6 +1,11 @@
-// heatmap.rs
 use serde::{Serialize, Deserialize};
 use wasm_bindgen::prelude::*;
+
+macro_rules! log {
+    ( $( $t:tt )* ) => {
+        web_sys::console::log_1(&format!( $( $t )* ).into())
+    }
+}
 
 // ============================================================================
 // POINT STRUCT
@@ -89,16 +94,16 @@ impl EulerianGrid {
             }
         }
         
+        // Use copy_from_slice for better performance
         for iy in 1..self.ny - 1 {
-            for ix in 1..self.nx - 1 {
-                let idx = iy * self.nx + ix;
-                self.grid[idx] = smoothed[idx];
-            }
+            let start = iy * self.nx + 1;
+            let end = start + self.nx - 2;
+            self.grid[start..end].copy_from_slice(&smoothed[start..end]);
         }
     }
     
     pub fn get_max_value(&self) -> f32 {
-        self.grid.iter().fold(0.0, |max, &val| max.max(val))
+        self.grid.iter().fold(0.0f32, |max, &val| if val > max { val } else { max })
     }
     
     pub fn get_min_max(&self) -> (f32, f32) {
@@ -106,8 +111,8 @@ impl EulerianGrid {
         let mut max = f32::MIN;
         for &val in &self.grid {
             if val > 0.0 {
-                min = min.min(val);
-                max = max.max(val);
+                if val < min { min = val; }
+                if val > max { max = val; }
             }
         }
         (min, max)
@@ -171,12 +176,12 @@ impl EulerianGrid {
     // Generate smooth contour GeoJSON
     pub fn to_contour_geojson(&self, thresholds: &[f32]) -> String {
         let contours = self.generate_contours(thresholds);
-        let mut features = Vec::new();
+        let mut features = Vec::with_capacity(contours.len());
         
         for contour in &contours {
             for ring in &contour.rings {
-                let coordinates: Vec<[f64; 2]> = ring.iter()
-                    .map(|p| [p.x, p.y])
+                let coordinates: Vec<Vec<f64>> = ring.iter()
+                    .map(|p| vec![p.x, p.y])
                     .collect();
                 
                 let feature = serde_json::json!({
@@ -204,7 +209,7 @@ impl EulerianGrid {
     
     // Generate contours at multiple thresholds
     pub fn generate_contours(&self, thresholds: &[f32]) -> Vec<Contour> {
-        let mut contours = Vec::new();
+        let mut contours = Vec::with_capacity(thresholds.len());
         
         for &threshold in thresholds {
             let rings = self.marching_squares(threshold);
@@ -216,163 +221,119 @@ impl EulerianGrid {
         contours
     }
     
-    // Marching squares algorithm for a single threshold
     fn marching_squares(&self, threshold: f32) -> Vec<Vec<Point2D>> {
-        let mut rings = Vec::new();
+        // Pre-allocate with estimated capacity (roughly 25% of cells will have contours)
+        let estimated_capacity = (self.nx * self.ny) / 4;
+        let mut polygons = Vec::with_capacity(estimated_capacity);
+        
+        // Pre-compute binary classifications to avoid repeated comparisons
+        let classified: Vec<u8> = self.grid.iter()
+            .map(|&v| if v >= threshold { 1u8 } else { 0u8 })
+            .collect();
+        
+        let cell_size = self.cell_size;
+        let lon_min = self.lon_min;
+        let lat_min = self.lat_min;
         
         for y in 0..self.ny - 1 {
+            let row_offset = y * self.nx;
+            let next_row_offset = (y + 1) * self.nx;
+            let lat = lat_min + y as f64 * cell_size;
+            let next_lat = lat + cell_size;
+            
             for x in 0..self.nx - 1 {
-                let idx = y * self.nx + x;
+                let idx = row_offset + x;
                 
-                let v00 = self.grid[idx];
-                let v10 = self.grid[idx + 1];
-                let v01 = self.grid[(y + 1) * self.nx + x];
-                let v11 = self.grid[(y + 1) * self.nx + x + 1];
+                // Fast config computation using pre-classified values
+                let b0 = classified[idx];
+                let b1 = classified[idx + 1];
+                let b2 = classified[next_row_offset + x + 1];
+                let b3 = classified[next_row_offset + x];
                 
-                let c00 = if v00 >= threshold { 1 } else { 0 };
-                let c10 = if v10 >= threshold { 1 } else { 0 };
-                let c01 = if v01 >= threshold { 1 } else { 0 };
-                let c11 = if v11 >= threshold { 1 } else { 0 };
+                let config = b0 | (b1 << 1) | (b2 << 2) | (b3 << 3);
                 
-                let config = c00 | (c10 << 1) | (c11 << 2) | (c01 << 3);
-                
-                if config == 0 || config == 15 {
+                // Skip empty cells early
+                if config == 0 {
                     continue;
                 }
                 
-                let lon = self.lon_min + x as f64 * self.cell_size;
-                let lat = self.lat_min + y as f64 * self.cell_size;
+                let lon = lon_min + x as f64 * cell_size;
+                let next_lon = lon + cell_size;
                 
-                let interpolate = |a: f32, b: f32, p1: &Point2D, p2: &Point2D| -> Point2D {
-                    if (a - b).abs() < 1e-6 {
-                        return p1.clone();
-                    }
-                    let t = (threshold - a) as f64 / (b - a) as f64;
-                    Point2D {
-                        x: p1.x + (p2.x - p1.x) * t,
-                        y: p1.y + (p2.y - p1.y) * t,
-                    }
+                // Compute corner points
+                let p0 = Point2D { x: lon, y: lat };
+                let p1 = Point2D { x: next_lon, y: lat };
+                let p2 = Point2D { x: next_lon, y: next_lat };
+                let p3 = Point2D { x: lon, y: next_lat };
+                
+                // Handle full cell case early (no interpolation needed)
+                if config == 15 {
+                    polygons.push(vec![p0, p1, p2, p3]);
+                    continue;
+                }
+                
+                // Only fetch actual grid values we need for interpolation
+                let c0 = self.grid[idx];
+                let c1 = self.grid[idx + 1];
+                let c2 = self.grid[next_row_offset + x + 1];
+                let c3 = self.grid[next_row_offset + x];
+                
+                // Interpolate edge crossings
+                let mb = Self::interpolate(&p0, &p1, c0, c1, threshold);
+                let mr = Self::interpolate(&p1, &p2, c1, c2, threshold);
+                let mt = Self::interpolate(&p3, &p2, c3, c2, threshold);
+                let ml = Self::interpolate(&p0, &p3, c0, c3, threshold);
+                
+                // Generate polygon for this cell configuration
+                let polygon = match config {
+                    1 => vec![p0, mb, ml],
+                    2 => vec![p1, mr, mb],
+                    4 => vec![p2, mt, mr],
+                    8 => vec![p3, ml, mt],
+                    
+                    3 => vec![p0, p1, mr, ml],
+                    6 => vec![p1, p2, mt, mb],
+                    12 => vec![p2, p3, ml, mr],
+                    9 => vec![p0, p3, mt, mb],
+                    
+                    5 => vec![p0, mb, mr, p2, mt, ml],
+                    10 => vec![mb, p1, mr, mt, p3, ml],
+                    
+                    7 => vec![p0, p1, p2, mt, ml],
+                    11 => vec![p0, p1, mr, mt, p3],
+                    13 => vec![p0, mb, mr, p2, p3],
+                    14 => vec![mb, p1, p2, p3, ml],
+                    
+                    _ => vec![],
                 };
                 
-                let mut points = Vec::new();
-                
-                // Bottom edge
-                if c00 != c10 {
-                    points.push(interpolate(v00, v10,
-                        &Point2D { x: lon, y: lat },
-                        &Point2D { x: lon + self.cell_size, y: lat }));
-                }
-                
-                // Right edge
-                if c10 != c11 {
-                    points.push(interpolate(v10, v11,
-                        &Point2D { x: lon + self.cell_size, y: lat },
-                        &Point2D { x: lon + self.cell_size, y: lat + self.cell_size }));
-                }
-                
-                // Top edge
-                if c11 != c01 {
-                    points.push(interpolate(v11, v01,
-                        &Point2D { x: lon + self.cell_size, y: lat + self.cell_size },
-                        &Point2D { x: lon, y: lat + self.cell_size }));
-                }
-                
-                // Left edge
-                if c01 != c00 {
-                    points.push(interpolate(v01, v00,
-                        &Point2D { x: lon, y: lat + self.cell_size },
-                        &Point2D { x: lon, y: lat }));
-                }
-                
-                if points.len() >= 3 {
-                    let center_x = lon + self.cell_size / 2.0;
-                    let center_y = lat + self.cell_size / 2.0;
-                    points.sort_by(|a, b| {
-                        let angle_a = (a.y - center_y).atan2(a.x - center_x);
-                        let angle_b = (b.y - center_y).atan2(b.x - center_x);
-                        angle_a.partial_cmp(&angle_b).unwrap()
-                    });
-                    rings.push(points);
+                if !polygon.is_empty() {
+                    polygons.push(polygon);
                 }
             }
         }
         
-        self.merge_contours(rings)
+        polygons
     }
     
-    // Merge adjacent contour segments
-    fn merge_contours(&self, mut segments: Vec<Vec<Point2D>>) -> Vec<Vec<Point2D>> {
-        if segments.len() <= 1 {
-            return segments;
+    /// Linear interpolation along a cell edge
+    #[inline]
+    fn interpolate(p1: &Point2D, p2: &Point2D, v1: f32, v2: f32, threshold: f32) -> Point2D {
+        let diff = v2 - v1;
+        if diff.abs() < 1e-10 {
+            return Point2D {
+                x: (p1.x + p2.x) * 0.5,
+                y: (p1.y + p2.y) * 0.5,
+            };
         }
         
-        let mut merged = Vec::new();
-        let mut used = vec![false; segments.len()];
+        let t = ((threshold - v1) / diff) as f64;
+        let t = if t < 0.0 { 0.0 } else if t > 1.0 { 1.0 } else { t };
         
-        for i in 0..segments.len() {
-            if used[i] {
-                continue;
-            }
-            
-            let mut current = segments[i].clone();
-            used[i] = true;
-            
-            let mut changed = true;
-            while changed {
-                changed = false;
-                for j in 0..segments.len() {
-                    if used[j] {
-                        continue;
-                    }
-                    
-                    let seg = &segments[j];
-                    if seg.is_empty() {
-                        used[j] = true;
-                        continue;
-                    }
-                    
-                    let epsilon = 1e-6;
-                    let first_current = current.first().unwrap();
-                    let last_current = current.last().unwrap();
-                    let first_seg = seg.first().unwrap();
-                    let last_seg = seg.last().unwrap();
-                    
-                    let dist_last_first = ((last_current.x - first_seg.x).powi(2) + (last_current.y - first_seg.y).powi(2)).sqrt();
-                    let dist_last_last = ((last_current.x - last_seg.x).powi(2) + (last_current.y - last_seg.y).powi(2)).sqrt();
-                    let dist_first_first = ((first_current.x - first_seg.x).powi(2) + (first_current.y - first_seg.y).powi(2)).sqrt();
-                    let dist_first_last = ((first_current.x - last_seg.x).powi(2) + (first_current.y - last_seg.y).powi(2)).sqrt();
-                    
-                    if dist_last_first < epsilon {
-                        current.extend(seg.iter().skip(1).cloned());
-                        used[j] = true;
-                        changed = true;
-                    } else if dist_last_last < epsilon {
-                        let mut rev = seg.clone();
-                        rev.reverse();
-                        current.extend(rev.iter().skip(1).cloned());
-                        used[j] = true;
-                        changed = true;
-                    } else if dist_first_first < epsilon {
-                        let mut new = seg.clone();
-                        new.extend(current.iter().skip(1).cloned());
-                        current = new;
-                        used[j] = true;
-                        changed = true;
-                    } else if dist_first_last < epsilon {
-                        let mut rev = seg.clone();
-                        rev.reverse();
-                        rev.extend(current.iter().skip(1).cloned());
-                        current = rev;
-                        used[j] = true;
-                        changed = true;
-                    }
-                }
-            }
-            
-            merged.push(current);
+        Point2D {
+            x: p1.x + t * (p2.x - p1.x),
+            y: p1.y + t * (p2.y - p1.y),
         }
-        
-        merged
     }
 }
 
