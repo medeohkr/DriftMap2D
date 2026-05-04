@@ -3,6 +3,11 @@ use crate::particles::Particles;
 use crate::integrators;
 use crate::diffusion::{Diffusion};
 
+macro_rules! log {
+    ( $( $t:tt )* ) => {
+        web_sys::console::log_1(&format!( $( $t )* ).into());
+    }
+}
 pub struct Simulation {
     config: SimulationConfig,
     pub particles: Particles,           // Made pub for testing
@@ -88,6 +93,7 @@ impl Simulation {
             
             // Update history for visualization
             self.particles.update_history(i, 50);
+
         }
     }
     

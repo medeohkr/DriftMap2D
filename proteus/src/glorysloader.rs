@@ -183,6 +183,7 @@ impl GlorysLoader {
         let v_deg_per_s = v_interp / meters_per_degree_lat;
         
         Some((u_deg_per_s, v_deg_per_s))
+        // None
     }
         
     fn fetch_tiles(&self, particles: &Particles) -> HashSet<TileKey> {

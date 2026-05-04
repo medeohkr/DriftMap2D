@@ -26,14 +26,14 @@
             <span class="release-text">Release Location:</span>
             <span class="lat-text">Latitude:</span>
             <span class="lon-text">Longitude:</span>
-            <input type="text" class="lat-field" value="N/A">
-            <input type="text" class="lon-field" value="N/A">
+            <input type="text" class="lat-field" value="26.74">
+            <input type="text" class="lon-field" value="56.54">
         </div>
         <div class="oil-display-container">
             <span class="oil-text">Oil Type:</span>
             <select name="oil-menu" id="oil-menu">
-            <option value="bonny-light">BONNY LIGHT (Medium Crude)</option>
             <option value="arabian-light">ARABIAN LIGHT (Light Crude)</option>
+            <option value="bonny-light">BONNY LIGHT (Medium Crude)</option>
             <option value="ifo-380">IFO 380 (Heavy Fuel Oil)</option>
             <option value="venezuelan-heavy">VENEZUELAN HEAVY (Extra Heavy)</option>
             <option value="marine-diesel">MARINE DIESEL (Refined)</option>
@@ -54,10 +54,13 @@
             <input type="text" id="total-day-field" value="10">
         </div>
     </div>
-    <div class="timeline-controls">
-        <div class="simulation-info">
-            <span>Day:</span>
-            <span id="current-day">0.0</span>
+    <div class="playback-controls">
+        <div class="timeline-controls">
+            <span id="current-day">Day: 0.0</span>
+        </div>
+        <div class="visualization-toggle-container">
+            <button class="visualization-toggle" id="heatmap-toggle">Heatmap</button>
+            <button class="visualization-toggle" id="particle-toggle">Particles</button>
         </div>
     </div>
 

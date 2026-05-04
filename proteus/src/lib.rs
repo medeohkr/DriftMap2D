@@ -6,6 +6,7 @@ pub mod glorysloader;
 pub mod release_manager;
 pub mod simulation;
 pub mod wasm;
+pub mod heatmap;
 
 // Re-export commonly used types for convenience
 pub use particles::Particles;

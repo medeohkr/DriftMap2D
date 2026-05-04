@@ -3,3 +3,4 @@ target/
 web/pkg/
 data/
 data-pipeline/
+.vscode/
