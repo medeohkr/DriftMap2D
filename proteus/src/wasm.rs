@@ -173,4 +173,7 @@ impl Proteus {
         let day = current_date.day();
         (year as u32 * 10000) + (month * 100) + day
     }
+    pub fn get_particle_bounding_box(&self) -> Vec<f32> {
+        self.simulation.particles.bounding_box_array()
+    }
 }
