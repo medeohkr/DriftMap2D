@@ -35,7 +35,6 @@ impl Proteus {
         start_day: u32) -> Self {
 
         let start_date = NaiveDate::from_ymd_opt(start_year, start_month, start_day).unwrap();
-        log!("{start_year}, {start_month}, {start_day}");
         // Configure release (default: Fukushima)
         let release_config = ReleaseConfig {
             lon: lon,

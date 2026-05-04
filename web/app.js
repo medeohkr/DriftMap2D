@@ -29,12 +29,13 @@ let map = new maplibregl.Map({
     },
     center: [0, 0],
     zoom: 0,
-    renderWorldCopies: false,
-    maxBounds: [
-        [-180 + (1/12), -80],
-        [180, 85.05]
-    ]
+    // renderWorldCopies: false,
+    // maxBounds: [
+    //     [-180 + (1/12), -80],
+    //     [180, 85.05]
+    // ]
 });
+
 
 // DOM elements
 const latField = document.querySelector('.lat-field');
@@ -48,30 +49,37 @@ const resetBtn = document.getElementById('reset-simulation');
 const oilMenu = document.getElementById('oil-menu');
 const startDate = document.getElementById('start-day-selector');
 const totalDaysField = document.getElementById('total-day-field');
-
+const heatmapToggle = document.getElementById('heatmap-toggle');
+const particleToggle = document.getElementById('particle-toggle');
 // Event listeners
 startBtn.addEventListener('click', startSimulation);
 stopBtn.addEventListener('click', stopSimulation);
 resumeBtn.addEventListener('click', resumeSimulation);
 resetBtn.addEventListener('click', resetSimulation);
-latField.addEventListener('input', updateMarkerFromFields);
-lonField.addEventListener('input', updateMarkerFromFields);
+latField.addEventListener('input', updatePositionFromFields);
+lonField.addEventListener('input', updatePositionFromFields);
+latField.addEventListener('blur', updateFields)
+lonField.addEventListener('blur', updateFields);
 startDate.addEventListener('input', updateSimulationDate);
 totalDaysField.addEventListener('input', updateTotalDays);
+heatmapToggle.addEventListener('click', toggleHeatmapMode);
+particleToggle.addEventListener('click', toggleParticleMode)
+
 // State
 let proteus = null;
 let simulationRunning = false;
 let stepInProgress = false;
 let animationId = null;
-let currentPositions = [];
 let simulationVersion = 0;
 
 // Grid visualization
 let concentrationGrid = null;
 let lastGridUpdate = 0;
-const GRID_UPDATE_INTERVAL = 1000; 
+const GRID_UPDATE_INTERVAL = 500; 
 let visualizationMode = 'grid'; 
-let kValue = 100;
+let rawLon = 56.54;
+let rawLat = 26.74;
+let kValue = 50;
 let particleCount = 20000;
 let spreadKm = 1;
 let oilType = oilMenu ? oilMenu.value : 'arabian_light';
@@ -82,7 +90,6 @@ let stepSize = 1/24;
 let totalDays = 10;
 let isError = false;
 let stepCount = 0;
-
 // Normalize longitude
 function normalizeLongitude(lon) {
     lon = parseFloat(lon);
@@ -108,7 +115,6 @@ function getTileIndicesFromPositions(positions, tileSize = 10.0) {
             tiles.add({ lonIdx, latIdx });
         }
     }
-    console.log(Array.from(tiles));
 
     return Array.from(tiles);
 }
@@ -131,17 +137,13 @@ async function initialize() {
     await init();
     setup_panic_hook();
     
-    let lon = parseFloat(lonField.value);
-    let lat = parseFloat(latField.value);
+    let lon = normalizeLongitude(rawLon);
+    let lat = rawLat
     
     proteus = new Proteus(normalizeLongitude(lon), lat, kValue, particleCount, spreadKm, startYear, startMonth, startDay);
-    console.log('Proteus engine initialized');
     
-    // Initialize grid layer on map
     initGridLayer();
-    
-    // Set initial marker
-    updateMarkerFromFields();
+    updateMarker();
 }
 
 function initGridLayer() {
@@ -165,7 +167,7 @@ function initGridLayer() {
                     16, 'rgb(141, 142, 213)',
                     32, 'rgb(252, 184, 197)',
                     64, 'rgb(255, 115, 107)',
-                    128, 'rgb(251, 64, 26)',
+                    128, 'rgb(254, 79, 44)',
                     256, 'rgb(255, 106, 0)',
                     512, 'rgb(255, 154, 0)',
                     1024, 'rgb(255, 216, 1)',
@@ -186,7 +188,7 @@ function initGridLayer() {
             source: 'particles',
             paint: {
                 'circle-radius': 2,
-                'circle-color': '#ff6b6b',
+                'circle-color': '#ffffff',
                 'circle-opacity': 0.7
             }
         });
@@ -206,21 +208,57 @@ function toggleVisualizationMode() {
     }
 }
 
-// Update marker from lat/lon fields
-function updateMarkerFromFields() {
-    let lon = parseFloat(lonField.value);
-    let lat = parseFloat(latField.value);
-    
-    if (window.currentMarker) {
-        window.currentMarker.remove();
+function toggleParticleMode() {
+    visualizationMode = 'particles'
+    toggleVisualizationMode();
+    heatmapToggle.style.background = 'rgb(255, 255, 255)'
+    heatmapToggle.style.color = 'rgb(0, 0, 0)'
+    particleToggle.style.background = 'none'
+    particleToggle.style.color = 'rgb(255, 255, 255)'
+    updateParticleVisualization(proteus.get_positions());
+    updateGridVisualization(proteus.get_positions());
+}
+
+function toggleHeatmapMode() {
+    visualizationMode = 'grid'
+    toggleVisualizationMode();
+    heatmapToggle.style.background = 'none'
+    heatmapToggle.style.color = 'rgb(255, 255, 255)'
+    particleToggle.style.background = 'rgb(255, 255, 255)'
+    particleToggle.style.color = 'rgb(0, 0, 0)'
+    updateParticleVisualization(proteus.get_positions());
+    updateGridVisualization(proteus.get_positions());
+}
+
+
+
+function updatePositionFromFields() {
+    if (!Number.isNaN(lonField.value) && !Number.isNaN(latField.value)) {
+        rawLon = lonField.value;
+        rawLat = latField.value;
     }
-    
-    window.currentMarker = new maplibregl.Marker({
-        color: '#244886',
-        scale: 0.9
-    })
-    .setLngLat([lon, lat])
-    .addTo(map);
+    updateMarker()
+}
+
+function updateFields() {
+    let displayLon = normalizeLongitude(rawLon).toFixed(2);
+    lonField.value = displayLon;
+    latField.value = rawLat;
+}
+
+function updateMarker() {
+    if (!simulationRunning) {
+        if (window.currentMarker) {
+            window.currentMarker.remove();
+        }
+        
+        window.currentMarker = new maplibregl.Marker({
+            color: '#244886',
+            scale: 0.9
+        })
+        .setLngLat([rawLon, rawLat])
+        .addTo(map);
+    }
 }
 
 // Update grid visualization from particle positions
@@ -282,7 +320,6 @@ function updateParticleVisualization(positions) {
 // Run one simulation step
 async function simulationStep(version) {
     if (!simulationRunning || version !== simulationVersion) {
-        console.log("Step skipped: not running or version mismatch");
         return;
     }
     
@@ -295,20 +332,17 @@ async function simulationStep(version) {
 
         // Check if simulation was reset during step
         if (version !== simulationVersion) {
-            console.log("Step aborted: version changed");
             return;
         }
         
         const positions = proteus.get_positions();
-        currentPositions = positions;
 
         const currentDate = proteus.current_date_int();  // ← From Rust
 
-        if (stepCount % 24 === 0) {
+        if (stepCount % (1/stepSize) === 0) {
             const currentTiles = getTileIndicesFromPositions(positions);
             const nextStepDate = addDays(currentDate, 1);
             preloader.preloadTiles(nextStepDate, currentTiles); 
-            console.log('preloaded!')
         }
         
         // Update visualization based on mode
@@ -323,15 +357,13 @@ async function simulationStep(version) {
         }
         
         const day = proteus.current_day();
-        if (dayDisplay) {
-            dayDisplay.textContent = day.toFixed(1);
-        }
+
+        dayDisplay.textContent = `Day: ${day.toFixed(1)}`;
         
         if (simulationRunning && version === simulationVersion && day <= totalDays) {
             animationId = requestAnimationFrame(() => simulationStep(version));
         }
     } catch (error) {
-        console.error("Simulation step error:", error);
         simulationRunning = false;
     } finally {
         stepInProgress = false;
@@ -341,7 +373,6 @@ async function simulationStep(version) {
 // Start simulation
 function startSimulation() {
     if (simulationRunning) {
-        console.log("Simulation already running");
         return;
     }
     
@@ -351,8 +382,8 @@ function startSimulation() {
     lastGridUpdate = 0;
     concentrationGrid = null;
     
-    let lon = parseFloat(lonField.value);
-    let lat = parseFloat(latField.value);
+    let lon = normalizeLongitude(rawLon);
+    let lat = rawLat;
     
     updateSimulationDate();
     updateTotalDays();
@@ -362,6 +393,13 @@ function startSimulation() {
     startBtn.style.display = "none";
     stopBtn.style.display = "inline-flex";
     resumeBtn.style.display = "none";
+
+    map.flyTo({
+        center: [lon, lat],
+        zoom: 5.5-(totalDays/100),  // Adjust zoom level (lower = further out, higher = closer)
+        duration: 1500,  // Animation duration in milliseconds
+        essential: true  // Ensures the animation happens even if user prefers reduced motion
+    });
     
     // Start simulation loop
     simulationStep(simulationVersion);
@@ -394,7 +432,6 @@ function resumeSimulation() {
 
 // Reset simulation
 async function resetSimulation() {
-    console.log("Reset started");
     
     simulationRunning = false;
     simulationVersion++;
@@ -405,26 +442,7 @@ async function resetSimulation() {
         animationId = null;
     }
     
-    if (stepInProgress) {
-        await new Promise(resolve => {
-            const checkInterval = setInterval(() => {
-                if (!stepInProgress) {
-                    clearInterval(checkInterval);
-                    resolve();
-                }
-            }, 10);
-        });
-    }
-    
-    await new Promise(resolve => setTimeout(resolve, 50));
-    
-    let lon = parseFloat(lonField.value);
-    let lat = parseFloat(latField.value);
-    
-    proteus = new Proteus(normalizeLongitude(lon), lat, kValue, particleCount, spreadKm, startYear, startMonth, startDay);
-    
     concentrationGrid = null;
-    currentPositions = [];
     lastGridUpdate = 0;
     
     if (map.getSource('concentration')) {
@@ -434,13 +452,14 @@ async function resetSimulation() {
         map.getSource('particles').setData({ type: 'FeatureCollection', features: [] });
     }
     
-    if (dayDisplay) dayDisplay.textContent = "0.0";
+    dayDisplay.textContent = "Day: 0.0";
     
     startBtn.style.display = "inline-flex";
     stopBtn.style.display = "none";
     resumeBtn.style.display = "none";
-    
-    console.log("Reset complete");
+
+    updateMarker();
+    updateTotalDays();
 }
 
 function updateSimulationDate() {
@@ -451,38 +470,20 @@ function updateSimulationDate() {
 }
 
 function updateTotalDays() {
-    totalDays = totalDaysField.value;
-}
-
-
-// Oil type change handler
-if (oilMenu) {
-    oilMenu.addEventListener('change', () => {
-        if (proteus && !simulationRunning) {
-            let lon = parseFloat(lonField.value);
-            let lat = parseFloat(latField.value);
-            const oilType = oilMenu.value;
-            proteus = new Proteus(normalizeLongitude(lon), lat, kValue, particleCount, spreadKm, startYear, startMonth, startDay);
-            console.log("Oil type changed to:", oilType);
-        }
-    });
+    if (!simulationRunning) {
+        totalDays = totalDaysField.value;
+    }
 }
 
 // Map click
 map.on('click', function(e) {
-    let rawLon = e.lngLat.lng;
-    let rawLat = e.lngLat.lat;
-    
-    let displayLon = rawLon.toFixed(2);
-    if (rawLon < -180 || rawLon > 180) {
-        displayLon = normalizeLongitude(rawLon).toFixed(2);
+    if (!simulationRunning) {
+        rawLon = e.lngLat.lng.toFixed(2);
+        rawLat = e.lngLat.lat.toFixed(2);
+        
+        updateFields();
+        updateMarker();
     }
-    let displayLat = rawLat.toFixed(2);
-    
-    latField.value = displayLat;
-    lonField.value = displayLon;
-    
-    updateMarkerFromFields();
 });
 
 // Initialize when page loads
