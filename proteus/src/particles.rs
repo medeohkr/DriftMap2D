@@ -201,8 +201,9 @@ impl Particles {
         self.active.iter().filter(|&&a| a).count()
     }
     
-    /// Get bounding box of active particles in projected coordinates.
-    /// Returns (xmin, xmax, ymin, ymax).
+    pub fn inactive_count(&self) -> usize {
+        self.active.iter().filter(|&&a| !a).count()
+    }
 
     pub fn bounding_box(&self) -> (f32, f32, f32, f32) {
         let mut xmin = f32::MAX;
@@ -211,12 +212,10 @@ impl Particles {
         let mut ymax = f32::MIN;
         
         for i in 0..self.len {
-            if self.active[i] {
-                xmin = xmin.min(self.x[i]);
-                xmax = xmax.max(self.x[i]);
-                ymin = ymin.min(self.y[i]);
-                ymax = ymax.max(self.y[i]);
-            }
+            xmin = xmin.min(self.x[i]);
+            xmax = xmax.max(self.x[i]);
+            ymin = ymin.min(self.y[i]);
+            ymax = ymax.max(self.y[i]);
         }
         
         (xmin, xmax, ymin, ymax)
@@ -230,12 +229,10 @@ impl Particles {
         let mut bounding_box = Vec::with_capacity(4);
         
         for i in 0..self.len {
-            if self.active[i] {
-                xmin = xmin.min(self.x[i]);
-                xmax = xmax.max(self.x[i]);
-                ymin = ymin.min(self.y[i]);
-                ymax = ymax.max(self.y[i]);
-            }
+            xmin = xmin.min(self.x[i]);
+            xmax = xmax.max(self.x[i]);
+            ymin = ymin.min(self.y[i]);
+            ymax = ymax.max(self.y[i]);       
         }
         bounding_box.push(xmin);
         bounding_box.push(xmax);
