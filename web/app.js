@@ -163,7 +163,10 @@ function initGridLayer() {
     map.on('load', () => {
         map.addSource('concentration', {
             type: 'geojson',
-            data: { type: 'FeatureCollection', features: [] }
+            data: { type: 'FeatureCollection', features: [] },
+            tolerance: 0,  // Disable simplification
+            buffer: 0,     // No buffer needed
+            maxzoom: 24    // Keep detailed geometry at all zooms
         });
         map.addLayer({
             id: 'concentration-fill',
@@ -201,7 +204,7 @@ function initGridLayer() {
                 'fill-opacity': 1.0,
                 'fill-antialias': false,
                 'fill-outline-color': 'rgba(0,0,0,0)'
-            }
+            },
         });
         
         map.addSource('particles-active', {
@@ -462,14 +465,16 @@ function startSimulation() {
     stopBtn.style.display = "inline-flex";
     resumeBtn.style.display = "none";
 
-    // map.flyTo({
-    //     center: [lon, lat],
-    //     zoom: 6-(totalDays/100),  // Adjust zoom level (lower = further out, higher = closer)
-    //     duration: 1500,  // Animation duration in milliseconds
-    //     essential: true  // Ensures the animation happens even if user prefers reduced motion
-    // });
-    
-    // Start simulation loop
+    const currentZoom = map.getZoom();
+    if (currentZoom < 2.5) {
+        map.flyTo({
+            center: [lon, lat],
+            zoom: 6-(totalDays/100),  // Adjust zoom level (lower = further out, higher = closer)
+            duration: 1500,  // Animation duration in milliseconds
+            essential: true  // Ensures the animation happens even if user prefers reduced motion
+        });
+    }
+
     simulationStep(simulationVersion);
 }
 
