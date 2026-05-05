@@ -28,15 +28,9 @@ let map = new maplibregl.Map({
     },
     center: [0, 0],
     zoom: 0,
-    // renderWorldCopies: false,
-    // maxBounds: [
-    //     [-180 + (1/12), -80],
-    //     [180, 85.05]
-    // ]
 });
 
 
-// DOM elements
 const latField = document.querySelector('.lat-field');
 const lonField = document.querySelector('.lon-field');
 const startBtn = document.getElementById('start-simulation');
@@ -50,7 +44,7 @@ const startDate = document.getElementById('start-day-selector');
 const totalDaysField = document.getElementById('total-day-field');
 const heatmapToggle = document.getElementById('heatmap-toggle');
 const particleToggle = document.getElementById('particle-toggle');
-// Event listeners
+
 startBtn.addEventListener('click', startSimulation);
 stopBtn.addEventListener('click', stopSimulation);
 resumeBtn.addEventListener('click', resumeSimulation);
@@ -64,41 +58,53 @@ totalDaysField.addEventListener('input', updateTotalDays);
 heatmapToggle.addEventListener('click', toggleHeatmapMode);
 particleToggle.addEventListener('click', toggleParticleMode)
 
-// State
 let proteus = null;
 let simulationRunning = false;
 let stepInProgress = false;
 let animationId = null;
 let simulationVersion = 0;
 
-// Grid visualization
 let heatmap = null;
 let concentrationGrid = null;
 let lastGridUpdate = 0;
-const GRID_UPDATE_INTERVAL = 200; 
-let visualizationMode = 'grid'; 
+let visualizationMode = 'particles'; 
 let rawLon = 56.54;
 let rawLat = 26.74;
-let kValue = 100;
-let particleCount = 20000;
-let spreadKm = 1;
+let kValue = 20;
+let particleCount = 10000;
+let spreadKm = 0.1;
 let oilType = oilMenu ? oilMenu.value : 'arabian_light';
 let startYear = 2025;
 let startMonth = 5;
 let startDay = 1;
-let stepSize = 1/24;
+let stepSize = 1/96;
 let totalDays = 10;
 let isError = false;
 let stepCount = 0;
 let bounding_box = [];
-let gridSize = 0.1;
+
+const GRID_UPDATE_INTERVAL = 200; 
+const GRID_SIZE = 0.01;
+const CONCENTRATIONS = [
+    particleCount/40000,
+    particleCount/20000,
+    particleCount/10000,
+    particleCount/5000,
+    particleCount/2500,
+    particleCount/1250,
+    particleCount/625,
+    particleCount/313,
+    particleCount/156,
+    particleCount/78,
+]
 // Normalize longitude
 function normalizeLongitude(lon) {
     lon = parseFloat(lon);
     lon = ((lon + 180) % 360 + 360) % 360 - 180;
     return lon;
 }
-function getTileIndicesFromPositions(positions, tileSize = 10.0) {
+function getTileIndices() {
+    const positions = proteus.get_positions();
     const tiles = new Set();
     
     for (let i = 0; i < positions.length; i += 2) {
@@ -109,8 +115,8 @@ function getTileIndicesFromPositions(positions, tileSize = 10.0) {
         const minLon = -180;
         const minLat = -80;
         
-        const lonIdx = Math.floor((lon - minLon) / tileSize);
-        const latIdx = Math.floor((lat - minLat) / tileSize);
+        const lonIdx = Math.floor((lon - minLon) / 10);
+        const latIdx = Math.floor((lat - minLat) / 10);
         
         // Clamp to valid range
         if (lonIdx >= 0 && lonIdx < 36 && latIdx >= 0 && latIdx < 34) {
@@ -135,7 +141,6 @@ function addDays(dateInt, days) {
 
 function updateBoundingBox() {
     bounding_box = proteus.get_particle_bounding_box();
-    console.log(bounding_box);
 }
 // Initialize WASM and UI
 async function initialize() {
@@ -150,6 +155,7 @@ async function initialize() {
 
     initGridLayer();
     updateMarker();
+    updateSimulationDate();
     updateTotalDays();
 }
 
@@ -181,18 +187,16 @@ function initGridLayer() {
                 // ],
                 'fill-color': [
                     'interpolate', ['linear'], ['get', 'concentration'],
-                    0, 'rgb(40, 50, 130)',       // Deep but not harsh blue
-                    1, 'rgb(60, 90, 190)',       // Medium blue
-                    2, 'rgb(80, 140, 200)',      // Soft blue
-                    4, 'rgb(90, 175, 195)',      // Muted cyan
-                    8, 'rgb(100, 190, 160)',     // Soft teal
-                    16, 'rgb(140, 200, 120)',    // Sage
-                    32, 'rgb(200, 210, 100)',    // Olive
-                    64, 'rgb(225, 210, 100)',    // Warm yellow
-                    128, 'rgb(225, 170, 90)',    // Amber
-                    256, 'rgb(215, 135, 80)',    // Burnt orange
-                    512, 'rgb(200, 100, 80)',    // Muted red
-                    1024, 'rgb(170, 75, 75)',    // Brick red
+                    CONCENTRATIONS[0], 'rgb(60, 90, 190)',
+                    CONCENTRATIONS[1], 'rgb(80, 140, 200)',
+                    CONCENTRATIONS[2], 'rgb(90, 175, 195)',
+                    CONCENTRATIONS[3], 'rgb(100, 190, 160)',
+                    CONCENTRATIONS[4], 'rgb(140, 200, 120)',
+                    CONCENTRATIONS[5], 'rgb(200, 210, 100)',
+                    CONCENTRATIONS[6], 'rgb(225, 210, 100)',
+                    CONCENTRATIONS[7], 'rgb(225, 170, 90)',
+                    CONCENTRATIONS[8], 'rgb(215, 135, 80)',
+                    CONCENTRATIONS[9], 'rgb(200, 100, 80)',
                 ],
                 'fill-opacity': 1.0,
                 'fill-antialias': false,
@@ -200,17 +204,32 @@ function initGridLayer() {
             }
         });
         
-        map.addSource('particles', {
+        map.addSource('particles-active', {
             type: 'geojson',
             data: { type: 'FeatureCollection', features: [] }
         });
         map.addLayer({
-            id: 'particles-layer',
+            id: 'active-particles-layer',
             type: 'circle',
-            source: 'particles',
+            source: 'particles-active',
             paint: {
                 'circle-radius': 2,
-                'circle-color': '#ffffff',
+                'circle-color': 'rgb(255, 255, 255)',
+                'circle-opacity': 0.7
+            }
+        });
+
+        map.addSource('particles-inactive', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+        });
+        map.addLayer({
+            id: 'inactive-particles-layer',
+            type: 'circle',
+            source: 'particles-inactive',
+            paint: {
+                'circle-radius': 2,
+                'circle-color': 'rgb(255, 59, 20)',
                 'circle-opacity': 0.7
             }
         });
@@ -223,10 +242,12 @@ function initGridLayer() {
 function toggleVisualizationMode() {
     if (visualizationMode === 'grid') {
         map.setLayoutProperty('concentration-fill', 'visibility', 'visible');
-        map.setLayoutProperty('particles-layer', 'visibility', 'none');
+        map.setLayoutProperty('active-particles-layer', 'visibility', 'none');
+        map.setLayoutProperty('inactive-particles-layer', 'visibility', 'none');
     } else {
         map.setLayoutProperty('concentration-fill', 'visibility', 'none');
-        map.setLayoutProperty('particles-layer', 'visibility', 'visible');
+        map.setLayoutProperty('active-particles-layer', 'visibility', 'visible');
+        map.setLayoutProperty('inactive-particles-layer', 'visibility', 'visible');
     }
 }
 
@@ -237,8 +258,8 @@ function toggleParticleMode() {
     heatmapToggle.style.color = 'rgb(0, 0, 0)'
     particleToggle.style.background = 'none'
     particleToggle.style.color = 'rgb(255, 255, 255)'
-    updateParticleVisualization(proteus.get_positions());
-    updateGridVisualization(proteus.get_positions());
+    updateParticleVisualization();
+    updateGridVisualization();
 }
 
 function toggleHeatmapMode() {
@@ -248,8 +269,14 @@ function toggleHeatmapMode() {
     heatmapToggle.style.color = 'rgb(255, 255, 255)'
     particleToggle.style.background = 'rgb(255, 255, 255)'
     particleToggle.style.color = 'rgb(0, 0, 0)'
-    updateParticleVisualization(proteus.get_positions());
-    updateGridVisualization(proteus.get_positions());
+    heatmap = new HeatmapGenerator(
+        bounding_box[0]-GRID_SIZE,
+        bounding_box[1]+GRID_SIZE,
+        bounding_box[2]-GRID_SIZE,
+        bounding_box[3]+GRID_SIZE,
+        GRID_SIZE);
+    updateParticleVisualization();
+    updateGridVisualization();
 }
 
 
@@ -284,10 +311,12 @@ function updateMarker() {
 }
 
 // Update grid visualization from particle positions
-function updateGridVisualization(positions) {
-    // Extract lons and lats
+function updateGridVisualization() {
+    const positions = proteus.get_positions();
+
     const lons = [];
     const lats = [];
+
     for (let i = 0; i < positions.length; i += 2) {
         lons.push(positions[i]);
         lats.push(positions[i + 1]);
@@ -302,27 +331,30 @@ function updateGridVisualization(positions) {
     const thresholds = [0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024];
     const geojsonStr = heatmap.to_contour_geojson(thresholds);
     const geojson = JSON.parse(geojsonStr);
-    // console.log("GeoJSON length:", geojsonStr.length);
-    // console.log("First 500 chars:", geojsonStr.substring(0, 500));
-    
-    // console.log("Number of features:", geojson.features.length);
-    // console.log("Grid max value:", heatmap.get_max_value());
     map.getSource('concentration').setData(geojson);
 }
 
 // Update particle visualization (points)
-function updateParticleVisualization(positions) {
-    const geojson = {
+function updateParticleVisualization() {
+    let activePositions = proteus.get_active_positions();
+    let inactivePositions = proteus.get_inactive_positions();
+
+    const geojsonActive = {
+        type: 'FeatureCollection',
+        features: []
+    };
+
+    const geojsonInactive = {
         type: 'FeatureCollection',
         features: []
     };
     
-    for (let i = 0; i < positions.length; i += 2) {
-        const lon = positions[i];
-        const lat = positions[i + 1];
+    for (let i = 0; i < activePositions.length; i += 2) {
+        const lon = activePositions[i];
+        const lat = activePositions[i + 1];
         
         if (Math.abs(lat) <= 90 && lon >= -180 && lon <= 180) {
-            geojson.features.push({
+            geojsonActive.features.push({
                 type: 'Feature',
                 geometry: {
                     type: 'Point',
@@ -332,10 +364,25 @@ function updateParticleVisualization(positions) {
             });
         }
     }
-    
-    if (map.getSource('particles')) {
-        map.getSource('particles').setData(geojson);
+
+    for (let i = 0; i < inactivePositions.length; i += 2) {
+        const lon = inactivePositions[i];
+        const lat = inactivePositions[i + 1];
+        
+        if (Math.abs(lat) <= 90 && lon >= -180 && lon <= 180) {
+            geojsonInactive.features.push({
+                type: 'Feature',
+                geometry: {
+                    type: 'Point',
+                    coordinates: [lon, lat]
+                },
+                properties: {}
+            });
+        }
     }
+
+    map.getSource('particles-active').setData(geojsonActive);
+    map.getSource('particles-inactive').setData(geojsonInactive);
 }
 
 // Run one simulation step
@@ -348,44 +395,38 @@ async function simulationStep(version) {
     stepCount++;
 
     try {
-
         await proteus.step(stepSize);
-
         // Check if simulation was reset during step
         if (version !== simulationVersion) {
             return;
         }
-        
-        const positions = proteus.get_positions();
 
         const currentDate = proteus.current_date_int();  // ← From Rust
 
         if (stepCount % (1/stepSize) === 0) {
-            const currentTiles = getTileIndicesFromPositions(positions);
+            const currentTiles = getTileIndices();
             const nextStepDate = addDays(currentDate, 1);
             preloader.preloadTiles(nextStepDate, currentTiles); 
         }
-        
+        updateBoundingBox();
         // Update visualization based on mode
         const now = performance.now();
         if (visualizationMode === 'grid') {
             if (now - lastGridUpdate > GRID_UPDATE_INTERVAL) {
-                updateBoundingBox();
-                let xmin = bounding_box[0];
-                let xmax = bounding_box[1];
-                let ymin = bounding_box[2];
-                let ymax = bounding_box[3];
-                heatmap = new HeatmapGenerator(xmin-gridSize, xmax+gridSize, ymin-gridSize, ymax+gridSize, gridSize);
-                updateGridVisualization(positions);
+                heatmap = new HeatmapGenerator(
+                    bounding_box[0]-GRID_SIZE,
+                    bounding_box[1]+GRID_SIZE,
+                    bounding_box[2]-GRID_SIZE,
+                    bounding_box[3]+GRID_SIZE,
+                    GRID_SIZE);
+                updateGridVisualization();
                 lastGridUpdate = now;
             }
         } else {
-            updateParticleVisualization(positions);
+            updateParticleVisualization();
         }
-        
-        const day = proteus.current_day();
-
-        dayDisplay.textContent = `Day: ${day.toFixed(1)}`;
+        let day = proteus.current_day();
+        dayDisplay.textContent = proteus.current_date_str();
         
         if (simulationRunning && version === simulationVersion && day <= totalDays) {
             animationId = requestAnimationFrame(() => simulationStep(version));
@@ -421,12 +462,12 @@ function startSimulation() {
     stopBtn.style.display = "inline-flex";
     resumeBtn.style.display = "none";
 
-    map.flyTo({
-        center: [lon, lat],
-        zoom: 5-(totalDays/100),  // Adjust zoom level (lower = further out, higher = closer)
-        duration: 1500,  // Animation duration in milliseconds
-        essential: true  // Ensures the animation happens even if user prefers reduced motion
-    });
+    // map.flyTo({
+    //     center: [lon, lat],
+    //     zoom: 6-(totalDays/100),  // Adjust zoom level (lower = further out, higher = closer)
+    //     duration: 1500,  // Animation duration in milliseconds
+    //     essential: true  // Ensures the animation happens even if user prefers reduced motion
+    // });
     
     // Start simulation loop
     simulationStep(simulationVersion);
@@ -471,29 +512,36 @@ async function resetSimulation() {
     
     concentrationGrid = null;
     lastGridUpdate = 0;
+
+    let lon = normalizeLongitude(rawLon);
+    let lat = rawLat;
+
+    proteus = new Proteus(lon, lat, kValue, particleCount, spreadKm, startYear, startMonth, startDay);
+
+
+    map.getSource('concentration').setData({ type: 'FeatureCollection', features: [] });
+    map.getSource('particles-active').setData({ type: 'FeatureCollection', features: [] });
+    map.getSource('particles-inactive').setData({ type: 'FeatureCollection', features: [] });
     
-    if (map.getSource('concentration')) {
-        map.getSource('concentration').setData({ type: 'FeatureCollection', features: [] });
-    }
-    if (map.getSource('particles')) {
-        map.getSource('particles').setData({ type: 'FeatureCollection', features: [] });
-    }
-    
-    dayDisplay.textContent = "Day: 0.0";
+    dayDisplay.textContent = proteus.current_date_str();
     
     startBtn.style.display = "inline-flex";
     stopBtn.style.display = "none";
     resumeBtn.style.display = "none";
 
     updateMarker();
+    updateSimulationDate();
     updateTotalDays();
+
 }
 
 function updateSimulationDate() {
-    let inputDate = startDate.value.split("-");
-    startYear = inputDate[0];
-    startMonth = inputDate[1];
-    startDay = inputDate[2];
+    if (!simulationRunning) {
+        let inputDate = startDate.value.split("-");
+        startYear = inputDate[0];
+        startMonth = inputDate[1];
+        startDay = inputDate[2];
+    }
 }
 
 function updateTotalDays() {

@@ -103,15 +103,27 @@ impl Proteus {
         };
         
         // Update all particles
-        self.simulation.update_particles(dt_days, self.days_since_start, velocity_fn);
-        
+        self.simulation.update_particles_batch(dt_days, self.days_since_start, &self.loader, self.current_date_int());
+        // self.simulation.update_particles(dt_days, self.days_since_start, velocity_fn);
         Ok(())
     }
     
     /// Get all active particle positions as flat array [lon0, lat0, lon1, lat1, ...]
     pub fn get_positions(&self) -> Vec<f32> {
         let particles = self.simulation.get_particles();
-        let mut positions = Vec::with_capacity(particles.active_count() * 2);
+        let mut positions = Vec::with_capacity(particles.len);
+        
+        for i in 0..particles.len {
+            positions.push(particles.x[i]);
+            positions.push(particles.y[i]);
+        }
+        
+        positions
+    }
+
+    pub fn get_active_positions(&self) -> Vec<f32> {
+        let particles = self.simulation.get_particles();
+        let mut positions = Vec::with_capacity(particles.len);
         
         for i in 0..particles.len {
             if particles.active[i] {
@@ -122,24 +134,28 @@ impl Proteus {
         
         positions
     }
-    
-    /// Get particle concentrations
-    pub fn get_concentrations(&self) -> Vec<f32> {
+
+    pub fn get_inactive_positions(&self) -> Vec<f32> {
         let particles = self.simulation.get_particles();
-        let mut concentrations = Vec::with_capacity(particles.active_count());
+        let mut positions = Vec::with_capacity(particles.len);
         
         for i in 0..particles.len {
-            if particles.active[i] {
-                concentrations.push(particles.concentration[i]);
+            if !particles.active[i] {
+                positions.push(particles.x[i]);
+                positions.push(particles.y[i]);
             }
         }
         
-        concentrations
+        positions
     }
     
     /// Get number of active particles
     pub fn active_particle_count(&self) -> usize {
         self.simulation.get_particles().active_count()
+    }
+
+    pub fn inactive_particle_count(&self) -> usize {
+        self.simulation.get_particles().inactive_count()
     }
     
     /// Get current simulation day (days since start)
@@ -147,31 +163,20 @@ impl Proteus {
         self.days_since_start
     }
     
-    /// Set release location (call before starting simulation)
-    pub fn set_release_location(&mut self, lon: f32, lat: f32) {
-        // This will require recreating the simulation or updating release config
-        web_sys::console::log_1(&format!("Setting release location to ({}, {})", lon, lat).into());
-        // TODO: Update release manager config
-    }
-    
-    /// Set number of particles
-    pub fn set_particle_count(&mut self, count: usize) {
-        web_sys::console::log_1(&format!("Setting particle count to {}", count).into());
-        // TODO: Reinitialize simulation with new count
-    }
-    
-    /// Reset simulation to day 0
-    pub fn reset(&mut self) {
-        self.days_since_start = 0.0;
-        // TODO: Clear particles and reinitialize
-        //web_sys::console::log_1("Simulation reset".into());
-    }
     pub fn current_date_int(&self) -> u32 {
         let current_date = self.start_date + Days::new(self.days_since_start as u64);
         let year = current_date.year();
         let month = current_date.month();
         let day = current_date.day();
         (year as u32 * 10000) + (month * 100) + day
+    }
+    
+    pub fn current_date_str(&self) -> String {
+        let current_date = self.start_date + Days::new(self.days_since_start as u64);
+        let year = current_date.year();
+        let month = current_date.month();
+        let day = current_date.day();
+        format!("{year}-{month}-{day}")
     }
     pub fn get_particle_bounding_box(&self) -> Vec<f32> {
         self.simulation.particles.bounding_box_array()

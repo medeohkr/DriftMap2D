@@ -185,18 +185,7 @@ impl GlorysLoader {
         Some((u_deg_per_s, v_deg_per_s))
         // None
     }
-    pub fn get_velocities_batch(
-        &self,
-        positions: &[(f32, f32, f32)],  // (lon, lat, depth)
-        day: u32,
-    ) -> Vec<(f32, f32)> {
-        positions.iter().map(|&(lon, lat, depth)| {
-            self.get_velocity(lon, lat, depth, day)
-                .unwrap_or((0.0, 0.0))
-        }).collect()
-    }
-    
-    /// Optimized batch version that groups by tile for better cache locality
+
     pub fn get_velocities_batch_grouped(
         &self,
         positions: &[(f32, f32, f32)],
@@ -209,7 +198,6 @@ impl GlorysLoader {
             let key = self.get_tile_key(lon, lat, day);
             groups.entry(key).or_insert_with(Vec::new).push((i, (lon, lat, depth)));
         }
-        
         let mut results = vec![(0.0, 0.0); positions.len()];
         
         for (key, group) in groups {

@@ -138,12 +138,39 @@ impl Simulation {
             .map(|&(_, lon, lat, depth)| (lon, lat, depth))
             .collect();
         
-        // Batch integration with grouped velocity lookups
+        // Check initial velocities for stranding BEFORE integration
+        let initial_velocities = loader.get_velocities_batch_grouped(&positions, current_date_int);
+
+        let mut stranded_indices = Vec::new();
+        let mut active_integration_data = Vec::new();
+        let mut active_velocity_data = Vec::new();
+        
+        // Separate stranded particles from active ones
+        for (i, &(idx, lon, lat, depth)) in active_data.iter().enumerate() {
+            let (u, v) = initial_velocities[i];
+            if u == 0.0 && v == 0.0 {
+                stranded_indices.push(idx);
+            } else {
+                active_integration_data.push((idx, lon, lat, depth));
+                active_velocity_data.push((u, v));
+            }
+        }
+ 
+        // If no active particles remain, return early
+        if active_integration_data.is_empty() {
+            return;
+        }
+        
+        // Extract positions for the remaining active particles
+        let active_positions: Vec<(f32, f32, f32)> = active_integration_data.iter()
+            .map(|&(_, lon, lat, depth)| (lon, lat, depth))
+            .collect();
+        
+        // Batch integration for non-stranded particles
         let new_positions = match self.config.integrator {
             Integrator::Euler => {
-                // For Euler, just get velocities once
-                let velocities = loader.get_velocities_batch_grouped(&positions, current_date_int);
-                positions.iter()
+                let velocities = loader.get_velocities_batch_grouped(&active_positions, current_date_int);
+                active_positions.iter()
                     .enumerate()
                     .map(|(i, &(lon, lat, _))| {
                         let (u, v) = velocities[i];
@@ -152,39 +179,37 @@ impl Simulation {
                     .collect()
             }
             Integrator::Midpoint => {
-                // Create closure for batch velocity lookups
                 let get_velocities = |pos: &[(f32, f32, f32)]| {
                     loader.get_velocities_batch_grouped(pos, current_date_int)
                 };
-                integrators::midpoint_step_batch(&positions, dt, get_velocities)
+                integrators::midpoint_step_batch(&active_positions, dt, get_velocities)
             }
             Integrator::RK4 => {
-                // Create closure for batch velocity lookups
                 let get_velocities = |pos: &[(f32, f32, f32)]| {
                     loader.get_velocities_batch_grouped(pos, current_date_int)
                 };
-                integrators::rk4_step_batch(&positions, dt, get_velocities)
+                integrators::rk4_step_batch(&active_positions, dt, get_velocities)
             }
         };
         
+        for &idx in &stranded_indices {
+            self.particles.active[idx] = false;
+        }
         // Apply new positions and diffusion
-        for (i, &(idx, _, lat, _)) in active_data.iter().enumerate() {
+        for (i, &(idx, _, lat, _)) in active_integration_data.iter().enumerate() {
             let (new_lon, new_lat) = new_positions[i];
             let (dx, dy) = self.diffusion.apply_diffusion(dt_days, lat);
             
             self.particles.x[idx] = new_lon + dx;
             self.particles.y[idx] = new_lat + dy;
             self.particles.age[idx] += dt_days;
+
+
         }
     }
     
     /// Get reference to particles (for visualization)
     pub fn get_particles(&self) -> &Particles {
         &self.particles
-    }
-    
-    /// Get mutable reference to particles (for external updates)
-    pub fn get_particles_mut(&mut self) -> &mut Particles {
-        &mut self.particles
     }
 }
