@@ -337,14 +337,8 @@ function loadGeoJsonResults(data) {
   stopBtn.style.display = "none";
   resumeBtn.style.display = "none";
   exportGeojsonBtn.style.display = "inline-block";
-  dayDisplay.textContent = ""
   
   showTimeline();
-
-  if (simulationHistory.length > 0) {
-    dayDisplay.textContent =
-      simulationHistory[simulationHistory.length - 1].dateStr;
-  }
 }
 let proteus = null;
 let simulationRunning = false;
