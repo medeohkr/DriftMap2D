@@ -32,15 +32,20 @@ impl Proteus {
         spread_km: f32,
         start_year: i32,
         start_month: u32,
-        start_day: u32) -> Self {
+        start_day: u32,
+        release_amount: f64,
+        release_duration: f32)-> Self {
 
         let start_date = NaiveDate::from_ymd_opt(start_year, start_month, start_day).unwrap();
-        // Configure release (default: Fukushima)
+        let release_type =
+            if release_duration == 0.0 { Schedule::Instant }
+            else { Schedule::Continuous{total_days: release_duration} };
+
         let release_config = ReleaseConfig {
             lon: lon,
             lat: lat,
-            schedule: Schedule::Instant,
-            total_mass_bq: 16.0e15,
+            schedule: release_type,
+            total_mass_bq: release_amount,
             particle_count: particle_count,
             spread_km: spread_km,
             depth_m: 0.0,
@@ -95,15 +100,8 @@ impl Proteus {
             web_sys::console::error_1(&format!("Failed to load tiles: {:?}", e).into());
             return Err(JsValue::from_str(&format!("{:?}", e)));
         }
-        
-        // Velocity function that uses the loader
-        let velocity_fn = |lon, lat, depth| {
-            self.loader.get_velocity(lon, lat, depth, current_date_int)
-                .unwrap_or((0.0, 0.0))
-        };
-        
         // Update all particles
-        self.simulation.update_particles_batch(dt_days, self.days_since_start, &self.loader, self.current_date_int());
+        self.simulation.update_particles_batch(dt_days, &self.loader, self.current_date_int());
         // self.simulation.update_particles(dt_days, self.days_since_start, velocity_fn);
         Ok(())
     }

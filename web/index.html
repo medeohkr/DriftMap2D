@@ -22,12 +22,22 @@
             <img class="logo" src="images/DriftMap.webp">
             <span class="title-text">DriftMap</span>
         </div>
+        <div class="import-container">
+            <button id="import-geojson" class="timeline-btn">Import Scenario</button>
+            <input type="file" id="import-geojson-file" accept=".json,.geojson" style="display:none;">
+        </div>
         <div class="release-display-container">
             <span class="release-text">Release Location:</span>
             <span class="lat-text">Latitude:</span>
             <span class="lon-text">Longitude:</span>
-            <input type="text" class="lat-field" value="26.74">
-            <input type="text" class="lon-field" value="56.54">
+            <input type="text" class="lat-field" value="26.60">
+            <input type="text" class="lon-field" value="56.50">
+        </div>
+        <div class="simulation-time-container">
+            <span class="start-date-text">Starting Date:</span>
+            <input type="date" id="start-day-selector" value="2025-05-01">
+            <span class="total-day-text">Total Days:</span>
+            <input type="number" id="total-day-field" value="10">
         </div>
         <div class="oil-display-container">
             <span class="oil-text">Oil Type:</span>
@@ -39,32 +49,48 @@
             <option value="marine-diesel">MARINE DIESEL (Refined)</option>
             </select>
         </div>
+        <div class="release-manager-container">
+            <span class="release-amount-text">Release Amount</span>
+            <input type="number" id="release-amount-field" value="100.0" step="10">
+            <span class="release-units-text">tons</span>
+            <span class="release-duration-text">Release Duration</span>
+            <input type="number" id="release-duration-field" value="1.0" step="1">
+            <span class="duration-units-text">days</span>
+            <span class="release-radius-text">Initial Spill Radius</span>
+            <input type="number" id="release-radius-field" value="1.0" step="1">
+            <span class="radius-units-text">km</span>
+        </div>
         <div class="simulation-btn-container">
-            <button id="start-simulation" class="btn-primary">Start Simulation</button>
-            <button id="stop-simulation" class="btn-primary">Stop Simulation</button>
-            <button id="resume-simulation" class="btn-primary">Resume Simulation</button>
+            <button id="start-simulation" class="btn-primary">Render Scenario</button>
+            <button id="stop-simulation" class="btn-primary">Pause Render</button>
+            <button id="resume-simulation" class="btn-primary">Resume Render</button>
+            <button id="export-geojson" class="btn-primary">Export Scenario</button>
             <button id="reset-simulation">
                 <img class = "reset-btn-img" src="images/ResetBtn.webp">
             </button>
         </div>
-        <div class="simulation-time-container">
-            <span class="start-date-text">Starting Date:</span>
-            <input type="date" id="start-day-selector" value="2025-05-01">
-            <span class="total-day-text">Total Days:</span>
-            <input type="text" id="total-day-field" value="10">
-        </div>
     </div>
-    <div class="playback-controls">
+    <div class="simulation-info">
+        <span id="current-day"></span>
+    </div>
+    <div id="timeline-container" class="timeline-container" style="display:none;">
         <div class="timeline-controls">
-            <span id="current-day"></span>
+            <button id="timeline-rewind" class="timeline-btn">⏮</button>
+            <button id="timeline-play" class="timeline-btn">▶</button>
+            <button id="timeline-pause" class="timeline-btn" style="display:none;">⏸</button>
+            <button id="timeline-speed" class="timeline-btn">1x</button>
         </div>
-        <div class="visualization-toggle-container">
-            <button class="visualization-toggle" id="particle-toggle">Particles</button>
-            <button class="visualization-toggle" id="heatmap-toggle">Heatmap</button>
+        <input type="range" id="timeline-slider" class="timeline-slider" min="0" max="0" value="0">
+        <div class="timeline-labels">
+            <span id="timeline-start">Day 0</span>
+            <span id="timeline-current">Day 0</span>
+            <span id="timeline-end">Day 0</span>
         </div>
     </div>
-
-
+    <div class="visualization-toggle-container">
+        <button class="visualization-toggle" id="particle-toggle">Particles</button>
+        <button class="visualization-toggle" id="heatmap-toggle">Heatmap</button>
+    </div>
     <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
     <script type="module" src="preloader.js"></script>
     <script type="module" src="app.js"></script>
