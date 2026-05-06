@@ -48,13 +48,12 @@ impl Simulation {
     pub fn update_particles(
         &mut self, 
         dt_days: f32, 
-        current_day: f32, 
         velocity_fn: impl Fn(f32, f32, f32) -> (f32, f32) + Copy
     ) {
         let dt: f32 = dt_days * 86400.0;
         
         // Release new particles if any
-        if let Some(seeds) = self.release_manager.update(current_day, dt) {
+        if let Some(seeds) = self.release_manager.update(dt_days) {
             for seed in seeds {
                 self.particles.add_particle(
                     seed.lon,
@@ -102,14 +101,13 @@ impl Simulation {
     pub fn update_particles_batch(
         &mut self,
         dt_days: f32,
-        current_day: f32,
         loader: &GlorysLoader,
         current_date_int: u32,
     ) {
         let dt: f32 = dt_days * 86400.0;
         
         // Release new particles if any
-        if let Some(seeds) = self.release_manager.update(current_day, dt) {
+        if let Some(seeds) = self.release_manager.update(dt_days) {
             for seed in seeds {
                 self.particles.add_particle(
                     seed.lon,

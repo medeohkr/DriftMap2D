@@ -63,8 +63,6 @@ impl Particles {
         self.len - 1
     }
     
-    /// Remove a particle by index (swap_remove for O(1)).
-    /// Swaps with the last particle and pops all arrays.
     pub fn remove_particle(&mut self, index: usize) {
         if index >= self.len {
             return;
@@ -95,26 +93,6 @@ impl Particles {
         self.len -= 1;
     }
     
-    /// Remove all particles that satisfy a predicate.
-    /// Returns the number of removed particles.
-    pub fn retain(&mut self, mut predicate: impl FnMut(usize, &Self) -> bool) -> usize {
-        let mut removed = 0;
-        let mut i = 0;
-        
-        while i < self.len {
-            if !predicate(i, self) {
-                self.remove_particle(i);
-                removed += 1;
-                // Don't increment i — the next particle moved into this index
-            } else {
-                i += 1;
-            }
-        }
-        
-        removed
-    }
-    
-    /// Clear all particles (reset to empty).
     pub fn clear(&mut self) {
         self.x.clear();
         self.y.clear();
@@ -125,78 +103,7 @@ impl Particles {
         self.active.clear();
         self.len = 0;
     }
-    
-    // ========== ACCESSORS ==========
-    
-    /// Get a slice of all x positions.
-    pub fn x_slice(&self) -> &[f32] {
-        &self.x
-    }
-    
-    /// Get a mutable slice of all x positions.
-    pub fn x_slice_mut(&mut self) -> &mut [f32] {
-        &mut self.x
-    }
-    
-    /// Get a slice of all y positions.
-    pub fn y_slice(&self) -> &[f32] {
-        &self.y
-    }
-    
-    /// Get a mutable slice of all y positions.
-    pub fn y_slice_mut(&mut self) -> &mut [f32] {
-        &mut self.y
-    }
-    
-    /// Get a slice of all active flags.
-    pub fn active_slice(&self) -> &[bool] {
-        &self.active
-    }
-    
-    /// Get a mutable slice of all active flags.
-    pub fn active_slice_mut(&mut self) -> &mut [bool] {
-        &mut self.active
-    }
-    
-    // ========== BATCH OPERATIONS ==========
-    
-    /// Update all x positions by adding a delta array.
-    /// Assumes delta_x has same length as self.x.
-    pub fn add_to_x(&mut self, delta_x: &[f32]) {
-        for i in 0..self.len {
-            self.x[i] += delta_x[i];
-        }
-    }
-    
-    /// Update all y positions by adding a delta array.
-    pub fn add_to_y(&mut self, delta_y: &[f32]) {
-        for i in 0..self.len {
-            self.y[i] += delta_y[i];
-        }
-    }
-    
-    /// Scale all concentrations by a factor (e.g., decay).
-    pub fn scale_concentration(&mut self, factor: f32) {
-        for i in 0..self.len {
-            self.concentration[i] *= factor;
-        }
-    }
-    
-    /// Apply a function to all active particles.
-    /// Skips inactive particles efficiently.
-    pub fn for_active(&mut self, mut f: impl FnMut(&mut Particles, usize)) {
-        let mut i = 0;
-        while i < self.len {
-            if self.active[i] {
-                f(self, i);
-            }
-            i += 1;
-        }
-    }
-    
-    // ========== UTILITIES ==========
-    
-    /// Count number of active particles.
+
     pub fn active_count(&self) -> usize {
         self.active.iter().filter(|&&a| a).count()
     }
@@ -240,39 +147,5 @@ impl Particles {
         bounding_box.push(ymax);
         
         bounding_box
-    }
-    
-    /// Get bounding box in geographic coordinates (lon/lat).
-    pub fn geographic_bounding_box(
-        &self,
-        ref_lon: f32,
-        ref_lat: f32,
-        lon_scale: f32,
-        lat_scale: f32,
-    ) -> (f32, f32, f32, f32) {
-        let (xmin, xmax, ymin, ymax) = self.bounding_box();
-        
-        let lon_min = ref_lon + xmin / lon_scale;
-        let lon_max = ref_lon + xmax / lon_scale;
-        let lat_min = ref_lat + ymin / lat_scale;
-        let lat_max = ref_lat + ymax / lat_scale;
-        
-        (lon_min, lon_max, lat_min, lat_max)
-    }
-    
-    /// Check if the particle set is empty (no active particles).
-    pub fn is_empty(&self) -> bool {
-        self.active_count() == 0
-    }
-    
-    /// Ensure capacity for additional particles (pre-allocate).
-    pub fn reserve(&mut self, additional: usize) {
-        self.x.reserve(additional);
-        self.y.reserve(additional);
-        self.depth.reserve(additional);
-        self.concentration.reserve(additional);
-        self.mass.reserve(additional);
-        self.age.reserve(additional);
-        self.active.reserve(additional);
     }
 }

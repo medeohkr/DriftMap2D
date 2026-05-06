@@ -9,8 +9,7 @@ use rand_distr::{Normal, Distribution};
 pub enum Schedule {
     Instant,      // All particles released at start time
     Continuous {  // Released over a duration
-        start_day: f32,
-        end_day: f32,
+        total_days: f32
     },
 }
 
@@ -51,7 +50,7 @@ impl ReleaseManager {
     
     /// Check if any particles should be released at this timestep
     /// Returns number of particles to release and their starting positions
-    pub fn update(&mut self, current_day: f32, dt: f32) -> Option<Vec<ParticleSeed>> {
+    pub fn update(&mut self, dt_days: f32) -> Option<Vec<ParticleSeed>> {
         match self.config.schedule {
             Schedule::Instant => {
                 if self.total_released == 0 {
@@ -61,20 +60,9 @@ impl ReleaseManager {
                     None
                 }
             }
-            Schedule::Continuous { start_day, end_day } => {
-                if current_day < start_day {
-                    return None;
-                }
-                if current_day > end_day {
-                    return None;
-                }
-                if self.total_released >= self.config.particle_count {
-                    return None;
-                }
-                
-                let total_days = end_day - start_day;
+            Schedule::Continuous { total_days } => {
                 let rate = self.config.particle_count as f32 / total_days;
-                let to_release = (rate * dt).floor() as usize;
+                let to_release = (rate * dt_days).floor() as usize;
                 
                 if to_release > 0 {
                     let remaining = self.config.particle_count - self.total_released;
