@@ -1,0 +1,1 @@
+DriftMap is a web-based, client-side oil spill forecasting model that runs entirely in the browser using WebAssembly. It combines real ocean current data with Lagrangian particle tracking to simulate and visualize oil dispersion in marine environments.
