@@ -16,8 +16,9 @@
             row-gap: 20px;
             height: auto;
             left: 20px;
-            top: 20px;
-            bottom: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            padding-bottom: 25px;
             background: rgb(27, 27, 27);
             box-shadow: 2px 0px 5px rgb(0, 0, 0);
         }
@@ -144,10 +145,10 @@
 
         .simulation-btn-container {
             width: 200px;
-            position: absolute;
+            /* position: absolute;
             bottom: 0px;
             padding-top: 20px;
-            padding-bottom: 20px;
+            padding-bottom: 20px; */
             display: flex;
             justify-content: center;
             column-gap: 15px;
