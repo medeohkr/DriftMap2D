@@ -62,6 +62,7 @@ const timelineRewind = document.getElementById("timeline-rewind");
 const exportGeojsonBtn = document.getElementById("export-geojson");
 const importGeojsonBtn = document.getElementById("import-geojson");
 const importGeojsonFile = document.getElementById("import-geojson-file");
+const autoZoom = document.getElementById("autozoom-checkbox");
 
 map.on("click", function (e) {
   if (!simulationRunning) {
@@ -193,6 +194,7 @@ function exportWithHeatmaps() {
         total_days: totalDays,
         particle_count: particleCount,
         k_value: kValue,
+        oil_type: oilType
       },
     },
     features: simulationHistory.map((snapshot) => {
@@ -339,6 +341,12 @@ function loadGeoJsonResults(data) {
   exportGeojsonBtn.style.display = "inline-block";
   
   showTimeline();
+
+  if (visualizationMode == 'grid') {
+    createHeatmapColorLegend(true);
+  }
+
+  
 }
 let proteus = null;
 let simulationRunning = false;
@@ -975,6 +983,10 @@ function startSimulation() {
 
   updateSimulationDate();
   updateTotalDays();
+  updateReleaseAmount();
+  updateReleaseDuration();
+  updateReleaseRadius();
+
   proteus = new Proteus(
     normalizeLongitude(lon),
     lat,
@@ -995,7 +1007,7 @@ function startSimulation() {
   exportGeojsonBtn.style.display = "none";
 
   const currentZoom = map.getZoom();
-  if (currentZoom < 2.5) {
+  if (currentZoom < 5 && autoZoom.checked == true) {
     map.flyTo({
       center: [lon, lat],
       zoom: 6 - totalDays / 100,
@@ -1080,7 +1092,7 @@ async function resetSimulation() {
     .getSource("particles-inactive")
     .setData({ type: "FeatureCollection", features: [] });
 
-  dayDisplay.textContent = proteus.current_date_str();
+  dayDisplay.textContent = "";
 
   startBtn.style.display = "inline-flex";
   stopBtn.style.display = "none";

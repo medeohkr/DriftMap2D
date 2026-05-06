@@ -135,7 +135,15 @@
         }
 
         .import-container {
+            display: flex;
             width: 200px;
+            color: rgb(180, 180, 180);
+            font-family: Montserrat;
+            font-size: 12px;
+            font-weight: 500;
+            align-items: center;
+            column-gap: 3px;
+            white-space: nowrap;
         }
 
         #import-geojson {
