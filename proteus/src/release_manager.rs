@@ -78,7 +78,7 @@ impl ReleaseManager {
     
     /// Generate particle seeds with Gaussian spread around release point
     fn generate_particles(&mut self, count: usize) -> Vec<ParticleSeed> {
-        let km_to_deg = 1.0/111.0;
+        let km_to_deg = 1.0/111.12;
         
         (0..count)
             .map(|_| {

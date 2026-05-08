@@ -35,7 +35,7 @@ pub struct GlorysLoader {
     base_url: String,
     
     // State
-    current_day: u32,
+    pub current_day: u32,
     cache: HashMap<TileKey, TileData>,
     pending: HashSet<TileKey>,
 }
@@ -176,8 +176,8 @@ impl GlorysLoader {
             lerp(vz2, vz3, x_frac),
             y_frac,
         );
-        let meters_per_degree_lat = 111000.0;  // Approximately constant
-        let meters_per_degree_lon = 111000.0 * lat.to_radians().cos();
+        let meters_per_degree_lat = 111_120.0;  // Approximately constant
+        let meters_per_degree_lon = 111_120.0 * lat.to_radians().cos();
         
         let u_deg_per_s = u_interp / meters_per_degree_lon;
         let v_deg_per_s = v_interp / meters_per_degree_lat;
@@ -263,8 +263,8 @@ impl GlorysLoader {
                         y_frac,
                     );
                     
-                    let meters_per_degree_lat = 111000.0;
-                    let meters_per_degree_lon = 111000.0 * lat.to_radians().cos();
+                    let meters_per_degree_lat = 111_120.0;
+                    let meters_per_degree_lon = 111_120.0 * lat.to_radians().cos();
                     
                     results[idx] = (
                         u_interp / meters_per_degree_lon,
