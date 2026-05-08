@@ -149,6 +149,12 @@
         #import-geojson {
             font-size: 12px;
             padding: 3px;
+            background: rgb(40, 40, 40);
+            border: 1px solid rgb(100, 100, 100);
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: Montserrat;
         }
 
         .simulation-btn-container {
@@ -258,14 +264,14 @@
             border: 1px solid rgb(255, 255, 255);
         }
         #particle-toggle {
-            background: none;
-            color: rgb(255, 255, 255);
+            background: rgb(255, 255, 255);
+            color: rgb(0, 0, 0);
             cursor: pointer;
         }
 
         #heatmap-toggle {
-            background: rgb(255, 255, 255);
-            color: rgba(0, 0, 0, 1);
+            background: none;
+            color: rgb(255, 255, 255);
             cursor: pointer;
         }
         .release-manager-container {
@@ -352,6 +358,7 @@
         }
 
         .timeline-btn {
+            width: 50px;
             background: rgb(40, 40, 40);
             border: 1px solid rgb(100, 100, 100);
             color: white;

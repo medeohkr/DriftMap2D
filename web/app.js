@@ -36,6 +36,12 @@ let map = new maplibregl.Map({
   center: [0, 40],
   zoom: 1.5,
 });
+const scale = new maplibregl.ScaleControl({
+  maxWidth: 100,
+  unit: "metric",
+});
+
+map.addControl(scale, "bottom-right");
 
 const latField = document.querySelector(".lat-field");
 const lonField = document.querySelector(".lon-field");
@@ -142,7 +148,7 @@ function exportParticlesOnly() {
         start_date: `${startYear}-${String(startMonth).padStart(2, "0")}-${String(startDay).padStart(2, "0")}`,
         total_days: totalDays,
         particle_count: particleCount,
-        k_value: kValue,
+        cs_value: csValue,
       },
     },
     features: simulationHistory.map((snapshot) => ({
@@ -193,8 +199,8 @@ function exportWithHeatmaps() {
         start_date: `${startYear}-${String(startMonth).padStart(2, "0")}-${String(startDay).padStart(2, "0")}`,
         total_days: totalDays,
         particle_count: particleCount,
-        k_value: kValue,
-        oil_type: oilType
+        cs_value: csValue,
+        oil_type: oilType,
       },
     },
     features: simulationHistory.map((snapshot) => {
@@ -339,14 +345,12 @@ function loadGeoJsonResults(data) {
   stopBtn.style.display = "none";
   resumeBtn.style.display = "none";
   exportGeojsonBtn.style.display = "inline-block";
-  
+
   showTimeline();
 
-  if (visualizationMode == 'grid') {
+  if (visualizationMode == "grid") {
     createHeatmapColorLegend(true);
   }
-
-  
 }
 let proteus = null;
 let simulationRunning = false;
@@ -364,7 +368,7 @@ let lastGridUpdate = 0;
 let visualizationMode = "particles";
 let rawLon = 56.5;
 let rawLat = 26.6;
-let kValue = 20;
+let csValue = 0.15;
 let particleCount = 20000;
 let spreadKm = 1.0;
 let oilType = oilMenu ? oilMenu.value : "arabian_light";
@@ -463,7 +467,7 @@ async function initialize() {
   proteus = new Proteus(
     normalizeLongitude(lon),
     lat,
-    kValue,
+    csValue,
     particleCount,
     spreadKm,
     startYear,
@@ -587,20 +591,24 @@ function toggleVisualizationMode() {
 }
 
 function toggleParticleMode() {
+  if (visualizationMode == "particles") {
+    return;
+  }
   visualizationMode = "particles";
   toggleVisualizationMode();
-  heatmapToggle.style.background = "rgb(255, 255, 255)";
-  heatmapToggle.style.color = "rgb(0, 0, 0)";
-  particleToggle.style.background = "none";
-  particleToggle.style.color = "rgb(255, 255, 255)";
+
+  heatmapToggle.style.background = "none";
+  heatmapToggle.style.color = "rgb(255, 255, 255)";
+  particleToggle.style.background = "rgb(255, 255, 255)";
+  particleToggle.style.color = "rgb(0, 0, 0)";
 
   // If we have timeline data, use the current snapshot's particles
   if (simulationHistory.length > 0 && timelineDay >= 0) {
     const snapshot = simulationHistory[timelineDay];
-    if (snapshot.activeGeojson) {
+    if (snapshot && snapshot.activeGeojson) {
       map.getSource("particles-active").setData(snapshot.activeGeojson);
     }
-    if (snapshot.inactiveGeojson) {
+    if (snapshot && snapshot.inactiveGeojson) {
       map.getSource("particles-inactive").setData(snapshot.inactiveGeojson);
     }
     createHeatmapColorLegend(false);
@@ -610,25 +618,27 @@ function toggleParticleMode() {
   // Otherwise, try live update (only works during active simulation)
   if (proteus && proteus.get_positions().length > 0) {
     updateParticleVisualization();
-    updateGridVisualization();
   }
 
   createHeatmapColorLegend(false);
 }
 
 function toggleHeatmapMode() {
+  if (visualizationMode == "grid") {
+    return;
+  }
   visualizationMode = "grid";
   toggleVisualizationMode();
-  heatmapToggle.style.background = "none";
-  heatmapToggle.style.color = "rgb(255, 255, 255)";
-  particleToggle.style.background = "rgb(255, 255, 255)";
-  particleToggle.style.color = "rgb(0, 0, 0)";
+
+  heatmapToggle.style.background = "rgb(255, 255, 255)";
+  heatmapToggle.style.color = "rgb(0, 0, 0)";
+  particleToggle.style.background = "none";
+  particleToggle.style.color = "rgb(255, 255, 255)";
 
   // If we have timeline data, use the current snapshot's heatmap
   if (simulationHistory.length > 0 && timelineDay >= 0) {
     const snapshot = simulationHistory[timelineDay];
-    if (snapshot.heatmapGeojson) {
-      map.getSource("concentration").setData(snapshot.heatmapGeojson);
+    if (snapshot && snapshot.heatmapGeojson) {
       createHeatmapColorLegend(true);
       return; // Skip the live grid generation
     }
@@ -690,6 +700,9 @@ function updateMarker() {
 
 function updateReleaseAmount() {
   releaseAmount = releaseAmountField.value;
+  if (visualizationMode == "grid") {
+    createHeatmapColorLegend(true);
+  }
 }
 
 function updateReleaseDuration() {
@@ -782,7 +795,7 @@ function createHeatmapColorLegend(show = true) {
   legendDiv.id = "concentration-legend";
   legendDiv.style.cssText = `
         position: absolute;
-        bottom: 50px;
+        bottom: 100px;
         right: 25px;
         display: flex;
         gap: 10px;
@@ -908,10 +921,6 @@ async function simulationStep(version) {
     const currentDay = Math.floor(proteus.current_day());
     const stepsPerDay = Math.round(1 / stepSize);
 
-    if (stepCount % stepsPerDay === 1 || stepCount === 1) {
-      captureSnapshot(currentDay);
-    }
-
     await proteus.step(stepSize);
 
     if (version !== simulationVersion) return;
@@ -922,6 +931,7 @@ async function simulationStep(version) {
       const currentTiles = getTileIndices();
       const nextStepDate = addDays(currentDate, 1);
       preloader.preloadTiles(nextStepDate, currentTiles);
+      captureSnapshot(currentDay);
     }
 
     updateBoundingBox();
@@ -990,7 +1000,7 @@ function startSimulation() {
   proteus = new Proteus(
     normalizeLongitude(lon),
     lat,
-    kValue,
+    csValue,
     particleCount,
     spreadKm,
     startYear,
@@ -1072,7 +1082,7 @@ async function resetSimulation() {
   proteus = new Proteus(
     normalizeLongitude(lon),
     lat,
-    kValue,
+    csValue,
     particleCount,
     spreadKm,
     startYear,
@@ -1099,7 +1109,6 @@ async function resetSimulation() {
   resumeBtn.style.display = "none";
   exportGeojsonBtn.style.display = "none";
 
-  createHeatmapColorLegend(false);
   updateMarker();
   updateSimulationDate();
   updateTotalDays();
@@ -1156,9 +1165,14 @@ function updateTimelineDisplay(index) {
     map.getSource("particles-inactive").setData(snapshot.inactiveGeojson);
   }
 
-  // Show heatmap if in grid mode and available
-  if (visualizationMode === "grid" && snapshot.heatmapGeojson) {
+  // Always update heatmap regardless of current mode
+  if (snapshot.heatmapGeojson) {
     map.getSource("concentration").setData(snapshot.heatmapGeojson);
+  } else {
+    // Clear heatmap if snapshot doesn't have one
+    map
+      .getSource("concentration")
+      .setData({ type: "FeatureCollection", features: [] });
   }
 }
 

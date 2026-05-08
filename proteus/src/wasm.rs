@@ -27,7 +27,7 @@ impl Proteus {
     #[wasm_bindgen(constructor)]
     pub fn new(lon: f32, 
         lat: f32,
-        k_value: f32,
+        cs_value: f32,
         particle_count: usize,
         spread_km: f32,
         start_year: i32,
@@ -55,7 +55,7 @@ impl Proteus {
             release_config,
             integrator: Integrator::RK4,
             max_particles: 50000,
-            k_value: k_value
+            cs: cs_value
         };
         
         let simulation = Simulation::new(sim_config);

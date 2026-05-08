@@ -21,7 +21,7 @@ pub struct SimulationConfig {
     pub release_config: ReleaseConfig,
     pub integrator: Integrator,
     pub max_particles: usize,
-    pub k_value: f32,
+    pub cs: f32,
 }
 
 pub enum Integrator {
@@ -34,7 +34,7 @@ impl Simulation {
     pub fn new(config: SimulationConfig) -> Self {
         let release_manager = ReleaseManager::new(config.release_config.clone());
         let particles = Particles::new(config.max_particles);
-        let diffusion = Diffusion::new(config.k_value);
+        let diffusion = Diffusion::new(config.cs);
         
         Self {
             config,
@@ -48,6 +48,7 @@ impl Simulation {
     pub fn update_particles(
         &mut self, 
         dt_days: f32, 
+        loader: &GlorysLoader,
         velocity_fn: impl Fn(f32, f32, f32) -> (f32, f32) + Copy
     ) {
         let dt: f32 = dt_days * 86400.0;
@@ -89,8 +90,7 @@ impl Simulation {
                 }
             };
             
-            let (dx, dy) = self.diffusion.apply_diffusion(dt_days, lat);
-            
+            let (dx, dy) = self.diffusion.smagorinsky_step(loader, lon, lat, depth, loader.current_day, dt_days);
             self.particles.x[i] = new_x + dx;
             self.particles.y[i] = new_y + dy;
             self.particles.age[i] += dt_days;
@@ -194,10 +194,9 @@ impl Simulation {
             self.particles.active[idx] = false;
         }
         // Apply new positions and diffusion
-        for (i, &(idx, _, lat, _)) in active_integration_data.iter().enumerate() {
+        for (i, &(idx, lon, lat, depth)) in active_integration_data.iter().enumerate() {
             let (new_lon, new_lat) = new_positions[i];
-            let (dx, dy) = self.diffusion.apply_diffusion(dt_days, lat);
-            
+            let (dx, dy) = self.diffusion.smagorinsky_step(loader, lon, lat, depth, loader.current_day, dt_days);
             self.particles.x[idx] = new_lon + dx;
             self.particles.y[idx] = new_lat + dy;
             self.particles.age[idx] += dt_days;
