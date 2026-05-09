@@ -4,3 +4,4 @@ web/pkg/
 data/
 data-pipeline/
 .vscode/
+wrangler.toml
