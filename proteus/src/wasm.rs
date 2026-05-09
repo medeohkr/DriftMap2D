@@ -63,7 +63,7 @@ impl Proteus {
         
         // Create loader for your tile server
         let loader = GlorysLoader::new(
-            "data/forecast_tiles_smoc",
+            "https://tiles.driftmap2d.com/tiles",  // No trailing slash
             -180.0, -80.0
         );
         
@@ -99,7 +99,7 @@ impl Proteus {
         let needed_tiles = self.loader.update_tiles(&self.simulation.get_particles());
         
         // Load required tiles
-        if let Err(e) = self.loader.load_by_date(current_date_int, self.hour_count, &needed_tiles).await {
+        if let Err(e) = self.loader.load_by_date(current_date_int, &needed_tiles).await {
             web_sys::console::error_1(&format!("Failed to load tiles: {:?}", e).into());
             return Err(JsValue::from_str(&format!("{:?}", e)));
         }

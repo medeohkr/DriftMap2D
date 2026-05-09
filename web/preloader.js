@@ -3,7 +3,7 @@ export class TilePreloader {
   constructor() {
     this.cache = new Map(); // url -> Promise
     this.loaded = new Set(); // urls already loaded
-    this.baseUrl = "data/forecast_tiles";
+    this.baseUrl = "data/forecast_tiles_smoc_combined";
   }
 
   // Get URL for a tile
