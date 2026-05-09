@@ -49,7 +49,8 @@ impl Simulation {
         &mut self, 
         dt_days: f32, 
         loader: &GlorysLoader,
-        velocity_fn: impl Fn(f32, f32, f32) -> (f32, f32) + Copy
+        velocity_fn: impl Fn(f32, f32, f32) -> (f32, f32) + Copy,
+        hour: u32
     ) {
         let dt: f32 = dt_days * 86400.0;
         
@@ -90,7 +91,7 @@ impl Simulation {
                 }
             };
             
-            let (dx, dy) = self.diffusion.smagorinsky_step(loader, lon, lat, depth, loader.current_day, dt_days);
+            let (dx, dy) = self.diffusion.smagorinsky_step(loader, lon, lat, depth, loader.current_day, dt_days, hour);
             self.particles.x[i] = new_x + dx;
             self.particles.y[i] = new_y + dy;
             self.particles.age[i] += dt_days;
@@ -102,7 +103,7 @@ impl Simulation {
         &mut self,
         dt_days: f32,
         loader: &GlorysLoader,
-        current_date_int: u32,
+        hour: u32
     ) {
         let dt: f32 = dt_days * 86400.0;
         
@@ -137,7 +138,7 @@ impl Simulation {
             .collect();
         
         // Check initial velocities for stranding BEFORE integration
-        let initial_velocities = loader.get_velocities_batch_grouped(&positions, current_date_int);
+        let initial_velocities = loader.get_velocities_batch_grouped(&positions, loader.current_day, hour);
 
         let mut stranded_indices = Vec::new();
         let mut active_integration_data = Vec::new();
@@ -167,7 +168,7 @@ impl Simulation {
         // Batch integration for non-stranded particles
         let new_positions = match self.config.integrator {
             Integrator::Euler => {
-                let velocities = loader.get_velocities_batch_grouped(&active_positions, current_date_int);
+                let velocities = loader.get_velocities_batch_grouped(&active_positions, loader.current_day, hour);
                 active_positions.iter()
                     .enumerate()
                     .map(|(i, &(lon, lat, _))| {
@@ -178,13 +179,13 @@ impl Simulation {
             }
             Integrator::Midpoint => {
                 let get_velocities = |pos: &[(f32, f32, f32)]| {
-                    loader.get_velocities_batch_grouped(pos, current_date_int)
+                    loader.get_velocities_batch_grouped(pos, loader.current_day, hour)
                 };
                 integrators::midpoint_step_batch(&active_positions, dt, get_velocities)
             }
             Integrator::RK4 => {
                 let get_velocities = |pos: &[(f32, f32, f32)]| {
-                    loader.get_velocities_batch_grouped(pos, current_date_int)
+                    loader.get_velocities_batch_grouped(pos, loader.current_day, hour)
                 };
                 integrators::rk4_step_batch(&active_positions, dt, get_velocities)
             }
@@ -196,7 +197,7 @@ impl Simulation {
         // Apply new positions and diffusion
         for (i, &(idx, lon, lat, depth)) in active_integration_data.iter().enumerate() {
             let (new_lon, new_lat) = new_positions[i];
-            let (dx, dy) = self.diffusion.smagorinsky_step(loader, lon, lat, depth, loader.current_day, dt_days);
+            let (dx, dy) = self.diffusion.smagorinsky_step(loader, lon, lat, depth, loader.current_day, dt_days, hour);
             self.particles.x[idx] = new_lon + dx;
             self.particles.y[idx] = new_lat + dy;
             self.particles.age[idx] += dt_days;

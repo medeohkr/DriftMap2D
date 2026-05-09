@@ -30,14 +30,15 @@ impl Diffusion {
         depth: f32,
         day: u32,
         dt_days: f32,
+        hour: u32
     ) -> (f32, f32) {
         let dx = 0.01;
         let dy = 0.01;
 
-        let (updx, vpdx) = loader.get_velocity(lon + dx, lat, depth, day).unwrap_or((0.0, 0.0));
-        let (umdx, vmdx) = loader.get_velocity(lon - dx, lat, depth, day).unwrap_or((0.0, 0.0));
-        let (updy, vpdy) = loader.get_velocity(lon, lat + dy, depth, day).unwrap_or((0.0, 0.0));
-        let (umdy, vmdy) = loader.get_velocity(lon, lat - dy, depth, day).unwrap_or((0.0, 0.0));
+        let (updx, vpdx) = loader.get_velocity(lon + dx, lat, depth, day, hour).unwrap_or((0.0, 0.0));
+        let (umdx, vmdx) = loader.get_velocity(lon - dx, lat, depth, day, hour).unwrap_or((0.0, 0.0));
+        let (updy, vpdy) = loader.get_velocity(lon, lat + dy, depth, day, hour).unwrap_or((0.0, 0.0));
+        let (umdy, vmdy) = loader.get_velocity(lon, lat - dy, depth, day, hour).unwrap_or((0.0, 0.0));
 
         let dudx = (updx - umdx) / (2.0 * dx);
         let dudy = (updy - umdy) / (2.0 * dy);

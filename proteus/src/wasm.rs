@@ -15,6 +15,7 @@ pub struct Proteus {
     loader: GlorysLoader,
     days_since_start: f32,      // Days elapsed since start_date
     start_date: NaiveDate,       // Base date for the simulation
+    hour_count: u32
 }
 
 #[wasm_bindgen]
@@ -62,7 +63,7 @@ impl Proteus {
         
         // Create loader for your tile server
         let loader = GlorysLoader::new(
-            "data/forecast_tiles",
+            "data/forecast_tiles_smoc",
             -180.0, -80.0
         );
         
@@ -71,6 +72,7 @@ impl Proteus {
             loader,
             days_since_start: 0.0,
             start_date,
+            hour_count: 0
         }
     }
     
@@ -87,21 +89,22 @@ impl Proteus {
     pub async fn step(&mut self, dt_days: f32) -> Result<(), JsValue> {
         // Advance time
         self.days_since_start += dt_days;
-        
+        let total_hours = self.days_since_start * 24.0;
+        self.hour_count = (total_hours.floor() % 24.0) as u32;
         // Get current date for tile lookup
         let current_date_int = self.get_current_date_int();
-        self.loader.set_current_day(current_date_int);
+        self.loader.set_current_day(current_date_int, self.hour_count);
         
         // Get needed tiles based on particle positions
         let needed_tiles = self.loader.update_tiles(&self.simulation.get_particles());
         
         // Load required tiles
-        if let Err(e) = self.loader.load_by_date(current_date_int, &needed_tiles).await {
+        if let Err(e) = self.loader.load_by_date(current_date_int, self.hour_count, &needed_tiles).await {
             web_sys::console::error_1(&format!("Failed to load tiles: {:?}", e).into());
             return Err(JsValue::from_str(&format!("{:?}", e)));
         }
         // Update all particles
-        self.simulation.update_particles_batch(dt_days, &self.loader, self.current_date_int());
+        self.simulation.update_particles_batch(dt_days, &self.loader, self.hour_count);
         // self.simulation.update_particles(dt_days, self.days_since_start, velocity_fn);
         Ok(())
     }
