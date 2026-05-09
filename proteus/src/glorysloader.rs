@@ -15,6 +15,7 @@ pub struct TileKey {
     pub lon_idx: usize,
     pub lat_idx: usize,
     pub day: u32,
+    pub hour: u32
 }
 
 pub struct TileData {
@@ -36,6 +37,7 @@ pub struct GlorysLoader {
     
     // State
     pub current_day: u32,
+    current_hour: u32,
     cache: HashMap<TileKey, TileData>,
     pending: HashSet<TileKey>,
 }
@@ -68,6 +70,7 @@ impl GlorysLoader {
             tile_size: 10.0,
             base_url: base_url.to_string(),
             current_day: 0,
+            current_hour: 0,
             cache: HashMap::new(),
             pending: HashSet::new(),
         }
@@ -80,7 +83,7 @@ impl GlorysLoader {
     }
     
     /// Async load tiles for a given date
-    pub async fn load_by_date(&mut self, date: u32, tiles: &HashSet<TileKey>) -> Result<(), LoaderError> {
+    pub async fn load_by_date(&mut self, date: u32, hour: u32, tiles: &HashSet<TileKey>) -> Result<(), LoaderError> {
         for tile in tiles {
             
             if self.cache.contains_key(tile) {
@@ -96,7 +99,7 @@ impl GlorysLoader {
             //     "CACHE INSERT: ({}, {}) day={}. Cache size now: {}", 
             //     tile.lon_idx, tile.lat_idx, tile.day, self.cache.len()
             // ).into());
-            let url = self.tile_url(date, tile);
+            let url = self.tile_url(date, hour, tile);
             
             match self.load_tile(&url).await {
                 Ok(data) => {
@@ -112,8 +115,8 @@ impl GlorysLoader {
         Ok(())
     }
     
-    pub fn get_velocity(&self, lon: f32, lat: f32, depth_m: f32, day: u32) -> Option<(f32, f32)> {
-        let key = self.get_tile_key(lon, lat, day);
+    pub fn get_velocity(&self, lon: f32, lat: f32, depth_m: f32, day: u32, hour: u32) -> Option<(f32, f32)> {
+        let key = self.get_tile_key(lon, lat, day, hour);
 
         let tile_data = match self.cache.get(&key) {
             Some(data) => data,
@@ -190,12 +193,13 @@ impl GlorysLoader {
         &self,
         positions: &[(f32, f32, f32)],
         day: u32,
+        hour: u32
     ) -> Vec<(f32, f32)> {
         // Group positions by tile to maximize cache hits
         let mut groups: HashMap<TileKey, Vec<(usize, (f32, f32, f32))>> = HashMap::new();
         
         for (i, &(lon, lat, depth)) in positions.iter().enumerate() {
-            let key = self.get_tile_key(lon, lat, day);
+            let key = self.get_tile_key(lon, lat, day, hour);
             groups.entry(key).or_insert_with(Vec::new).push((i, (lon, lat, depth)));
         }
         let mut results = vec![(0.0, 0.0); positions.len()];
@@ -295,22 +299,24 @@ impl GlorysLoader {
                     lon_idx,
                     lat_idx,
                     day: self.current_day,
+                    hour: self.current_hour
                 });
             }
         }
         tiles
     }
     
-    fn tile_url(&self, date: u32, tile: &TileKey) -> String {
-        let year = date / 10000;
-        let month = (date / 100) % 100;
-        let day = date % 100;
+    fn tile_url(&self, date: u32, hour: u32, tile: &TileKey) -> String {
+        let year = date / 10000;       // 2026
+        let month = (date / 100) % 100; // 04
+        let day = date % 100;           // 08
         format!(
-            "{}/{:04}/{:02}/{:02}/{:03}_{:03}.bin",
+            "{}/{:04}/{:02}/{:02}/{:02}/{:03}_{:03}.bin",
             self.base_url,
             year,
             month,
             day,
+            hour,
             tile.lon_idx,
             tile.lat_idx,
         )
@@ -398,10 +404,10 @@ impl GlorysLoader {
         Self::parse_tile_data(&bytes).map_err(LoaderError::Parse)
     }
     
-    pub fn get_tile_key(&self, lon: f32, lat: f32, day: u32) -> TileKey {
+    pub fn get_tile_key(&self, lon: f32, lat: f32, day: u32, hour: u32) -> TileKey {
         let lon_idx = ((lon - self.min_lon) / self.tile_size).floor() as usize;
         let lat_idx = ((lat - self.min_lat) / self.tile_size).floor() as usize;
-        TileKey { lon_idx, lat_idx, day }
+        TileKey { lon_idx, lat_idx, day, hour}
     }
     
     pub fn get_cell_index(&self, lon: f32, lat: f32, tile: &TileData) -> (usize, usize) {
@@ -417,7 +423,8 @@ impl GlorysLoader {
         (lon_cell, lat_cell)
     }
     // In glorysloader.rs
-    pub fn set_current_day(&mut self, day: u32) {
+    pub fn set_current_day(&mut self, day: u32, hour: u32) {
         self.current_day = day;
+        self.current_hour = hour;
     }
 }

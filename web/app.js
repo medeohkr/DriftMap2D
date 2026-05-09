@@ -352,6 +352,7 @@ function loadGeoJsonResults(data) {
     createHeatmapColorLegend(true);
   }
 }
+let today = new Date();
 let proteus = null;
 let simulationRunning = false;
 let stepInProgress = false;
@@ -361,22 +362,22 @@ let simulationHistory = [];
 let timelineDay = 0;
 let timelinePlaying = false;
 let timelineAnimationId = null;
-let playbackSpeed = 500;
+let playbackSpeed = 100;
 let heatmap = null;
 let concentrationGrid = null;
 let lastGridUpdate = 0;
 let visualizationMode = "particles";
 let rawLon = 56.5;
 let rawLat = 26.6;
-let csValue = 0.15;
+let csValue = 0.1;
 let particleCount = 20000;
 let spreadKm = 1.0;
 let oilType = oilMenu ? oilMenu.value : "arabian_light";
-let startYear = 2025;
-let startMonth = 5;
-let startDay = 1;
-let stepSize = 1 / 48;
-let totalDays = 10;
+let startYear = today.getFullYear();
+let startMonth = today.getMonth();
+let startDay = today.getDate();
+let stepSize = 1 / 96;
+let totalDays = 10.0;
 let isError = false;
 let stepCount = 0;
 let boundingBox = [];
@@ -480,7 +481,7 @@ async function initialize() {
   initGridLayer();
   updateMarker();
   updateFields();
-  updateSimulationDate();
+  setSimulationDate();
   updateTotalDays();
 }
 
@@ -552,7 +553,7 @@ function initGridLayer() {
       type: "circle",
       source: "particles-active",
       paint: {
-        "circle-radius": 2,
+        "circle-radius": 1.4,
         "circle-color": "rgb(255, 255, 255)",
         "circle-opacity": 0.7,
       },
@@ -931,6 +932,8 @@ async function simulationStep(version) {
       const currentTiles = getTileIndices();
       const nextStepDate = addDays(currentDate, 1);
       preloader.preloadTiles(nextStepDate, currentTiles);
+    }
+    if (stepCount % (stepsPerDay/24) === 0) {
       captureSnapshot(currentDay);
     }
 
@@ -1123,6 +1126,28 @@ function updateSimulationDate() {
   }
 }
 
+function setSimulationDate() {
+  if (!simulationRunning) {
+    const today = new Date();
+    
+    // Data window: 30 days analysis + 10 days forecast
+    const minDate = new Date(today);
+    minDate.setDate(today.getDate() - 30);
+    
+    const maxDate = new Date(today);
+    maxDate.setDate(today.getDate() + 9);
+    
+    // Format as YYYY-MM-DD
+    const formatDate = (d) => {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    
+    startDate.min = formatDate(minDate);
+    startDate.max = formatDate(maxDate);
+    startDate.value = `${startYear}-${String(startMonth).padStart(2, '0')}-${String(startDay).padStart(2, '0')}`;
+  }
+}
+
 function updateTotalDays() {
   if (!simulationRunning) {
     totalDays = totalDaysField.value;
@@ -1195,18 +1220,18 @@ function timelinePlayback() {
 }
 
 function updatePlaybackSpeed() {
-  if (playbackSpeed == 500) {
-    playbackSpeed = 250;
+  if (playbackSpeed == 100) {
+    playbackSpeed = 50;
     timelineSpeed.textContent = "2x";
     return;
   }
-  if (playbackSpeed == 250) {
-    playbackSpeed = 125;
+  if (playbackSpeed == 50) {
+    playbackSpeed = 25;
     timelineSpeed.textContent = "4x";
     return;
   }
-  if (playbackSpeed == 125) {
-    playbackSpeed = 500;
+  if (playbackSpeed == 25) {
+    playbackSpeed = 100;
     timelineSpeed.textContent = "1x";
     return;
   }
