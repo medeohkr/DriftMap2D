@@ -5,3 +5,4 @@ data/
 data-pipeline/
 .vscode/
 wrangler.toml
+web/.wrangler/

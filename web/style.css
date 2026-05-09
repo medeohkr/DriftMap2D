@@ -359,6 +359,7 @@
 
         .timeline-btn {
             width: 50px;
+            height: 30px;
             background: rgb(40, 40, 40);
             border: 1px solid rgb(100, 100, 100);
             color: white;
