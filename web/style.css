@@ -451,49 +451,158 @@ body {
     .sidebar {
         left: 4px;
         max-height: 80vh;
-        row-gap: 8px;
-        padding-bottom: 8px;
+        row-gap: 10px;
+        padding: 8px;
     }
 
     .header-container {
-        width: 180px;
-        height: 44px;
+        width: 120px;
+        height: 36px;
     }
     .logo {
-        width: 28px;
-        margin-left: 12px;
-        margin-right: 10px;
+        width: 22px;
+        margin-left: 8px;
+        margin-right: 6px;
     }
     .title-text {
-        font-size: 22px;
-    }
-    .release-display-container,
-    .oil-display-container,
-    .simulation-time-container,
-    .release-manager-container {
-        width: 180px;
-    }
-    .import-container {
-        width: 180px;
-    }
-    .simulation-btn-container {
-        width: 180px;
-    }
-    #oil-menu {
-        width: 180px;
+        font-size: 16px;
     }
 
+    /* Panels */
+    .import-container {
+        width: 120px;
+        font-size: 9px;
+        column-gap: 2px;
+        font-size: 7px;
+    }
+    #import-geojson {
+        font-size: 6px;
+        padding: 2px 4px;
+    }
+    #autozoom-checkbox {
+        width: 12px;
+        height: 12px;
+    }
+
+    .release-display-container {
+        width: 120px;
+        padding: 6px 8px;
+        row-gap: 4px;
+        column-gap: 4px;
+        grid-template-rows: 16px 8px 16px;
+    }
+    .release-text {
+        font-size: 10px;
+    }
+    .lat-text, .lon-text {
+        font-size: 9px;
+    }
+    .lat-field, .lon-field {
+        width: 42px;
+        font-size: 10px;
+        padding: 3px;
+    }
+
+    .simulation-time-container {
+        width: 120px;
+        padding: 6px 8px;
+        row-gap: 4px;
+        font-size: 10px;
+    }
+    #start-day-selector, #total-day-field {
+        font-size: 9px;
+        padding: 3px 4px;
+    }
+
+    .oil-display-container {
+        width: 120px;
+        padding: 6px 8px;
+        row-gap: 4px;
+        font-size: 10px;
+    }
+    .oil-text {
+        font-size: 10px;
+    }
+    #oil-menu {
+        width: auto;
+        font-size: 7px;
+        padding: 4px;
+    }
+
+    .release-manager-container {
+        width: 120px;
+        padding: 6px 8px;
+        row-gap: 3px;
+        font-size: 9px;
+        grid-template-columns: 100px 30px;
+    }
+    #release-amount-field,
+    #release-duration-field,
+    #release-radius-field {
+        width: 80px;
+        font-size: 9px;
+        padding: 3px;
+    }
+
+    /* Buttons */
+    .simulation-btn-container {
+        width: 120px;
+        column-gap: 10px;
+        /* flex-wrap: wrap; */
+    }
+    .btn-primary {
+        width: 100px;
+        padding: 8px 10px;
+        font-size: 10px;
+    }
+    #reset-simulation {
+        padding: 4px;
+    }
+    .reset-btn-img {
+        height: 16px;
+    }
+
+    /* Toggles */
     .visualization-toggle {
-        font-size: 14px;
-        padding: 5px 12px;
+        font-size: 10px;
+        padding: 4px 8px;
     }
     #current-day {
-        font-size: 11px;
-        top: 8px;
+        font-size: 10px;
+        top: auto;
+        bottom: 35px;
+        left: 22%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        color: white;
+        font-family: Montserrat;
+        font-weight: 500;
+        z-index: 11;
     }
+    .visualization-toggle-container {
+        position: absolute;
+        top: 25px;
+        left: 22%;
+        transform: translateX(-50%);
+        right: auto;
+        column-gap: 4px;
+        display: flex;
+    }
+
+    /* Timeline */
     .timeline-container {
         bottom: 4px;
         width: 95%;
-        padding: 8px 10px;
+        padding: 6px 8px;
+        gap: 4px;
+    }
+    .timeline-btn {
+        width: 32px;
+        height: 22px;
+        font-size: 10px;
+        padding: 2px;
+    }
+    .timeline-labels {
+        font-size: 9px;
     }
 }
