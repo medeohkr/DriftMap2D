@@ -4,7 +4,12 @@ use crate::interpolation::{find_depth_indices, lerp};
 use half::f16;
 use thiserror::Error;
 use gloo_net::http::Request;
-
+use wasm_bindgen::prelude::*;
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_name = "getPreloadedTile")]
+    fn get_preloaded_tile(url: &str) -> Option<Vec<u8>>;
+}
 macro_rules! log {
     ( $( $t:tt )* ) => {
         web_sys::console::log_1(&format!( $( $t )* ).into());
@@ -328,6 +333,12 @@ impl GlorysLoader {
     }
     
     async fn load_tile(&self, url: &str) -> Result<TileData, LoaderError> {
+        // Try preloader cache first
+        if let Some(bytes) = get_preloaded_tile(url) {
+            return Self::parse_tile_data(&bytes).map_err(LoaderError::Parse);
+        }
+        
+        // Fall back to network if preloader missed it
         let response = Request::get(url)
             .send()
             .await
