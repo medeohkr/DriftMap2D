@@ -1,4 +1,6 @@
-// preloader.js
+if (!window.__tileCache) {
+    window.__tileCache = new Map();
+}
 export class TilePreloader {
     constructor() {
         this.pending = new Map();      // url → Promise (in-flight requests)
@@ -102,11 +104,10 @@ export class TilePreloader {
     }
 }
 
-// Expose for WASM
 window.getPreloadedTile = function(url) {
     if (window.__tileCache && window.__tileCache.has(url)) {
         const data = window.__tileCache.get(url);
-        window.__tileCache.delete(url);
+        // Don't delete — let the cleanup function handle old tiles
         return data;
     }
     return null;

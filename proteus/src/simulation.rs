@@ -1,8 +1,10 @@
+// simulation.rs
 use crate::release_manager::{ReleaseManager, ReleaseConfig, Schedule};
 use crate::particles::Particles;
 use crate::integrators;
 use crate::diffusion::Diffusion;
-use crate::glorysloader::GlorysLoader;
+use crate::data_loader::DataLoader;
+use crate::landmask_loader::LandMaskLoader;
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
@@ -44,66 +46,12 @@ impl Simulation {
         }
     }
     
-    /// Original single-particle update (kept for compatibility)
-    pub fn update_particles(
-        &mut self, 
-        dt_days: f32, 
-        loader: &GlorysLoader,
-        velocity_fn: impl Fn(f32, f32, f32) -> (f32, f32) + Copy,
-        hour: u32
-    ) {
-        let dt: f32 = dt_days * 86400.0;
-        
-        // Release new particles if any
-        if let Some(seeds) = self.release_manager.update(dt_days) {
-            for seed in seeds {
-                self.particles.add_particle(
-                    seed.lon,
-                    seed.lat,
-                    seed.depth,
-                    0.0,
-                    seed.mass as f32,
-                    0.0,
-                    true,
-                );
-            }
-        }
-
-        // Update all active particles
-        for i in 0..self.particles.len {
-            if !self.particles.active[i] {
-                continue;
-            }
-            
-            let lon = self.particles.x[i];
-            let lat = self.particles.y[i];
-            let depth = self.particles.depth[i];
-            
-            let (new_x, new_y) = match self.config.integrator {
-                Integrator::Euler => {
-                    integrators::euler_step(lon, lat, depth, dt, velocity_fn)
-                }
-                Integrator::Midpoint => {
-                    integrators::midpoint_step(lon, lat, depth, dt, velocity_fn)
-                }
-                Integrator::RK4 => {
-                    integrators::rk4_step(lon, lat, depth, dt, velocity_fn)
-                }
-            };
-            
-            let (dx, dy) = self.diffusion.smagorinsky_step(loader, lon, lat, depth, loader.current_day, dt_days, hour);
-            self.particles.x[i] = new_x + dx;
-            self.particles.y[i] = new_y + dy;
-            self.particles.age[i] += dt_days;
-        }
-    }
-    
-    /// Batch update all particles using optimized grouped velocity lookups
     pub fn update_particles_batch(
         &mut self,
         dt_days: f32,
-        loader: &GlorysLoader,
-        hour: u32
+        loader: &DataLoader,
+        hour: u32,
+        landmask: &LandMaskLoader,
     ) {
         let dt: f32 = dt_days * 86400.0;
         
@@ -132,44 +80,16 @@ impl Simulation {
             return;
         }
         
-        // Extract just positions for batch velocity lookup
+        // Extract positions for batch velocity lookup
         let positions: Vec<(f32, f32, f32)> = active_data.iter()
             .map(|&(_, lon, lat, depth)| (lon, lat, depth))
             .collect();
         
-        // Check initial velocities for stranding BEFORE integration
-        let initial_velocities = loader.get_velocities_batch_grouped(&positions, loader.current_day, hour);
-
-        let mut stranded_indices = Vec::new();
-        let mut active_integration_data = Vec::new();
-        let mut active_velocity_data = Vec::new();
-        
-        // Separate stranded particles from active ones
-        for (i, &(idx, lon, lat, depth)) in active_data.iter().enumerate() {
-            let (u, v) = initial_velocities[i];
-            if u == 0.0 && v == 0.0 {
-                stranded_indices.push(idx);
-            } else {
-                active_integration_data.push((idx, lon, lat, depth));
-                active_velocity_data.push((u, v));
-            }
-        }
- 
-        // If no active particles remain, return early
-        if active_integration_data.is_empty() {
-            return;
-        }
-        
-        // Extract positions for the remaining active particles
-        let active_positions: Vec<(f32, f32, f32)> = active_integration_data.iter()
-            .map(|&(_, lon, lat, depth)| (lon, lat, depth))
-            .collect();
-        
-        // Batch integration for non-stranded particles
+        // Batch integration
         let new_positions = match self.config.integrator {
             Integrator::Euler => {
-                let velocities = loader.get_velocities_batch_grouped(&active_positions, loader.current_day, hour);
-                active_positions.iter()
+                let velocities = loader.get_velocities_batch_grouped(&positions, loader.current_day, hour);
+                positions.iter()
                     .enumerate()
                     .map(|(i, &(lon, lat, _))| {
                         let (u, v) = velocities[i];
@@ -181,32 +101,37 @@ impl Simulation {
                 let get_velocities = |pos: &[(f32, f32, f32)]| {
                     loader.get_velocities_batch_grouped(pos, loader.current_day, hour)
                 };
-                integrators::midpoint_step_batch(&active_positions, dt, get_velocities)
+                integrators::midpoint_step_batch(&positions, dt, get_velocities)
             }
             Integrator::RK4 => {
                 let get_velocities = |pos: &[(f32, f32, f32)]| {
                     loader.get_velocities_batch_grouped(pos, loader.current_day, hour)
                 };
-                integrators::rk4_step_batch(&active_positions, dt, get_velocities)
+                integrators::rk4_step_batch(&positions, dt, get_velocities)
             }
         };
         
-        for &idx in &stranded_indices {
-            self.particles.active[idx] = false;
-        }
-        // Apply new positions and diffusion
-        for (i, &(idx, lon, lat, depth)) in active_integration_data.iter().enumerate() {
+        // Apply new positions, diffusion, and landmask check
+        for (i, &(idx, lon, lat, depth)) in active_data.iter().enumerate() {
             let (new_lon, new_lat) = new_positions[i];
-            let (dx, dy) = self.diffusion.smagorinsky_step(loader, lon, lat, depth, loader.current_day, dt_days, hour);
-            self.particles.x[idx] = new_lon + dx;
-            self.particles.y[idx] = new_lat + dy;
+            let (dx, dy) = self.diffusion.smagorinsky_step(
+                loader, lon, lat, depth, loader.current_day, dt_days, hour
+            );
+            
+            let final_lon = new_lon + dx;
+            let final_lat = new_lat + dy;
+            
+            // Check landmask — strand if on land
+            if landmask.is_on_land(final_lon, final_lat) {
+                self.particles.active[idx] = false;
+            }
+            
+            self.particles.x[idx] = final_lon;
+            self.particles.y[idx] = final_lat;
             self.particles.age[idx] += dt_days;
-
-
         }
     }
     
-    /// Get reference to particles (for visualization)
     pub fn get_particles(&self) -> &Particles {
         &self.particles
     }
