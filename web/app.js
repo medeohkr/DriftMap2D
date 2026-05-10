@@ -376,7 +376,7 @@ let oilType = oilMenu ? oilMenu.value : "arabian_light";
 let startYear = today.getFullYear();
 let startMonth = today.getMonth() + 1;
 let startDay = today.getDate();
-let stepSize = 1 / 96;
+let stepSize = 1 / 144;
 let totalDays = 7.0;
 let isError = false;
 let stepCount = 0;
@@ -842,7 +842,7 @@ function createHeatmapColorLegend(show = true) {
 function captureSnapshot(day) {
   const snapshot = {
     day: day + 1,
-    dateStr: proteus.current_date_str(),
+    dateStr: proteus.current_time_str(),
     activeGeojson: getActiveGeojson(),
     inactiveGeojson: getInactiveGeojson(),
     heatmapGeojson: getHeatmapGeojson(),
@@ -915,23 +915,23 @@ async function simulationStep(version) {
     return;
   }
 
-  stepInProgress = true;
-  stepCount++;
   try {
-    // Capture snapshot BEFORE stepping, at the start of each day
+    stepInProgress = true;
     const currentDay = Math.floor(proteus.current_day());
     const stepsPerDay = Math.round(1 / stepSize);
+    const currentDate = proteus.current_date_int();
 
     await proteus.step(stepSize);
 
-    if (version !== simulationVersion) return;
-
-    const currentDate = proteus.current_date_int();
 
     if (stepCount % stepsPerDay === 0) {
-      const currentTiles = getTileIndices();
-      const nextStepDate = addDays(currentDate, 1);
-      preloader.preloadTiles(nextStepDate, currentTiles);
+      // Current tiles for immediate display
+      const currentTiles = getTileIndices(proteus.get_positions(), 0);
+      // Preload current day
+      const currentDate = proteus.current_date_int();
+      preloader.preloadTiles(currentDate, currentTiles);
+      // Preload future steps
+      preloader.preloadFutureSteps(currentDate, proteus.get_positions(), 2, 0);
     }
     if (stepCount % (stepsPerDay/24) === 0) {
       captureSnapshot(currentDay);
@@ -956,12 +956,12 @@ async function simulationStep(version) {
     }
 
     let day = proteus.current_day();
-    dayDisplay.textContent = proteus.current_date_str();
+    dayDisplay.textContent = proteus.current_time_str();
 
     if (
       simulationRunning &&
       version === simulationVersion &&
-      day <= totalDays
+      day < totalDays
     ) {
       animationId = requestAnimationFrame(() => simulationStep(version));
     } else {
@@ -975,6 +975,7 @@ async function simulationStep(version) {
   } catch (error) {
     simulationRunning = false;
   } finally {
+    stepCount++;
     stepInProgress = false;
   }
 }

@@ -85,29 +85,30 @@ impl Proteus {
         (year as u32 * 10000) + (month * 100) + day
     }
     
-    /// Advance simulation by dt_days and update all particles
-    pub async fn step(&mut self, dt_days: f32) -> Result<(), JsValue> {
-        // Advance time
-        self.days_since_start += dt_days;
-        let total_hours = self.days_since_start * 24.0;
-        self.hour_count = (total_hours.floor() % 24.0) as u32;
-        // Get current date for tile lookup
-        let current_date_int = self.get_current_date_int();
-        self.loader.set_current_day(current_date_int, self.hour_count);
-        
-        // Get needed tiles based on particle positions
-        let needed_tiles = self.loader.update_tiles(&self.simulation.get_particles());
-        
-        // Load required tiles
-        if let Err(e) = self.loader.load_by_date(current_date_int, &needed_tiles).await {
-            web_sys::console::error_1(&format!("Failed to load tiles: {:?}", e).into());
-            return Err(JsValue::from_str(&format!("{:?}", e)));
-        }
-        // Update all particles
-        self.simulation.update_particles_batch(dt_days, &self.loader, self.hour_count);
-        // self.simulation.update_particles(dt_days, self.days_since_start, velocity_fn);
-        Ok(())
+pub async fn step(&mut self, dt_days: f32) -> Result<(), JsValue> {
+    // Get current date BEFORE advancing (use current state)
+    let current_date_int = self.get_current_date_int();
+    self.loader.set_current_day(current_date_int, self.hour_count);
+    
+    // Get needed tiles based on current particle positions
+    let needed_tiles = self.loader.update_tiles(&self.simulation.get_particles());
+    
+    // Load required tiles for current date
+    if let Err(e) = self.loader.load_by_date(current_date_int, &needed_tiles).await {
+        web_sys::console::error_1(&format!("Failed to load tiles: {:?}", e).into());
+        return Err(JsValue::from_str(&format!("{:?}", e)));
     }
+    
+    // Update all particles using current date
+    self.simulation.update_particles_batch(dt_days, &self.loader, self.hour_count);
+    
+    // THEN advance time for next iteration
+    self.days_since_start += dt_days;
+    let total_hours = self.days_since_start * 24.0;
+    self.hour_count = (total_hours.floor() % 24.0) as u32;
+    
+    Ok(())
+}
     
     /// Get all active particle positions as flat array [lon0, lat0, lon1, lat1, ...]
     pub fn get_positions(&self) -> Vec<f32> {
@@ -172,12 +173,12 @@ impl Proteus {
         (year as u32 * 10000) + (month * 100) + day
     }
     
-    pub fn current_date_str(&self) -> String {
+    pub fn current_time_str(&self) -> String {
         let current_date = self.start_date + Days::new(self.days_since_start as u64);
         let year = current_date.year();
         let month = current_date.month();
         let day = current_date.day();
-        format!("{year}-{month}-{day}")
+        format!("{:04}-{:02}-{:02} {:02}:00", year, month, day, self.hour_count)
     }
     pub fn get_particle_bounding_box(&self) -> Vec<f32> {
         self.simulation.particles.bounding_box_array()
