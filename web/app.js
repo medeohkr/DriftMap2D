@@ -931,7 +931,7 @@ async function simulationStep(version) {
     if (stepCount % stepsPerDay === 0) {
       const currentTiles = getTileIndices(proteus.get_positions());
       preloader.preloadTiles(todayDateInt, currentTiles);
-      preloader.preloadFutureSteps(todayDateInt, proteus.get_positions(), 1, 0);
+      preloader.preloadFutureSteps(todayDateInt, proteus.get_positions(), 2, 0);
       for (const url of window.__tileCache.keys()) {
         const match = url.match(/(\d{4})\/(\d{2})\/(\d{2})/);
         if (match) {
