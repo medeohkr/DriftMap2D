@@ -33,7 +33,7 @@ pub struct TileData {
     pub n_hours: usize,     // NEW: number of time steps in this tile (usually 24)
 }
 
-pub struct GlorysLoader {
+pub struct DataLoader {
     min_lon: f32,
     min_lat: f32,
     lon_step: f32,
@@ -59,7 +59,7 @@ pub enum LoaderError {
     Http(u16),
 }
 
-impl GlorysLoader {
+impl DataLoader {
     pub fn new(base_url: &str, min_lon: f32, min_lat: f32) -> Self {
         Self {
             min_lon,

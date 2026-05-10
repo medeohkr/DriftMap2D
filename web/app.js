@@ -77,6 +77,14 @@ map.on("click", function (e) {
 
     updateFields();
     updateMarker();
+
+    const currentPosition = getTileIndices([
+      normalizeLongitude(rawLon),
+      rawLat,
+    ]);
+    const currentDate = `${startYear}${String(startMonth).padStart(2, "0")}${String(startDay).padStart(2, "0")}`;
+
+    preloader.preloadTiles(currentDate, currentPosition);
   }
 });
 startBtn.addEventListener("click", startSimulation);
@@ -126,8 +134,7 @@ exportGeojsonBtn.addEventListener("click", () => {
     return;
   }
 
-  // Check if heatmaps are available and warn about size
-  const hasHeatmaps = simulationHistory.some((s) => s.heatmapGeojson !== null);
+  // const hasHeatmaps = simulationHistory.some((s) => s.heatmapGeojson !== null);
   exportWithHeatmaps();
 });
 
@@ -377,7 +384,7 @@ let startYear = today.getFullYear();
 let startMonth = today.getMonth() + 1;
 let startDay = today.getDate();
 let stepSize = 1 / 144;
-let totalDays = 7.0;
+let totalDays = 10.0;
 let isError = false;
 let stepCount = 0;
 let boundingBox = [];
@@ -416,8 +423,7 @@ function normalizeLongitude(lon) {
   lon = ((((lon + 180) % 360) + 360) % 360) - 180;
   return lon;
 }
-function getTileIndices() {
-  const positions = proteus.get_positions();
+function getTileIndices(positions) {
   const tiles = new Set();
 
   for (let i = 0; i < positions.length; i += 2) {
@@ -461,7 +467,7 @@ function updateBoundingBox() {
 async function initialize() {
   await init();
   setup_panic_hook();
-
+  initGridLayer();
   let lon = normalizeLongitude(rawLon);
   let lat = rawLat;
 
@@ -477,8 +483,8 @@ async function initialize() {
     releaseAmount,
     releaseDuration,
   );
+  // await proteus.init_landmask();
 
-  initGridLayer();
   updateMarker();
   updateFields();
   setSimulationDate();
@@ -919,21 +925,25 @@ async function simulationStep(version) {
     stepInProgress = true;
     const currentDay = Math.floor(proteus.current_day());
     const stepsPerDay = Math.round(1 / stepSize);
-    const currentDate = proteus.current_date_int();
+    const todayDateInt = proteus.current_date_int(); // Renamed for clarity
 
     await proteus.step(stepSize);
-
-
     if (stepCount % stepsPerDay === 0) {
-      // Current tiles for immediate display
-      const currentTiles = getTileIndices(proteus.get_positions(), 0);
-      // Preload current day
-      const currentDate = proteus.current_date_int();
-      preloader.preloadTiles(currentDate, currentTiles);
-      // Preload future steps
-      preloader.preloadFutureSteps(currentDate, proteus.get_positions(), 2, 0);
+      const currentTiles = getTileIndices(proteus.get_positions());
+      preloader.preloadTiles(todayDateInt, currentTiles);
+      preloader.preloadFutureSteps(todayDateInt, proteus.get_positions(), 1, 0);
+      for (const url of window.__tileCache.keys()) {
+        const match = url.match(/(\d{4})\/(\d{2})\/(\d{2})/);
+        if (match) {
+          const tileDate = parseInt(match[1] + match[2] + match[3]);
+          if (tileDate < todayDateInt - 1) {
+            window.__tileCache.delete(url);
+          }
+        }
+      }
     }
-    if (stepCount % (stepsPerDay/24) === 0) {
+
+    if (stepCount % (stepsPerDay / 24) === 0) {
       captureSnapshot(currentDay);
     }
 
@@ -958,11 +968,7 @@ async function simulationStep(version) {
     let day = proteus.current_day();
     dayDisplay.textContent = proteus.current_time_str();
 
-    if (
-      simulationRunning &&
-      version === simulationVersion &&
-      day < totalDays
-    ) {
+    if (version === simulationVersion && day < totalDays) {
       animationId = requestAnimationFrame(() => simulationStep(version));
     } else {
       simulationRunning = false;
@@ -973,6 +979,7 @@ async function simulationStep(version) {
       exportGeojsonBtn.style.display = "inline-block";
     }
   } catch (error) {
+    console.error("Simulation step failed:", error);
     simulationRunning = false;
   } finally {
     stepCount++;
@@ -981,7 +988,7 @@ async function simulationStep(version) {
 }
 
 // Start simulation
-function startSimulation() {
+async function startSimulation() {
   if (simulationRunning) {
     return;
   }
@@ -1013,6 +1020,7 @@ function startSimulation() {
     releaseAmount,
     releaseDuration,
   );
+  // await proteus.init_landmask();
 
   // Update UI
   startBtn.style.display = "none";
@@ -1095,6 +1103,7 @@ async function resetSimulation() {
     releaseAmount,
     releaseDuration,
   );
+  // await proteus.init_landmask();
 
   map
     .getSource("concentration")
@@ -1130,22 +1139,22 @@ function updateSimulationDate() {
 function setSimulationDate() {
   if (!simulationRunning) {
     const today = new Date();
-    
+
     // Data window: 30 days analysis + 10 days forecast
     const minDate = new Date(today);
     minDate.setDate(today.getDate() - 30);
-    
+
     const maxDate = new Date(today);
     maxDate.setDate(today.getDate() + 9);
-    
+
     // Format as YYYY-MM-DD
     const formatDate = (d) => {
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     };
-    
+
     startDate.min = formatDate(minDate);
     startDate.max = formatDate(maxDate);
-    startDate.value = `${startYear}-${String(startMonth).padStart(2, '0')}-${String(startDay).padStart(2, '0')}`;
+    startDate.value = `${startYear}-${String(startMonth).padStart(2, "0")}-${String(startDay).padStart(2, "0")}`;
   }
 }
 

@@ -1,6 +1,6 @@
 use rand::prelude::*;
 use rand_distr::{Normal, Distribution};
-use crate::glorysloader::GlorysLoader;
+use crate::data_loader::DataLoader;
 macro_rules! log {
     ( $( $t:tt )* ) => {
         web_sys::console::log_1(&format!( $( $t )* ).into());
@@ -24,7 +24,7 @@ impl Diffusion {
 
     pub fn smagorinsky_step(
         &mut self,
-        loader: &GlorysLoader,
+        loader: &DataLoader,
         lon: f32,
         lat: f32,
         depth: f32,
