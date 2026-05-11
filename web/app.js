@@ -70,6 +70,64 @@ const importGeojsonBtn = document.getElementById("import-geojson");
 const importGeojsonFile = document.getElementById("import-geojson-file");
 const autoZoom = document.getElementById("autozoom-checkbox");
 
+let today = new Date();
+let proteus = null;
+let simulationRunning = false;
+let stepInProgress = false;
+let animationId = null;
+let simulationVersion = 0;
+let simulationHistory = [];
+let timelineDay = 0;
+let timelinePlaying = false;
+let timelineAnimationId = null;
+let playbackSpeed = 100;
+let heatmap = null;
+let concentrationGrid = null;
+let lastGridUpdate = 0;
+let visualizationMode = "particles";
+let rawLon = 56.5;
+let rawLat = 26.6;
+let csValue = 0.1;
+let particleCount = 20000;
+let spreadKm = 1.0;
+let oilType = oilMenu ? oilMenu.value : "arabian_light";
+let startYear = today.getFullYear();
+let startMonth = today.getMonth() + 1;
+let startDay = today.getDate();
+let stepSize = 1 / 144;
+let totalDays = 10.0;
+let isError = false;
+let stepCount = 0;
+let boundingBox = [];
+let releaseAmount = 100.0;
+let releaseDuration = 1.0;
+
+const GRID_UPDATE_INTERVAL = 200;
+const GRID_SIZE = 0.05;
+const CONCENTRATIONS = [
+  particleCount / 20000,
+  particleCount / 10000,
+  particleCount / 5000,
+  particleCount / 2500,
+  particleCount / 1250,
+  particleCount / 625,
+  particleCount / 312.5,
+  particleCount / 156.25,
+  particleCount / 78.125,
+  particleCount / 39.0625,
+];
+const COLORS = [
+  "rgb(60, 90, 190)",
+  "rgb(80, 140, 200)",
+  "rgb(90, 175, 195)",
+  "rgb(100, 190, 160)",
+  "rgb(140, 200, 120)",
+  "rgb(200, 210, 100)",
+  "rgb(225, 210, 100)",
+  "rgb(225, 170, 90)",
+  "rgb(215, 135, 80)",
+  "rgb(200, 100, 80)",
+];
 map.on("click", function (e) {
   if (simulationHistory.length === 0) {
     rawLon = e.lngLat.lng.toFixed(2);
@@ -296,8 +354,8 @@ importGeojsonFile.addEventListener("change", (e) => {
       const data = JSON.parse(event.target.result);
       loadGeoJsonResults(data);
     } catch (err) {
-      alert("Invalid GeoJSON file");
-      console.error(err);
+      console.error("Import error:", err.message, err.stack);
+      alert("Invalid GeoJSON file: " + err.message);
     }
   };
   reader.readAsText(file);
@@ -382,68 +440,21 @@ function loadGeoJsonResults(data) {
   if (window.currentMarker) {
     window.currentMarker.remove();
   }
+  createReleaseCircle(rawLon, rawLat, spreadKm);
+
   if (visualizationMode == "grid") {
     createHeatmapColorLegend(true);
   }
+  if (autoZoom.checked) {
+    map.flyTo({
+      center: [rawLon, rawLat],
+      zoom: 6 - totalDays / 100,
+      duration: 2000,
+      essential: true,
+    });
+  }
 }
-let today = new Date();
-let proteus = null;
-let simulationRunning = false;
-let stepInProgress = false;
-let animationId = null;
-let simulationVersion = 0;
-let simulationHistory = [];
-let timelineDay = 0;
-let timelinePlaying = false;
-let timelineAnimationId = null;
-let playbackSpeed = 100;
-let heatmap = null;
-let concentrationGrid = null;
-let lastGridUpdate = 0;
-let visualizationMode = "particles";
-let rawLon = 56.5;
-let rawLat = 26.6;
-let csValue = 0.1;
-let particleCount = 20000;
-let spreadKm = 1.0;
-let oilType = oilMenu ? oilMenu.value : "arabian_light";
-let startYear = today.getFullYear();
-let startMonth = today.getMonth() + 1;
-let startDay = today.getDate();
-let stepSize = 1 / 144;
-let totalDays = 10.0;
-let isError = false;
-let stepCount = 0;
-let boundingBox = [];
-let releaseAmount = 100.0;
-let releaseDuration = 1.0;
 
-const GRID_UPDATE_INTERVAL = 200;
-const GRID_SIZE = 0.05;
-const CONCENTRATIONS = [
-  particleCount / 20000,
-  particleCount / 10000,
-  particleCount / 5000,
-  particleCount / 2500,
-  particleCount / 1250,
-  particleCount / 625,
-  particleCount / 312.5,
-  particleCount / 156.25,
-  particleCount / 78.125,
-  particleCount / 39.0625,
-];
-const COLORS = [
-  "rgb(60, 90, 190)",
-  "rgb(80, 140, 200)",
-  "rgb(90, 175, 195)",
-  "rgb(100, 190, 160)",
-  "rgb(140, 200, 120)",
-  "rgb(200, 210, 100)",
-  "rgb(225, 210, 100)",
-  "rgb(225, 170, 90)",
-  "rgb(215, 135, 80)",
-  "rgb(200, 100, 80)",
-];
 // Normalize longitude
 function normalizeLongitude(lon) {
   lon = parseFloat(lon);
@@ -510,7 +521,6 @@ async function initialize() {
     releaseAmount,
     releaseDuration,
   );
-  // await proteus.init_landmask();
 
   updateMarker();
   updateFields();
@@ -606,6 +616,23 @@ function initGridLayer() {
         "circle-opacity": 0.7,
       },
     });
+    // In initGridLayer(), add after the other sources:
+    map.addSource("release-circle", {
+      type: "geojson",
+      data: { type: "FeatureCollection", features: [] },
+    });
+    map.addLayer({
+      id: "release-circle-layer",
+      type: "fill",
+      source: "release-circle",
+      paint: {
+        "fill-color": "rgba(255, 80, 80, 0.4)",
+        "fill-outline-color": "rgba(255, 80, 80, 0.6)",
+      },
+      layout: {
+        visibility: "none",
+      },
+    });
 
     toggleVisualizationMode();
   });
@@ -636,8 +663,9 @@ function toggleParticleMode() {
   particleToggle.style.background = "rgb(255, 255, 255)";
   particleToggle.style.color = "rgb(0, 0, 0)";
 
-  // If we have timeline data, use the current snapshot's particles
-  if (simulationHistory.length > 0 && timelineDay >= 0) {
+  if (proteus && proteus.get_positions().length > 0) {
+    updateParticleVisualization();
+  } else if (simulationHistory.length > 0 && timelineDay >= 0) {
     const snapshot = simulationHistory[timelineDay];
     if (snapshot && snapshot.activeGeojson) {
       map.getSource("particles-active").setData(snapshot.activeGeojson);
@@ -646,12 +674,6 @@ function toggleParticleMode() {
       map.getSource("particles-inactive").setData(snapshot.inactiveGeojson);
     }
     createHeatmapColorLegend(false);
-    return; // Skip live update
-  }
-
-  // Otherwise, try live update (only works during active simulation)
-  if (proteus && proteus.get_positions().length > 0) {
-    updateParticleVisualization();
   }
 
   createHeatmapColorLegend(false);
@@ -713,8 +735,9 @@ function updatePositionFromFields() {
 
 function updateFields() {
   let displayLon = normalizeLongitude(rawLon).toFixed(2);
+  let displayLat = parseFloat(rawLat).toFixed(2);
   lonField.value = displayLon;
-  latField.value = rawLat;
+  latField.value = displayLat;
   const currentTile = getTileIndices([normalizeLongitude(rawLon), rawLat]);
   const currentDate = parseInt(
     `${startYear}${String(startMonth).padStart(2, "0")}${String(startDay).padStart(2, "0")}`,
@@ -886,6 +909,37 @@ function createHeatmapColorLegend(show = true) {
     label.textContent = tonsPerKm2.toExponential(1) + " tons/km²";
   }
 }
+function createReleaseCircle(lon, lat, radiusKm) {
+  const points = 64;
+  const coords = [];
+  const kmPerDeg = 1.0 / 111.12;
+  const radiusDeg = radiusKm * kmPerDeg;
+
+  for (let i = 0; i <= points; i++) {
+    const angle = (i / points) * 2 * Math.PI;
+    // Adjust longitude radius for latitude
+    const dx = radiusDeg * Math.cos(angle);
+    const dy = radiusDeg * Math.sin(angle) * Math.cos((lat * Math.PI) / 180);
+    coords.push([lon + dx, lat + dy]);
+  }
+  coords.push(coords[0]); // Close the ring
+
+  const geojson = {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        geometry: {
+          type: "Polygon",
+          coordinates: [coords],
+        },
+      },
+    ],
+  };
+
+  map.getSource("release-circle").setData(geojson);
+  map.setLayoutProperty("release-circle-layer", "visibility", "visible");
+}
 function captureSnapshot(day) {
   const snapshot = {
     day: day + 1,
@@ -1017,7 +1071,7 @@ async function simulationStep(version) {
     let day = proteus.current_day();
     dayDisplay.textContent = proteus.current_time_str();
 
-    if (version === simulationVersion && day < totalDays) {
+    if (day < totalDays) {
       animationId = requestAnimationFrame(() => simulationStep(version));
     } else {
       simulationRunning = false;
@@ -1039,7 +1093,8 @@ async function simulationStep(version) {
 // Start simulation
 async function startSimulation() {
   if (simulationRunning || isError) {
-    if (isError) alert("Simulation dates are outside the available data window.");
+    if (isError)
+      alert("Simulation dates are outside the available data window.");
     return;
   }
 
@@ -1049,17 +1104,20 @@ async function startSimulation() {
   lastGridUpdate = 0;
   concentrationGrid = null;
 
-  if (window.currentMarker) {
-    window.currentMarker.remove();
-  }
-  let lon = normalizeLongitude(rawLon);
-  let lat = rawLat;
-
   updateSimulationDate();
   updateTotalDays();
   updateReleaseAmount();
   updateReleaseDuration();
   updateReleaseRadius();
+  // After removing the marker in startSimulation:
+  if (window.currentMarker) {
+    window.currentMarker.remove();
+  }
+
+  createReleaseCircle(rawLon, rawLat, spreadKm);
+
+  let lon = normalizeLongitude(rawLon);
+  let lat = rawLat;
 
   const currentZoom = map.getZoom();
 
@@ -1133,6 +1191,7 @@ async function resetSimulation() {
     animationId = null;
   }
 
+  map.setLayoutProperty("release-circle-layer", "visibility", "none");
   // Hide timeline
   const container = document.getElementById("timeline-container");
   if (container) container.style.display = "none";
