@@ -130,7 +130,8 @@ body {
     font-size: 14px;
     font-weight: 500;
     bottom: 25px;
-    left: 285px;
+    left: 50%;
+    transform: translateX(-50%);
 }
 
 .import-container {

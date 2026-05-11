@@ -6,6 +6,37 @@ export class TilePreloader {
         this.pending = new Map();      // url → Promise (in-flight requests)
         this.completed = new Set();    // urls already loaded
         this.baseUrl = "https://tiles.driftmap2d.com/tiles";
+        this.landmaskUrl = "https://tiles.driftmap2d.com/landmask";
+    }
+    
+    preloadLandmask(lonIdx, latIdx) {
+        const url = `${this.landmaskUrl}/${String(lonIdx).padStart(3, '0')}_${String(latIdx).padStart(3, '0')}.bin`;
+        
+        if (this.completed.has(url) || this.pending.has(url)) return;
+        
+        const promise = fetch(url)
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return response.arrayBuffer();
+            })
+            .then(buffer => {
+                if (!window.__tileCache) window.__tileCache = new Map();
+                window.__tileCache.set(url, new Uint8Array(buffer));
+                this.completed.add(url);
+                this.pending.delete(url);
+            })
+            .catch(err => {
+                console.warn(`Landmask preload failed: ${url}`, err);
+                this.pending.delete(url);
+            });
+        
+        this.pending.set(url, promise);
+    }
+    
+    preloadLandmaskTiles(tileIndices) {
+        for (const { lonIdx, latIdx } of tileIndices) {
+            this.preloadLandmask(lonIdx, latIdx);
+        }
     }
     
     getUrl(date, lonIdx, latIdx) {
