@@ -910,6 +910,7 @@ function createHeatmapColorLegend(show = true) {
   }
 }
 function createReleaseCircle(lon, lat, radiusKm) {
+  console.log(radiusKm);
   const points = 64;
   const coords = [];
   const kmPerDeg = 1.0 / 111.12;
@@ -1233,6 +1234,7 @@ async function resetSimulation() {
   resumeBtn.style.display = "none";
   exportGeojsonBtn.style.display = "none";
 
+  updateFields();
   updateMarker();
   updateSimulationDate();
   updateTotalDays();
