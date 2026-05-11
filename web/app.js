@@ -71,21 +71,32 @@ const importGeojsonFile = document.getElementById("import-geojson-file");
 const autoZoom = document.getElementById("autozoom-checkbox");
 
 map.on("click", function (e) {
-  if (!simulationRunning) {
+  if (simulationHistory.length === 0) {
     rawLon = e.lngLat.lng.toFixed(2);
     rawLat = e.lngLat.lat.toFixed(2);
-
     updateFields();
     updateMarker();
-
-    const currentPosition = getTileIndices([
-      normalizeLongitude(rawLon),
-      rawLat,
-    ]);
-    const currentDate = `${startYear}${String(startMonth).padStart(2, "0")}${String(startDay).padStart(2, "0")}`;
-
-    preloader.preloadTiles(currentDate, currentPosition);
   }
+});
+// Add coordinate display to the map
+const coordDisplay = document.createElement("div");
+coordDisplay.id = "coordinate-display";
+coordDisplay.style.cssText = `
+    position: absolute;
+    bottom: 20px;
+    left: 285px;
+    color: rgba(255, 255, 255, 0.7);
+    font-family: monospace;
+    font-size: 12px;
+    z-index: 10;
+    pointer-events: none;
+`;
+document.body.appendChild(coordDisplay);
+
+map.on("mousemove", function (e) {
+  const lon = e.lngLat.lng.toFixed(2);
+  const lat = e.lngLat.lat.toFixed(2);
+  coordDisplay.textContent = `${lat}°, ${lon}°`;
 });
 startBtn.addEventListener("click", startSimulation);
 stopBtn.addEventListener("click", stopSimulation);
@@ -265,7 +276,7 @@ function downloadGeoJSON(data, type) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `driftmap-results-${type}-${startYear}-${startMonth}-${startDay}.geojson`;
+  a.download = `driftmap-${type}-${startYear}-${startMonth}-${startDay}.geojson`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -352,9 +363,25 @@ function loadGeoJsonResults(data) {
   stopBtn.style.display = "none";
   resumeBtn.style.display = "none";
   exportGeojsonBtn.style.display = "inline-block";
+  latField.value = `${data.properties.config.release_lat}`;
+  lonField.value = `${data.properties.config.release_lon}`;
+  releaseAmountField.value = `${data.properties.config.release_amount_tons}`;
+  releaseDurationField.value = `${data.properties.config.release_duration_days}`;
+  releaseRadiusField.value = `${data.properties.config.release_radius_km}`;
+  startDate.value = `${data.properties.config.start_date}`;
+  totalDaysField.value = `${data.properties.config.total_days}`;
 
+  updatePositionFromFields();
+  updateSimulationDate();
+  updateTotalDays();
+  updateReleaseAmount();
+  updateReleaseDuration();
+  updateReleaseRadius();
   showTimeline();
 
+  if (window.currentMarker) {
+    window.currentMarker.remove();
+  }
   if (visualizationMode == "grid") {
     createHeatmapColorLegend(true);
   }
@@ -688,10 +715,17 @@ function updateFields() {
   let displayLon = normalizeLongitude(rawLon).toFixed(2);
   lonField.value = displayLon;
   latField.value = rawLat;
+  const currentTile = getTileIndices([normalizeLongitude(rawLon), rawLat]);
+  const currentDate = parseInt(
+    `${startYear}${String(startMonth).padStart(2, "0")}${String(startDay).padStart(2, "0")}`,
+  );
+
+  preloader.preloadTiles(currentDate, currentTile);
+  preloader.preloadLandmaskTiles(currentTile);
 }
 
 function updateMarker() {
-  if (!simulationRunning) {
+  if (simulationHistory.length === 0) {
     if (window.currentMarker) {
       window.currentMarker.remove();
     }
@@ -706,22 +740,29 @@ function updateMarker() {
 }
 
 function updateReleaseAmount() {
-  releaseAmount = releaseAmountField.value;
-  if (visualizationMode == "grid") {
-    createHeatmapColorLegend(true);
+  if (simulationHistory.length === 0) {
+    releaseAmount = releaseAmountField.value;
+    if (visualizationMode == "grid") {
+      createHeatmapColorLegend(true);
+    }
   }
 }
 
 function updateReleaseDuration() {
-  releaseDuration = releaseDurationField.value;
+  if (simulationHistory.length === 0) {
+    releaseDuration = releaseDurationField.value;
+  }
 }
 
 function updateReleaseRadius() {
-  spreadKm = releaseRadiusField.value;
+  if (simulationHistory.length === 0) {
+    spreadKm = releaseRadiusField.value;
+  }
 }
 // Update grid visualization from particle positions
 function updateGridVisualization() {
   const positions = proteus.get_positions();
+  if (positions.length < 6) return; // Need at least 3 points to form a grid
 
   const lons = [];
   const lats = [];
@@ -931,6 +972,7 @@ async function simulationStep(version) {
     if (stepCount % stepsPerDay === 0) {
       const currentTiles = getTileIndices(proteus.get_positions());
       preloader.preloadTiles(todayDateInt, currentTiles);
+      preloader.preloadLandmaskTiles(currentTiles);
       preloader.preloadFutureSteps(todayDateInt, proteus.get_positions(), 2, 0);
       for (const url of window.__tileCache.keys()) {
         const match = url.match(/(\d{4})\/(\d{2})\/(\d{2})/);
@@ -943,7 +985,7 @@ async function simulationStep(version) {
       }
     }
 
-    if (stepCount % (stepsPerDay / 24) === 0) {
+    if (stepCount % (stepsPerDay / 24) === 1) {
       captureSnapshot(currentDay);
     }
 
@@ -951,15 +993,22 @@ async function simulationStep(version) {
     const now = performance.now();
     if (visualizationMode === "grid") {
       if (now - lastGridUpdate > GRID_UPDATE_INTERVAL) {
-        heatmap = new HeatmapGenerator(
-          boundingBox[0] - GRID_SIZE * 2,
-          boundingBox[1] + GRID_SIZE * 2,
-          boundingBox[2] - GRID_SIZE * 2,
-          boundingBox[3] + GRID_SIZE * 2,
-          GRID_SIZE,
-        );
-        updateGridVisualization();
-        lastGridUpdate = now;
+        // Check if bounding box is valid before creating heatmap
+        if (
+          boundingBox.length === 4 &&
+          boundingBox[0] !== boundingBox[1] &&
+          boundingBox[2] !== boundingBox[3]
+        ) {
+          heatmap = new HeatmapGenerator(
+            boundingBox[0] - GRID_SIZE * 2,
+            boundingBox[1] + GRID_SIZE * 2,
+            boundingBox[2] - GRID_SIZE * 2,
+            boundingBox[3] + GRID_SIZE * 2,
+            GRID_SIZE,
+          );
+          updateGridVisualization();
+          lastGridUpdate = now;
+        }
       }
     } else {
       updateParticleVisualization();
@@ -989,7 +1038,8 @@ async function simulationStep(version) {
 
 // Start simulation
 async function startSimulation() {
-  if (simulationRunning) {
+  if (simulationRunning || isError) {
+    if (isError) alert("Simulation dates are outside the available data window.");
     return;
   }
 
@@ -999,6 +1049,9 @@ async function startSimulation() {
   lastGridUpdate = 0;
   concentrationGrid = null;
 
+  if (window.currentMarker) {
+    window.currentMarker.remove();
+  }
   let lon = normalizeLongitude(rawLon);
   let lat = rawLat;
 
@@ -1007,6 +1060,20 @@ async function startSimulation() {
   updateReleaseAmount();
   updateReleaseDuration();
   updateReleaseRadius();
+
+  const currentZoom = map.getZoom();
+
+  if (currentZoom < 5 && autoZoom.checked == true) {
+    map.flyTo({
+      center: [lon, lat],
+      zoom: 6 - totalDays / 100,
+      duration: 2000,
+      essential: true,
+    });
+  }
+  if (visualizationMode == "grid") {
+    createHeatmapColorLegend(true);
+  }
 
   proteus = new Proteus(
     normalizeLongitude(lon),
@@ -1020,27 +1087,12 @@ async function startSimulation() {
     releaseAmount,
     releaseDuration,
   );
-  // await proteus.init_landmask();
-
+  simulationStep(simulationVersion);
   // Update UI
   startBtn.style.display = "none";
   stopBtn.style.display = "inline-flex";
   resumeBtn.style.display = "none";
   exportGeojsonBtn.style.display = "none";
-
-  const currentZoom = map.getZoom();
-  if (currentZoom < 5 && autoZoom.checked == true) {
-    map.flyTo({
-      center: [lon, lat],
-      zoom: 6 - totalDays / 100,
-      duration: 1500,
-      essential: true,
-    });
-  }
-  if (visualizationMode == "grid") {
-    createHeatmapColorLegend(true);
-  }
-  simulationStep(simulationVersion);
 }
 
 // Stop simulation
@@ -1128,16 +1180,48 @@ async function resetSimulation() {
 }
 
 function updateSimulationDate() {
-  if (!simulationRunning) {
+  if (simulationHistory.length === 0) {
     let inputDate = startDate.value.split("-");
-    startYear = inputDate[0];
-    startMonth = inputDate[1];
-    startDay = inputDate[2];
+    startYear = parseInt(inputDate[0]);
+    startMonth = parseInt(inputDate[1]);
+    startDay = parseInt(inputDate[2]);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const simStart = new Date(startYear, startMonth - 1, startDay);
+
+    // Earliest available: 30 days ago
+    const minDate = new Date(today);
+    minDate.setDate(minDate.getDate() - 30);
+
+    // Latest available: today + 9 days
+    const maxDate = new Date(today);
+    maxDate.setDate(maxDate.getDate() + 10);
+
+    if (simStart < minDate || simStart > maxDate) {
+      isError = true;
+      startDate.style.border = "2px solid rgb(255, 59, 20)";
+      return;
+    }
+
+    // Also validate totalDays against the new start date
+    const simEnd = new Date(simStart);
+    simEnd.setDate(simEnd.getDate() + Math.ceil(totalDays));
+    if (simEnd > maxDate) {
+      isError = true;
+      startDate.style.border = "2px solid rgb(255, 59, 20)";
+      totalDaysField.style.border = "2px solid rgb(255, 59, 20)";
+      return;
+    }
+
+    isError = false;
+    startDate.style.border = "1px solid rgba(0, 0, 0, 0.3)";
+    totalDaysField.style.border = "1px solid rgba(0, 0, 0, 0.3)";
   }
 }
 
 function setSimulationDate() {
-  if (!simulationRunning) {
+  if (simulationHistory.length === 0) {
     const today = new Date();
 
     // Data window: 30 days analysis + 10 days forecast
@@ -1159,8 +1243,41 @@ function setSimulationDate() {
 }
 
 function updateTotalDays() {
-  if (!simulationRunning) {
-    totalDays = totalDaysField.value;
+  if (simulationHistory.length === 0) {
+    const days = parseFloat(totalDaysField.value);
+
+    if (isNaN(days) || days <= 0) {
+      isError = true;
+      totalDaysField.style.border = "2px solid rgb(255, 59, 20)";
+      return;
+    }
+
+    // Calculate the end date of the simulation
+    const simStart = new Date(startYear, startMonth - 1, startDay);
+    const simEnd = new Date(simStart);
+    simEnd.setDate(simEnd.getDate() + Math.ceil(days));
+
+    // Latest available data: today + 9 days forecast
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const maxDate = new Date(today);
+    maxDate.setDate(maxDate.getDate() + 10);
+
+    if (simEnd > maxDate) {
+      isError = true;
+      totalDaysField.style.border = "2px solid rgb(255, 59, 20)";
+      return;
+    }
+
+    if (simStart < new Date(today).setDate(today.getDate() - 30)) {
+      isError = true;
+      totalDaysField.style.border = "2px solid rgb(255, 59, 20)";
+      return;
+    }
+
+    isError = false;
+    totalDaysField.style.border = "1px solid rgba(0, 0, 0, 0.3)";
+    totalDays = days;
   }
 }
 
