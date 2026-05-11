@@ -440,7 +440,6 @@ function loadGeoJsonResults(data) {
   if (window.currentMarker) {
     window.currentMarker.remove();
   }
-  createReleaseCircle(rawLon, rawLat, spreadKm);
 
   if (visualizationMode == "grid") {
     createHeatmapColorLegend(true);
@@ -616,24 +615,6 @@ function initGridLayer() {
         "circle-opacity": 0.7,
       },
     });
-    // In initGridLayer(), add after the other sources:
-    map.addSource("release-circle", {
-      type: "geojson",
-      data: { type: "FeatureCollection", features: [] },
-    });
-    map.addLayer({
-      id: "release-circle-layer",
-      type: "fill",
-      source: "release-circle",
-      paint: {
-        "fill-color": "rgba(255, 80, 80, 0.4)",
-        "fill-outline-color": "rgba(255, 80, 80, 0.6)",
-      },
-      layout: {
-        visibility: "none",
-      },
-    });
-
     toggleVisualizationMode();
   });
 }
@@ -909,38 +890,6 @@ function createHeatmapColorLegend(show = true) {
     label.textContent = tonsPerKm2.toExponential(1) + " tons/km²";
   }
 }
-function createReleaseCircle(lon, lat, radiusKm) {
-  console.log(radiusKm);
-  const points = 64;
-  const coords = [];
-  const kmPerDeg = 1.0 / 111.12;
-  const radiusDeg = radiusKm * kmPerDeg;
-
-  for (let i = 0; i <= points; i++) {
-    const angle = (i / points) * 2 * Math.PI;
-    // Adjust longitude radius for latitude
-    const dx = radiusDeg * Math.cos(angle);
-    const dy = radiusDeg * Math.sin(angle) * Math.cos((lat * Math.PI) / 180);
-    coords.push([lon + dx, lat + dy]);
-  }
-  coords.push(coords[0]); // Close the ring
-
-  const geojson = {
-    type: "FeatureCollection",
-    features: [
-      {
-        type: "Feature",
-        geometry: {
-          type: "Polygon",
-          coordinates: [coords],
-        },
-      },
-    ],
-  };
-
-  map.getSource("release-circle").setData(geojson);
-  map.setLayoutProperty("release-circle-layer", "visibility", "visible");
-}
 function captureSnapshot(day) {
   const snapshot = {
     day: day + 1,
@@ -1115,8 +1064,6 @@ async function startSimulation() {
     window.currentMarker.remove();
   }
 
-  createReleaseCircle(rawLon, rawLat, spreadKm);
-
   let lon = normalizeLongitude(rawLon);
   let lat = rawLat;
 
@@ -1192,8 +1139,6 @@ async function resetSimulation() {
     animationId = null;
   }
 
-  map.setLayoutProperty("release-circle-layer", "visibility", "none");
-  // Hide timeline
   const container = document.getElementById("timeline-container");
   if (container) container.style.display = "none";
 
