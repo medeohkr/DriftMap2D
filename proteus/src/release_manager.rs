@@ -76,14 +76,23 @@ impl ReleaseManager {
         }
     }
     
-    /// Generate particle seeds with Gaussian spread around release point
     fn generate_particles(&mut self, count: usize) -> Vec<ParticleSeed> {
-        let km_to_deg = 1.0/111.12;
+        let km_to_deg = 1.0 / 111.12;
+        let max_r = self.config.spread_km;  // Hard boundary
         
         (0..count)
             .map(|_| {
-                let dx = self.normal.sample(&mut self.rng);
-                let dy = self.normal.sample(&mut self.rng);
+                // Sample from Gaussian, but reject if beyond max_r
+                let mut dx: f32;
+                let mut dy: f32;
+                loop {
+                    dx = self.normal.sample(&mut self.rng);
+                    dy = self.normal.sample(&mut self.rng);
+                    let r = (dx * dx + dy * dy).sqrt();
+                    if r <= max_r {
+                        break;
+                    }
+                }
                 let lon = self.config.lon + dx * km_to_deg;
                 let lat = self.config.lat + dy * km_to_deg;
                 
