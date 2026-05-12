@@ -127,12 +127,7 @@ impl Simulation {
             let final_lon = new_lon + dx;
             let final_lat = new_lat + dy;
             
-            // Strand if in zero-velocity cell or on land
-            let (u_final, v_final) = loader.get_velocity(
-                final_lon, final_lat, depth, loader.current_day, hour
-            ).unwrap_or((0.0, 0.0));
-            
-            if (u_final == 0.0 && v_final == 0.0) || landmask.is_on_land(final_lon, final_lat) {
+            if landmask.is_on_land(final_lon, final_lat) {
                 self.particles.active[idx] = false;
             }
             

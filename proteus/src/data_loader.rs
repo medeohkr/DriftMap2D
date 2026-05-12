@@ -182,6 +182,10 @@ impl DataLoader {
         let key = self.get_tile_key(lon, lat, day);
         let tile_data = self.cache.get(&key)?;
         
+        // Return None if tile has no wind data
+        if tile_data.n_steps == 0 || tile_data.u_wind.is_empty() {
+            return None;
+        }
         let wind_step = ((hour / 6) as usize).min(tile_data.n_steps.saturating_sub(1));
         
         let (lon_cell, lat_cell) = self.get_cell_index(
@@ -247,16 +251,22 @@ impl DataLoader {
         
         for (key, group) in groups {
             if let Some(tile) = self.cache.get(&key) {
+                let has_wind = tile.n_steps > 0 && !tile.u_wind.is_empty();
+                
                 let h = (hour as usize).min(tile.n_hours.saturating_sub(1));
-                let wind_step = ((hour / 6) as usize).min(tile.n_steps.saturating_sub(1));
+                let wind_step = if has_wind {
+                    ((hour / 6) as usize).min(tile.n_steps.saturating_sub(1))
+                } else {
+                    0
+                };
                 
                 // Current data
                 let cells_per_hour = tile.n_lon * tile.n_lat;
                 let hour_offset = h * cells_per_hour;
                 
                 // Wind data
-                let cells_per_step = tile.n_lon_wind * tile.n_lat_wind;
-                let step_offset = wind_step * cells_per_step;
+                let cells_per_step = if has_wind { tile.n_lon_wind * tile.n_lat_wind } else { 1 };
+                let step_offset = if has_wind { wind_step * cells_per_step } else { 0 };
                 
                 let tile_min_lon = self.min_lon + (key.lon_idx as f32) * self.tile_size;
                 let tile_min_lat = self.min_lat + (key.lat_idx as f32) * self.tile_size;
@@ -293,41 +303,41 @@ impl DataLoader {
                         v_current / meters_per_degree_lat,
                     );
                     
-                    // Wind drift (bilinear at 0.25°)
-                    let (wlon_cell, wlat_cell) = self.get_cell_index(lon, lat, tile, self.lon_step_wind, self.lat_step_wind);
-                    let wcell_lon_min = tile_min_lon + (wlon_cell as f32) * self.lon_step_wind;
-                    let wcell_lat_min = tile_min_lat + (wlat_cell as f32) * self.lat_step_wind;
-                    let wx_frac = ((lon - wcell_lon_min) / self.lon_step_wind).clamp(0.0, 1.0);
-                    let wy_frac = ((lat - wcell_lat_min) / self.lat_step_wind).clamp(0.0, 1.0);
-                    
-                    let w_idx = step_offset + wlat_cell * tile.n_lon_wind + wlon_cell;
-                    
-                    let wu0 = tile.u_wind[w_idx];
-                    let wv0 = tile.v_wind[w_idx];
-                    let wu1 = tile.u_wind[w_idx + 1];
-                    let wv1 = tile.v_wind[w_idx + 1];
-                    let wu2 = tile.u_wind[w_idx + tile.n_lon_wind];
-                    let wv2 = tile.v_wind[w_idx + tile.n_lon_wind];
-                    let wu3 = tile.u_wind[w_idx + tile.n_lon_wind + 1];
-                    let wv3 = tile.v_wind[w_idx + tile.n_lon_wind + 1];
-                    
-                    let u_wind = lerp(lerp(wu0, wu1, wx_frac), lerp(wu2, wu3, wx_frac), wy_frac);
-                    let v_wind = lerp(lerp(wv0, wv1, wx_frac), lerp(wv2, wv3, wx_frac), wy_frac);
-                    
-                    // Samuels deflection
-                    let wind_speed = (u_wind * u_wind + v_wind * v_wind).sqrt().max(0.1);
-                    let theta_deg = 25.0 * (-wind_speed.powi(3) / 1184.75).exp();
-                    let theta = if lat >= 0.0 { theta_deg.to_radians() } else { -theta_deg.to_radians() };
-                    let cos_t = theta.cos();
-                    let sin_t = theta.sin();
-                    
-                    let u_drift = 0.03 * (u_wind * cos_t - v_wind * sin_t);
-                    let v_drift = 0.03 * (u_wind * sin_t + v_wind * cos_t);
-                    
-                    let wind = (
-                        u_drift / meters_per_degree_lon,
-                        v_drift / meters_per_degree_lat,
-                    );
+                    // Wind drift (bilinear at 0.25°) — only if wind data available
+                    let wind = if has_wind {
+                        let (wlon_cell, wlat_cell) = self.get_cell_index(lon, lat, tile, self.lon_step_wind, self.lat_step_wind);
+                        let wcell_lon_min = tile_min_lon + (wlon_cell as f32) * self.lon_step_wind;
+                        let wcell_lat_min = tile_min_lat + (wlat_cell as f32) * self.lat_step_wind;
+                        let wx_frac = ((lon - wcell_lon_min) / self.lon_step_wind).clamp(0.0, 1.0);
+                        let wy_frac = ((lat - wcell_lat_min) / self.lat_step_wind).clamp(0.0, 1.0);
+                        
+                        let w_idx = step_offset + wlat_cell * tile.n_lon_wind + wlon_cell;
+                        
+                        let wu0 = tile.u_wind[w_idx];
+                        let wv0 = tile.v_wind[w_idx];
+                        let wu1 = tile.u_wind[w_idx + 1];
+                        let wv1 = tile.v_wind[w_idx + 1];
+                        let wu2 = tile.u_wind[w_idx + tile.n_lon_wind];
+                        let wv2 = tile.v_wind[w_idx + tile.n_lon_wind];
+                        let wu3 = tile.u_wind[w_idx + tile.n_lon_wind + 1];
+                        let wv3 = tile.v_wind[w_idx + tile.n_lon_wind + 1];
+                        
+                        let u_wind = lerp(lerp(wu0, wu1, wx_frac), lerp(wu2, wu3, wx_frac), wy_frac);
+                        let v_wind = lerp(lerp(wv0, wv1, wx_frac), lerp(wv2, wv3, wx_frac), wy_frac);
+                        
+                        let wind_speed = (u_wind * u_wind + v_wind * v_wind).sqrt().max(0.1);
+                        let theta_deg = 25.0 * (-wind_speed.powi(3) / 1184.75).exp();
+                        let theta = if lat >= 0.0 { theta_deg.to_radians() } else { -theta_deg.to_radians() };
+                        let cos_t = theta.cos();
+                        let sin_t = theta.sin();
+                        
+                        let u_drift = 0.03 * (u_wind * cos_t - v_wind * sin_t);
+                        let v_drift = 0.03 * (u_wind * sin_t + v_wind * cos_t);
+                        
+                        (u_drift / meters_per_degree_lon, v_drift / meters_per_degree_lat)
+                    } else {
+                        (0.0, 0.0)
+                    };
                     
                     results[idx] = (current, wind);
                 }
@@ -373,7 +383,6 @@ impl DataLoader {
         )
     }
     
-    // UPDATED: Parse daily file with all 24 hours
     pub fn parse_tile_data(bytes: &[u8]) -> Result<TileData, String> {
         if bytes.len() < 12 {
             return Err("File too short for header".to_string());
@@ -414,17 +423,48 @@ impl DataLoader {
                 );
             }
         }
+        
+        // Check if wind data is present (need at least 12 bytes for wind header)
+        if offset + 12 > bytes.len() {
+            // No wind data — return with empty wind/SST vectors
+            return Ok(TileData {
+                u, v,
+                u_wind: Vec::new(),
+                v_wind: Vec::new(),
+                sst: Vec::new(),
+                n_lon, n_lat,
+                n_lon_wind: 0, n_lat_wind: 0,
+                depths, n_hours, n_steps: 0,
+            });
+        }
+        
+        // Parse wind header
         let n_lon_wind = u32::from_le_bytes([bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]]) as usize;
         let n_lat_wind = u32::from_le_bytes([bytes[offset + 4], bytes[offset + 5], bytes[offset + 6], bytes[offset + 7]]) as usize;
         let n_steps = u32::from_le_bytes([bytes[offset + 8], bytes[offset + 9], bytes[offset + 10], bytes[offset + 11]]) as usize;
         offset += 12;
-
+        
         let n_cells_wind = n_lon_wind * n_lat_wind;
-
+        let wind_bytes_needed = n_steps * n_cells_wind * 2 * 3; // u + v + sst, 2 bytes each
+        
+        // Check if we have enough bytes for wind data
+        if offset + wind_bytes_needed > bytes.len() {
+            // Incomplete wind data — return without wind
+            return Ok(TileData {
+                u, v,
+                u_wind: Vec::new(),
+                v_wind: Vec::new(),
+                sst: Vec::new(),
+                n_lon, n_lat,
+                n_lon_wind: 0, n_lat_wind: 0,
+                depths, n_hours, n_steps: 0,
+            });
+        }
+        
         let mut u_wind = Vec::with_capacity(n_steps * n_cells_wind);
         let mut v_wind = Vec::with_capacity(n_steps * n_cells_wind);
         let mut sst = Vec::with_capacity(n_steps * n_cells_wind);
-
+        
         for _ in 0..n_steps {
             let u_wind_f16 = &bytes[offset..offset + n_cells_wind * 2];
             offset += n_cells_wind * 2;
@@ -437,15 +477,22 @@ impl DataLoader {
             v_wind.extend(
                 v_wind_f16.chunks_exact(2).map(|c| f16::from_bits(u16::from_le_bytes([c[0], c[1]])).to_f32())
             );
+            
             let sst_f16 = &bytes[offset..offset + n_cells_wind * 2];
             offset += n_cells_wind * 2;
             sst.extend(
                 sst_f16.chunks_exact(2).map(|c| f16::from_bits(u16::from_le_bytes([c[0], c[1]])).to_f32())
             );
         }
-        Ok(TileData { u, v, u_wind, v_wind, sst, n_lon, n_lat, n_lon_wind, n_lat_wind, depths, n_hours, n_steps})
+        
+        Ok(TileData {
+            u, v,
+            u_wind, v_wind, sst,
+            n_lon, n_lat,
+            n_lon_wind, n_lat_wind,
+            depths, n_hours, n_steps,
+        })
     }
-    
     async fn load_tile(&self, url: &str) -> Result<TileData, LoaderError> {
         // Try preloader cache first
         if let Some(bytes) = get_preloaded_tile(url) {
