@@ -633,9 +633,8 @@ function toggleVisualizationMode() {
 }
 
 function toggleParticleMode() {
-  if (visualizationMode == "particles") {
-    return;
-  }
+  if (visualizationMode == "particles") return;
+
   visualizationMode = "particles";
   toggleVisualizationMode();
 
@@ -644,17 +643,29 @@ function toggleParticleMode() {
   particleToggle.style.background = "rgb(255, 255, 255)";
   particleToggle.style.color = "rgb(0, 0, 0)";
 
-  if (proteus && proteus.get_positions().length > 0) {
+  // During active simulation: use live particle data
+  if (simulationRunning && proteus && proteus.get_positions().length > 0) {
     updateParticleVisualization();
-  } else if (simulationHistory.length > 0 && timelineDay >= 0) {
-    const snapshot = simulationHistory[timelineDay];
-    if (snapshot && snapshot.activeGeojson) {
-      map.getSource("particles-active").setData(snapshot.activeGeojson);
-    }
-    if (snapshot && snapshot.inactiveGeojson) {
-      map.getSource("particles-inactive").setData(snapshot.inactiveGeojson);
-    }
     createHeatmapColorLegend(false);
+    return;
+  }
+
+  // During playback or after import: use snapshot from simulationHistory
+  if (simulationHistory.length > 0) {
+    const index =
+      timelineDay >= 0 && timelineDay < simulationHistory.length
+        ? timelineDay
+        : simulationHistory.length - 1;
+    const snapshot = simulationHistory[index];
+
+    if (snapshot) {
+      if (snapshot.activeGeojson) {
+        map.getSource("particles-active").setData(snapshot.activeGeojson);
+      }
+      if (snapshot.inactiveGeojson) {
+        map.getSource("particles-inactive").setData(snapshot.inactiveGeojson);
+      }
+    }
   }
 
   createHeatmapColorLegend(false);
