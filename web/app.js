@@ -776,7 +776,7 @@ function updateReleaseRadius() {
 }
 // Update grid visualization from particle positions
 function updateGridVisualization() {
-  const positions = proteus.get_positions();
+  const positions = proteus.get_active_positions();
   if (positions.length < 6) return; // Need at least 3 points to form a grid
 
   const lons = [];
@@ -943,7 +943,7 @@ function getInactiveGeojson() {
 }
 
 function getHeatmapGeojson() {
-  const positions = proteus.get_positions();
+  const positions = proteus.get_active_positions();
   if (positions.length === 0) return null;
 
   // Use world bounds if boundingBox is invalid
