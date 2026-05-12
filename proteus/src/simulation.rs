@@ -59,18 +59,13 @@ impl Simulation {
         if let Some(seeds) = self.release_manager.update(dt_days) {
             for seed in seeds {
                 self.particles.add_particle(
-                    seed.lon,
-                    seed.lat,
-                    seed.depth,
-                    0.0,
-                    seed.mass as f32,
-                    0.0,
-                    true,
+                    seed.lon, seed.lat, seed.depth,
+                    0.0, seed.mass as f32, 0.0, true,
                 );
             }
         }
         
-        // Collect active particle indices and positions
+        // Collect all active particles
         let active_data: Vec<(usize, f32, f32, f32)> = (0..self.particles.len)
             .filter(|&i| self.particles.active[i])
             .map(|i| (i, self.particles.x[i], self.particles.y[i], self.particles.depth[i]))
@@ -80,38 +75,49 @@ impl Simulation {
             return;
         }
         
-        // Extract positions for batch velocity lookup
         let positions: Vec<(f32, f32, f32)> = active_data.iter()
             .map(|&(_, lon, lat, depth)| (lon, lat, depth))
             .collect();
         
-        // Batch integration
+        // Get combined current + wind velocities
+        let velocities = loader.get_velocities_wind_batch_grouped(
+            &positions, loader.current_day, hour
+        );
+        
+        // RK4 integration using combined velocities
         let new_positions = match self.config.integrator {
             Integrator::Euler => {
-                let velocities = loader.get_velocities_batch_grouped(&positions, loader.current_day, hour);
                 positions.iter()
                     .enumerate()
                     .map(|(i, &(lon, lat, _))| {
-                        let (u, v) = velocities[i];
+                        let ((cu, cv), (wu, wv)) = velocities[i];
+                        let u = cu + wu;
+                        let v = cv + wv;
                         (lon + dt * u, lat + dt * v)
                     })
                     .collect()
             }
             Integrator::Midpoint => {
                 let get_velocities = |pos: &[(f32, f32, f32)]| {
-                    loader.get_velocities_batch_grouped(pos, loader.current_day, hour)
+                    loader.get_velocities_wind_batch_grouped(pos, loader.current_day, hour)
+                        .into_iter()
+                        .map(|((cu, cv), (wu, wv))| (cu + wu, cv + wv))
+                        .collect()
                 };
                 integrators::midpoint_step_batch(&positions, dt, get_velocities)
             }
             Integrator::RK4 => {
                 let get_velocities = |pos: &[(f32, f32, f32)]| {
-                    loader.get_velocities_batch_grouped(pos, loader.current_day, hour)
+                    loader.get_velocities_wind_batch_grouped(pos, loader.current_day, hour)
+                        .into_iter()
+                        .map(|((cu, cv), (wu, wv))| (cu + wu, cv + wv))
+                        .collect()
                 };
                 integrators::rk4_step_batch(&positions, dt, get_velocities)
             }
         };
         
-        // Apply new positions, diffusion, and landmask check
+        // Apply new positions, diffusion, and stranding
         for (i, &(idx, lon, lat, depth)) in active_data.iter().enumerate() {
             let (new_lon, new_lat) = new_positions[i];
             let (dx, dy) = self.diffusion.smagorinsky_step(
@@ -121,8 +127,12 @@ impl Simulation {
             let final_lon = new_lon + dx;
             let final_lat = new_lat + dy;
             
-            // Check landmask — strand if on land
-            if landmask.is_on_land(final_lon, final_lat) {
+            // Strand if in zero-velocity cell or on land
+            let (u_final, v_final) = loader.get_velocity(
+                final_lon, final_lat, depth, loader.current_day, hour
+            ).unwrap_or((0.0, 0.0));
+            
+            if (u_final == 0.0 && v_final == 0.0) || landmask.is_on_land(final_lon, final_lat) {
                 self.particles.active[idx] = false;
             }
             
@@ -131,7 +141,6 @@ impl Simulation {
             self.particles.age[idx] += dt_days;
         }
     }
-    
     pub fn get_particles(&self) -> &Particles {
         &self.particles
     }
