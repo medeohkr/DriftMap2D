@@ -333,7 +333,6 @@ impl DataLoader {
                         
                         let u_drift = 0.03 * (u_wind * cos_t - v_wind * sin_t);
                         let v_drift = 0.03 * (u_wind * sin_t + v_wind * cos_t);
-                        
                         (u_drift / meters_per_degree_lon, v_drift / meters_per_degree_lat)
                     } else {
                         (0.0, 0.0)
@@ -371,7 +370,6 @@ impl DataLoader {
         tiles
     }
     
-    // UPDATED: No hour in path
     fn tile_url(&self, date: u32, tile: &TileKey) -> String {
         let year = date / 10000;
         let month = (date / 100) % 100;
