@@ -1075,6 +1075,7 @@ async function resetSimulation() {
   updateMarker();
   updateSimulationDate();
   updateTotalDays();
+  createHeatmapColorLegend(false);
 }
 
 function updateSimulationDate() {
