@@ -35,10 +35,6 @@ let map = new maplibregl.Map({
   },
   center: [0, 40],
   zoom: 1.5,
-  maxBounds: [
-    [-Infinity, -75.05], // Lower bound restriction (Southwest)
-    [Infinity, 85.05]    // Upper bound restriction (Northeast)
-  ]
 });
 const scale = new maplibregl.ScaleControl({
   maxWidth: 100,
@@ -99,7 +95,7 @@ let startYear = today.getFullYear();
 let startMonth = today.getMonth() + 1;
 let startDay = today.getDate();
 let stepSize = 1 / 144;
-let totalDays = 7.0;
+let totalDays = 10.0;
 let isError = false;
 let playbackMode = false;
 let stepCount = 0;
@@ -541,26 +537,6 @@ function initGridLayer() {
         "circle-opacity": 0.7,
       },
     });
-    map.addSource('overlay-png', {
-      'type': 'image',
-      'url': 'https://tiles.driftmap2d.com/currents.png', // Replace with your PNG URL
-      'coordinates': [
-        [-199.8, 85.05], // Top Left
-        [199.61, 85.05], // Top Right
-        [199.61, -80.0], // Bottom Right
-        [-199.8, -80.0]  // Bottom Left
-      ]
-    });
-
-    // 2. Add the raster layer
-    map.addLayer({
-      'id': 'overlay-layer',
-      'type': 'raster',
-      'source': 'overlay-png',
-      'paint': {
-        'raster-opacity': 0.25 // Optional: adjust transparency
-      }
-    });
     toggleVisualizationMode();
   });
 }
@@ -613,10 +589,10 @@ function toggleHeatmapMode() {
   if (playbackMode) {
     const snapshot = simulationHistory[timelineDay];
     createHeatmapColorLegend(true);
-  } else if (simulationHistory > 0){
+  } else {
     updateGridVisualization();
-    createHeatmapColorLegend(true);
   }
+  createHeatmapColorLegend(true);
 }
 
 function updatePositionFromFields() {
@@ -947,8 +923,6 @@ async function startSimulation() {
   lastGridUpdate = 0;
   concentrationGrid = null;
 
-  map.setLayoutProperty("overlay-layer", "visibility", "none");
-
   updateSimulationDate();
   updateTotalDays();
   updateReleaseAmount();
@@ -966,7 +940,7 @@ async function startSimulation() {
 
   if (currentZoom < 5 && autoZoom.checked == true) {
     map.flyTo({
-      center: [rawLon, rawLat],
+      center: [lon, lat],
       zoom: 6 - totalDays / 100,
       duration: 2000,
       essential: true,
@@ -1027,8 +1001,6 @@ async function resetSimulation() {
   stepCount = 0;
   simulationHistory = [];
   playbackMode = false;
-
-  map.setLayoutProperty("overlay-layer", "visibility", "visible");
 
   if (animationId) {
     cancelAnimationFrame(animationId);
