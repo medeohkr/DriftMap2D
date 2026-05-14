@@ -381,7 +381,7 @@ function loadGeoJsonResults(data) {
   updateReleaseRadius();
   showTimeline();
 
-  map.setLayoutProperty("overlay-layer", "visibility", "none");
+  map.setPaintProperty("overlay-layer", "raster-opacity", 0.03);
 
   playbackMode = true;
 
@@ -590,11 +590,7 @@ function toggleParticleMode() {
   particleToggle.style.background = "rgb(255, 255, 255)";
   particleToggle.style.color = "rgb(0, 0, 0)";
 
-  if (playbackMode) {
-    const snapshot = simulationHistory[timelineDay];
-    map.getSource("particles-active").setData(snapshot.activeGeojson);
-    map.getSource("particles-inactive").setData(snapshot.inactiveGeojson);
-  } else {
+  if (!playbackMode) {
     updateParticleVisualization();
   }
   createHeatmapColorLegend(false);
@@ -613,9 +609,8 @@ function toggleHeatmapMode() {
   particleToggle.style.color = "rgb(255, 255, 255)";
 
   if (playbackMode) {
-    const snapshot = simulationHistory[timelineDay];
     createHeatmapColorLegend(true);
-  } else if (simulationHistory > 0){
+  } else if (simulationHistory.length != 0){
     updateGridVisualization();
     createHeatmapColorLegend(true);
   }
@@ -949,7 +944,7 @@ async function startSimulation() {
   lastGridUpdate = 0;
   concentrationGrid = null;
 
-  map.setLayoutProperty("overlay-layer", "visibility", "none");
+  map.setPaintProperty("overlay-layer", "raster-opacity", 0.03);
 
   updateSimulationDate();
   updateTotalDays();
@@ -1030,7 +1025,7 @@ async function resetSimulation() {
   simulationHistory = [];
   playbackMode = false;
 
-  map.setLayoutProperty("overlay-layer", "visibility", "visible");
+  map.setPaintProperty("overlay-layer", "raster-opacity", 0.25);
 
   if (animationId) {
     cancelAnimationFrame(animationId);
