@@ -381,6 +381,8 @@ function loadGeoJsonResults(data) {
   updateReleaseRadius();
   showTimeline();
 
+  map.setLayoutProperty("overlay-layer", "visibility", "none");
+
   playbackMode = true;
 
   if (window.currentMarker) {
