@@ -207,8 +207,16 @@ timelineRewind.addEventListener("click", () => {
   timelinePauseBtn.style.display = "none";
 });
 exportGeojsonBtn.addEventListener("click", exportScenario);
-collapseBtn.addEventListener("click", collapseSidebar);
-openBtn.addEventListener("click", collapseSidebar);
+collapseBtn.addEventListener("click", () => {
+  sidebar.style.display = "none";
+  openBtn.style.display = "inline-block";
+  collapseBtn.style.display = "none";
+});
+openBtn.addEventListener("click", () => {
+  sidebar.style.display = "flex";
+  openBtn.style.display = "none";
+  collapseBtn.style.display = "inline-block";
+});
 overlay.addEventListener("click", updateOverlay);
 
 function exportScenario() {
@@ -1267,18 +1275,6 @@ function updateOverlay() {
     map.setLayoutProperty("overlay-layer", "visibility", "visible");
   } else {
     map.setLayoutProperty("overlay-layer", "visibility", "none");
-  }
-}
-
-function collapseSidebar() {
-  if (sidebar.style.display === "flex") {
-    sidebar.style.display = "none";
-    openBtn.style.display = "inline-block";
-    collapseBtn.style.display = "none";
-  } else {
-    sidebar.style.display = "flex";
-    openBtn.style.display = "none";
-    collapseBtn.style.display = "inline-block";
   }
 }
 
