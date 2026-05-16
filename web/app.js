@@ -1271,7 +1271,7 @@ function updateOverlay() {
 }
 
 function collapseSidebar() {
-  if (sidebar.style === "flex") {
+  if (sidebar.style.display === "flex") {
     sidebar.style.display = "none";
     openBtn.style.display = "inline-block";
     collapseBtn.style.display = "none";
