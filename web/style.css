@@ -8,7 +8,6 @@ body {
     padding: 0;
 }
 
-/* ===== DESKTOP — UNCHANGED ===== */
 .sidebar {
     position: absolute;
     display: flex;
@@ -244,14 +243,15 @@ body {
     position: absolute;
     display: flex;
     top: 16px;
-    left: 50%;
-    transform: translateX(-40%);
+    left: 55%;
+    transform: translateX(-50%);
     column-gap: 10px;
     font-family: Montserrat;
     color: rgb(255, 255, 255);
     font-weight: 400;
     font-size: 14px;
     align-items: center;
+    white-space: nowrap;
 }
 .visualization-toggle {
     font-family: Montserrat;
@@ -397,11 +397,29 @@ body {
     font-family: Montserrat;
     font-size: 11px;
 }
+/* .overlay-container {
+    position: absolute;
+    top: 20px;
+    left: 61%;
+    transform: translateX(-50%);
+    column-gap: 2px;
+    display: flex;
+    font-family: Montserrat;
+    font-weight: 500;
+    color: rgb(255, 255, 255);
+    font-size: 14px;
+    align-items: center;
+} */
+.collapse-button-container {
+    position: absolute;
+    height: 734.5px;
+    top: 50%;
+    transform: translateY(-50%);
+}
 
 .collapse-button {
     position: absolute;
     left: 260px;
-    top: 18px;
     z-index: 1;
     border: none;
     border-radius: 2px;
@@ -426,7 +444,7 @@ body {
 /* ===== MOBILE: Tablet (≤768px) ===== */
 @media (max-width: 768px) {
     .sidebar {
-        left: 6px;
+        left: 10px;
         right: auto;
         top: 50%;
         bottom: auto;
@@ -522,11 +540,13 @@ body {
 
     /* Buttons */
     .simulation-btn-container {
-        width: 170px;
-        column-gap: 10px;
+        width: 190px;
+        height: 20px;
+        margin-top: 8px;
+        column-gap: 15px;
     }
     .btn-primary {
-        width: 130px;
+        width: 170px;
         padding: 10px 14px;
         font-size: 12px;
     }
@@ -546,7 +566,7 @@ body {
         font-size: 12px;
         top: auto;
         bottom: 25px;
-        left: 16%;
+        left: 116px;
         transform: translateX(-50%);
         white-space: nowrap;
         color: white;
@@ -557,11 +577,15 @@ body {
     .visualization-toggle-container {
         position: absolute;
         top: 16px;
-        left: 16%;
-        transform: translateX(-30%);
+        left: 205px;
         right: auto;
-        column-gap: 10px;
+        column-gap: 12px;
         display: flex;
+        white-space: nowrap;
+    }
+
+    .overlay-container {
+        margin-left: 15px;
     }
 
     /* Timeline */
@@ -580,10 +604,12 @@ body {
     .timeline-labels {
         font-size: 10px;
     }
-    .collapse-button {
-        position: absolute;
-        top: 65px;
-        left: 236px;
+    .collapse-button-container {
+        height: 633px;
+        left: -20px;
+    }
+    #open {
+        left: 30px;
     }
 }
 
@@ -592,21 +618,21 @@ body {
     .sidebar {
         left: 4px;
         max-height: 80vh;
+        max-width: 150px;
         row-gap: 10px;
-        padding: 8px;
     }
 
     .header-container {
-        width: 120px;
+        width: 150px;
         height: 36px;
     }
     .logo {
-        width: 22px;
-        margin-left: 8px;
-        margin-right: 6px;
+        width: 20px;
+        margin-left: 14px;
+        margin-right: 12px;
     }
     .title-text {
-        font-size: 16px;
+        font-size: 20px;
     }
 
     /* Panels */
@@ -689,7 +715,7 @@ body {
     .simulation-btn-container {
         width: 120px;
         column-gap: 10px;
-        /* flex-wrap: wrap; */
+        height: 10px
     }
     .btn-primary {
         width: 100px;
@@ -712,8 +738,7 @@ body {
         font-size: 10px;
         top: auto;
         bottom: 35px;
-        left: 22%;
-        transform: translateX(-50%);
+        left: 75px;
         white-space: nowrap;
         color: white;
         font-family: Montserrat;
@@ -722,12 +747,17 @@ body {
     }
     .visualization-toggle-container {
         position: absolute;
-        top: 25px;
-        left: 22%;
-        transform: translateX(-50%);
-        right: auto;
+        top: 15px;
+        left: 78px;
         column-gap: 4px;
         display: flex;
+    }
+
+    .overlay-container {
+        position: absolute;
+        top: 33px;
+        left: -4px;
+        font-size: 10px;
     }
 
     /* Timeline */
@@ -745,5 +775,13 @@ body {
     }
     .timeline-labels {
         font-size: 9px;
+    }
+    .collapse-button-container {
+        height: 512px;
+        left: -100px;
+    }
+
+    #open {
+        left: 115px;
     }
 }
