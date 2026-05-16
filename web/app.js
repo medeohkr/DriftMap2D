@@ -36,8 +36,8 @@ let map = new maplibregl.Map({
   center: [0, 40],
   zoom: 1.5,
   maxBounds: [
-    [-Infinity, -75.05], // Lower bound restriction (Southwest)
-    [Infinity, 85.05]    // Upper bound restriction (Northeast)
+    [-Infinity, -80.00],
+    [Infinity, 85.05] 
   ]
 });
 const scale = new maplibregl.ScaleControl({
@@ -73,6 +73,10 @@ const exportGeojsonBtn = document.getElementById("export-geojson");
 const importGeojsonBtn = document.getElementById("import-geojson");
 const importGeojsonFile = document.getElementById("import-geojson-file");
 const autoZoom = document.getElementById("autozoom-checkbox");
+const collapseBtn = document.getElementById("collapse");
+const openBtn = document.getElementById("open");
+const sidebar = document.querySelector(".sidebar");
+const overlay = document.getElementById("overlay-checkbox")
 
 let today = new Date();
 let proteus = null;
@@ -92,13 +96,13 @@ let visualizationMode = "particles";
 let rawLon = 56.5;
 let rawLat = 26.6;
 let csValue = 0.1;
-let particleCount = 20000;
+let particleCount = 10000;
 let spreadKm = 1.0;
 let oilType = oilMenu ? oilMenu.value : "arabian_light";
 let startYear = today.getFullYear();
 let startMonth = today.getMonth() + 1;
 let startDay = today.getDate();
-let stepSize = 1 / 144;
+let stepSize = 1 / 96;
 let totalDays = 7.0;
 let isError = false;
 let playbackMode = false;
@@ -146,8 +150,8 @@ const coordDisplay = document.createElement("div");
 coordDisplay.id = "coordinate-display";
 coordDisplay.style.cssText = `
     position: absolute;
-    bottom: 20px;
-    left: 285px;
+    bottom: 18px;
+    right: 45px;
     color: rgba(255, 255, 255, 0.7);
     font-family: monospace;
     font-size: 12px;
@@ -203,6 +207,9 @@ timelineRewind.addEventListener("click", () => {
   timelinePauseBtn.style.display = "none";
 });
 exportGeojsonBtn.addEventListener("click", exportScenario);
+collapseBtn.addEventListener("click", collapseSidebar);
+openBtn.addEventListener("click", collapseSidebar);
+overlay.addEventListener("click", updateOverlay);
 
 function exportScenario() {
   const exportData = {
@@ -381,7 +388,7 @@ function loadGeoJsonResults(data) {
   updateReleaseRadius();
   showTimeline();
 
-  map.setPaintProperty("overlay-layer", "raster-opacity", 0.03);
+  map.setPaintProperty("overlay-layer", "raster-opacity", 0.05);
 
   playbackMode = true;
 
@@ -545,7 +552,8 @@ function initGridLayer() {
     });
     map.addSource('overlay-png', {
       'type': 'image',
-      'url': 'https://tiles.driftmap2d.com/currents.png', // Replace with your PNG URL
+      'url': 'https://tiles.driftmap2d.com/currents.png',
+      // 'url': 'data/currents.png', 
       'coordinates': [
         [-199.8, 85.05], // Top Left
         [199.61, 85.05], // Top Right
@@ -560,10 +568,11 @@ function initGridLayer() {
       'type': 'raster',
       'source': 'overlay-png',
       'paint': {
-        'raster-opacity': 0.25 // Optional: adjust transparency
+        'raster-opacity': 0.4 
       }
     });
     toggleVisualizationMode();
+    updateOverlay();
   });
 }
 
@@ -944,7 +953,7 @@ async function startSimulation() {
   lastGridUpdate = 0;
   concentrationGrid = null;
 
-  map.setPaintProperty("overlay-layer", "raster-opacity", 0.03);
+  map.setPaintProperty("overlay-layer", "raster-opacity", 0.05);
 
   updateSimulationDate();
   updateTotalDays();
@@ -1025,7 +1034,7 @@ async function resetSimulation() {
   simulationHistory = [];
   playbackMode = false;
 
-  map.setPaintProperty("overlay-layer", "raster-opacity", 0.25);
+  map.setPaintProperty("overlay-layer", "raster-opacity", 0.4);
 
   if (animationId) {
     cancelAnimationFrame(animationId);
@@ -1250,6 +1259,26 @@ function updatePlaybackSpeed() {
     playbackSpeed = 100;
     timelineSpeed.textContent = "1x";
     return;
+  }
+}
+
+function updateOverlay() {
+  if (overlay.checked) {
+    map.setLayoutProperty("overlay-layer", "visibility", "visible");
+  } else {
+    map.setLayoutProperty("overlay-layer", "visibility", "none");
+  }
+}
+
+function collapseSidebar() {
+  if (sidebar.style === "flex") {
+    sidebar.style.display = "none";
+    openBtn.style.display = "inline-block";
+    collapseBtn.style.display = "none";
+  } else {
+    sidebar.style.display = "flex";
+    openBtn.style.display = "none";
+    collapseBtn.style.display = "inline-block";
   }
 }
 
