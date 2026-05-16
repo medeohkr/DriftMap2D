@@ -16,7 +16,7 @@ body {
     align-items: center;
     row-gap: 20px;
     height: auto;
-    left: 20px;
+    left: 15px;
     top: 50%;
     transform: translateY(-50%);
     padding-bottom: 25px;
@@ -30,10 +30,10 @@ body {
     align-items: center;
     background-color: rgb(20, 20, 20);
     box-shadow: 0px 1px 5px rgb(12, 12, 12);
-    width: 250px;
+    width: 235px;
 }
 .logo {
-    margin-left: 25px;
+    margin-left: 20px;
     margin-right: 20px;
     width: 40px;
 }
@@ -243,9 +243,15 @@ body {
 .visualization-toggle-container {
     position: absolute;
     display: flex;
-    top: 20px;
-    left: 300px;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-40%);
     column-gap: 10px;
+    font-family: Montserrat;
+    color: rgb(255, 255, 255);
+    font-weight: 400;
+    font-size: 14px;
+    align-items: center;
 }
 .visualization-toggle {
     font-family: Montserrat;
@@ -327,7 +333,7 @@ body {
 }
 .timeline-container {
     position: absolute;
-    bottom: 20px;
+    bottom: 15px;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(27, 27, 27, 0.95);
@@ -338,7 +344,7 @@ body {
     gap: 10px;
     width: 80%;
     max-width: 800px;
-    z-index: 10;
+    z-index: 1;
 }
 
 .timeline-controls {
@@ -392,6 +398,31 @@ body {
     font-size: 11px;
 }
 
+.collapse-button {
+    position: absolute;
+    left: 260px;
+    top: 18px;
+    z-index: 1;
+    border: none;
+    border-radius: 2px;
+    background-color: rgb(49, 49, 49);
+    color: white;
+    box-shadow: 1px 1px 3px rgb(0, 0, 0);
+    cursor: pointer;
+    width: 20px;
+    height: 20px;
+    font-weight: 800;
+}
+
+#collapse {
+    display: inline-block;
+}
+
+#open {
+    display: none;
+    left: 15px;
+}
+
 /* ===== MOBILE: Tablet (≤768px) ===== */
 @media (max-width: 768px) {
     .sidebar {
@@ -402,17 +433,18 @@ body {
         transform: translateY(-50%);
         max-height: 85vh;
         overflow-y: auto;
-        row-gap: 14px;
-        padding: 10px;
+        row-gap: 16px;
+        width: 220px;
+        /* padding: 10px; */
     }
 
     .header-container {
-        width: 170px;
+        width: 220px;
     }
     .logo {
-        width: 32px;
-        margin-left: 16px;
-        margin-right: 12px;
+        width: 36px;
+        margin-left: 25px;
+        margin-right: 25px;
     }
     .title-text {
         font-size: 24px;
@@ -478,12 +510,12 @@ body {
         padding: 8px 10px;
         row-gap: 4px;
         font-size: 10px;
-        grid-template-columns: 110px 40px;
+        grid-template-columns: 140px 40px;
     }
     #release-amount-field,
     #release-duration-field,
     #release-radius-field {
-        width: 105px;
+        width: 120px;
         font-size: 10px;
         padding: 3px;
     }
@@ -513,22 +545,22 @@ body {
     #current-day {
         font-size: 12px;
         top: auto;
-        bottom: 35px;
-        left: 22%;
+        bottom: 25px;
+        left: 16%;
         transform: translateX(-50%);
         white-space: nowrap;
         color: white;
         font-family: Montserrat;
         font-weight: 500;
-        z-index: 11;
+        z-index: 1;
     }
     .visualization-toggle-container {
         position: absolute;
-        top: 25px;
-        left: 22%;
-        transform: translateX(-50%);
+        top: 16px;
+        left: 16%;
+        transform: translateX(-30%);
         right: auto;
-        column-gap: 6px;
+        column-gap: 10px;
         display: flex;
     }
 
@@ -547,6 +579,11 @@ body {
     }
     .timeline-labels {
         font-size: 10px;
+    }
+    .collapse-button {
+        position: absolute;
+        top: 65px;
+        left: 236px;
     }
 }
 
@@ -681,7 +718,7 @@ body {
         color: white;
         font-family: Montserrat;
         font-weight: 500;
-        z-index: 11;
+        z-index: 1;
     }
     .visualization-toggle-container {
         position: absolute;
