@@ -397,19 +397,7 @@ body {
     font-family: Montserrat;
     font-size: 11px;
 }
-/* .overlay-container {
-    position: absolute;
-    top: 20px;
-    left: 61%;
-    transform: translateX(-50%);
-    column-gap: 2px;
-    display: flex;
-    font-family: Montserrat;
-    font-weight: 500;
-    color: rgb(255, 255, 255);
-    font-size: 14px;
-    align-items: center;
-} */
+
 .collapse-button-container {
     position: absolute;
     height: 734.5px;
@@ -756,11 +744,10 @@ body {
     .overlay-container {
         position: absolute;
         top: 33px;
-        left: -4px;
+        left: -19px;
         font-size: 10px;
     }
 
-    /* Timeline */
     .timeline-container {
         bottom: 4px;
         width: 95%;
@@ -782,6 +769,6 @@ body {
     }
 
     #open {
-        left: 115px;
+        left: 113px;
     }
 }
