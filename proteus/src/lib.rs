@@ -8,6 +8,7 @@ pub mod simulation;
 pub mod wasm;
 pub mod heatmap;
 pub mod landmask_loader;
+pub mod oil_library;
 
 // Re-export commonly used types for convenience
 pub use particles::Particles;
