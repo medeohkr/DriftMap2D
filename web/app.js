@@ -76,7 +76,13 @@ const autoZoom = document.getElementById("autozoom-checkbox");
 const collapseBtn = document.getElementById("collapse");
 const openBtn = document.getElementById("open");
 const sidebar = document.querySelector(".sidebar");
-const overlay = document.getElementById("overlay-checkbox")
+const overlay = document.getElementById("overlay-checkbox");
+const statsDisplay = document.querySelector(".stats-container");
+const active = document.getElementById("active");
+const emulsified = document.getElementById("emulsified");
+const inactive = document.getElementById("inactive");
+const stranded = document.getElementById("stranded");
+const evaporated = document.getElementById("evaporated");
 
 let today = new Date();
 let proteus = null;
@@ -274,9 +280,9 @@ function exportScenario() {
         properties: {
           day: snapshot.day,
           date: snapshot.dateStr,
+          stats: snapshot.stats,
           active_particles: snapshot.activeGeojson.features.length,
           inactive_particles: snapshot.inactiveGeojson.features.length,
-          has_heatmap: snapshot.heatmapGeojson !== null,
         },
         geometry: {
           type: "GeometryCollection",
@@ -341,6 +347,7 @@ function loadGeoJsonResults(data) {
     const snapshot = {
       day: feature.properties.day,
       dateStr: feature.properties.date,
+      stats: feature.properties.stats,
       activeGeojson: {
         type: "FeatureCollection",
         features: geometries[0].coordinates.map((coord) => ({
@@ -387,6 +394,7 @@ function loadGeoJsonResults(data) {
   releaseRadiusField.value = `${data.properties.config.release_radius_km}`;
   startDate.value = `${data.properties.config.start_date}`;
   totalDaysField.value = `${data.properties.config.total_days}`;
+  statsDisplay.style.display = "flex";
 
   updatePositionFromFields();
   updateSimulationDate();
@@ -816,6 +824,7 @@ function captureSnapshot(day) {
   const snapshot = {
     day: day + 1,
     dateStr: proteus.current_time_str(),
+    stats: getStatsDisplay(),
     activeGeojson: getActiveGeojson(),
     inactiveGeojson: getInactiveGeojson(),
     heatmapGeojson: getHeatmapGeojson(),
@@ -906,6 +915,7 @@ async function simulationStep(version) {
 
     if (stepCount % (stepsPerDay / 24) === 1) {
       captureSnapshot(currentDay);
+      updateStatsDisplay();
     }
 
     updateBoundingBox();
@@ -1003,11 +1013,12 @@ async function startSimulation() {
     releaseDuration,
   );
   simulationStep(simulationVersion);
-  // Update UI
+
   startBtn.style.display = "none";
   stopBtn.style.display = "inline-flex";
   resumeBtn.style.display = "none";
   exportGeojsonBtn.style.display = "none";
+  statsDisplay.style.display = "grid";
 }
 
 function stopSimulation() {
@@ -1087,6 +1098,7 @@ async function resetSimulation() {
   stopBtn.style.display = "none";
   resumeBtn.style.display = "none";
   exportGeojsonBtn.style.display = "none";
+  statsDisplay.style.display = "none";
 
   updateFields();
   updateMarker();
@@ -1203,7 +1215,6 @@ function showTimeline() {
 
   document.getElementById("timeline-end").textContent =
     `Day ${simulationHistory[simulationHistory.length - 1].day}`;
-
   container.style.display = "flex";
   updateTimelineDisplay(simulationHistory.length - 1);
   dayDisplay.textContent = "";
@@ -1217,21 +1228,12 @@ function updateTimelineDisplay(index) {
 
   document.getElementById("timeline-current").textContent = snapshot.dateStr;
   document.getElementById("timeline-slider").value = index;
+  active.textContent = `${snapshot.stats.active}%`;
+  inactive.textContent = `${snapshot.stats.inactive}%`;
 
-  if (snapshot.activeGeojson) {
-    map.getSource("particles-active").setData(snapshot.activeGeojson);
-  }
-  if (snapshot.inactiveGeojson) {
-    map.getSource("particles-inactive").setData(snapshot.inactiveGeojson);
-  }
-
-  if (snapshot.heatmapGeojson) {
-    map.getSource("concentration").setData(snapshot.heatmapGeojson);
-  } else {
-    map
-      .getSource("concentration")
-      .setData({ type: "FeatureCollection", features: [] });
-  }
+  map.getSource("particles-active").setData(snapshot.activeGeojson);
+  map.getSource("particles-inactive").setData(snapshot.inactiveGeojson);
+  map.getSource("concentration").setData(snapshot.heatmapGeojson);
 }
 
 function timelinePlayback() {
@@ -1276,6 +1278,25 @@ function updateOverlay() {
   } else {
     map.setLayoutProperty("overlay-layer", "visibility", "none");
   }
+}
+
+function updateStatsDisplay() {
+  const activePercent = getStatsDisplay().active;
+  const inactivePercent = getStatsDisplay().inactive;
+  active.textContent = `${activePercent}%`;
+  inactive.textContent = `${inactivePercent}%`;
+}
+
+function getStatsDisplay() {
+  const activeCount = proteus.get_active_positions().length / 2;
+  const inactiveCount = proteus.get_inactive_positions().length / 2;
+  const activePercent = ((activeCount / (activeCount + inactiveCount)) * 100).toFixed(1);
+  const inactivePercent = ((inactiveCount / (activeCount + inactiveCount)) * 100).toFixed(1);
+  
+  return {
+    active: activePercent,
+    inactive: inactivePercent,
+  };
 }
 
 initialize().catch(console.error);
