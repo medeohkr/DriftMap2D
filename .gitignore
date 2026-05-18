@@ -7,3 +7,5 @@ scripts/
 wrangler.toml
 web/.wrangler/
 .wrangler/
+roaring_landmask/
+web/images/

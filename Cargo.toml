@@ -1,5 +1,5 @@
 [workspace]
-members = ["proteus"]
+members = ["roaring_landmask","proteus"]
 resolver = "2"
 
 [workspace.package]

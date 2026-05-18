@@ -107,8 +107,8 @@ let oilType = oilMenu.value;
 let startYear = today.getFullYear();
 let startMonth = today.getMonth() + 1;
 let startDay = today.getDate();
-let stepSize = 1 / 96;
-let totalDays = 7.0;
+let stepSize = 1 / 48;
+let totalDays = 6.0;
 let isError = false;
 let playbackMode = false;
 let stepCount = 0;
@@ -430,7 +430,7 @@ function normalizeLongitude(lon) {
   lon = ((((lon + 180) % 360) + 360) % 360) - 180;
   return lon;
 }
-function getTileIndices(positions) {
+function getTileIndices(positions, minLat = -80) {
   const tiles = new Set();
 
   for (let i = 0; i < positions.length; i += 2) {
@@ -438,7 +438,6 @@ function getTileIndices(positions) {
     const lat = positions[i + 1];
 
     const minLon = -180;
-    const minLat = -80;
 
     const lonIdx = Math.floor((lon - minLon) / 10);
     const latIdx = Math.floor((lat - minLat) / 10);
@@ -467,14 +466,25 @@ function addDays(dateInt, days) {
 
 function updateBoundingBox() {
   boundingBox = proteus.get_particle_bounding_box();
+  
+  // Check if bounding box is valid
+  if (boundingBox[0] === Infinity || boundingBox[1] === -Infinity || 
+      boundingBox[2] === Infinity || boundingBox[3] === -Infinity) {
+    return;
+  }
+  
   const TARGET_CELLS = 5000;
   
   const width = boundingBox[1] - boundingBox[0];
   const height = boundingBox[3] - boundingBox[2];
-  const area = width * height;
-
-  let gridSize = Math.sqrt(area / TARGET_CELLS);
   
+  // Guard against zero area
+  if (width <= 0 || height <= 0) {
+    return;
+  }
+  
+  const area = width * height;
+  let gridSize = Math.sqrt(area / TARGET_CELLS);
   gridSize = Math.max(0.02, Math.min(0.2, gridSize));
   
   GRID_SIZE = gridSize;
@@ -620,7 +630,7 @@ function toggleVisualizationMode() {
 
 function toggleParticleMode() {
   if (visualizationMode == "particles") return;
-
+  createHeatmapColorLegend(false);
   visualizationMode = "particles";
   toggleVisualizationMode();
 
@@ -632,13 +642,14 @@ function toggleParticleMode() {
   if (!playbackMode) {
     updateParticleVisualization();
   }
-  createHeatmapColorLegend(false);
+
 }
 
 function toggleHeatmapMode() {
   if (visualizationMode == "grid") {
     return;
   }
+  createHeatmapColorLegend(true);
   visualizationMode = "grid";
   toggleVisualizationMode();
 
@@ -647,11 +658,9 @@ function toggleHeatmapMode() {
   particleToggle.style.background = "none";
   particleToggle.style.color = "rgb(255, 255, 255)";
 
-  if (playbackMode) {
-    createHeatmapColorLegend(true);
-  } else if (simulationHistory.length != 0){
+  if (simulationHistory.length != 0){
     updateGridVisualization();
-    createHeatmapColorLegend(true);
+
   }
 }
 
@@ -668,13 +677,14 @@ function updateFields() {
   let displayLat = parseFloat(rawLat).toFixed(2);
   lonField.value = displayLon;
   latField.value = displayLat;
-  const currentTile = getTileIndices([normalizeLongitude(rawLon), rawLat]);
+  const oceanTile = getTileIndices([normalizeLongitude(rawLon), rawLat], -80);
+  const landTile = getTileIndices([normalizeLongitude(rawLon), rawLat], -90);
   const currentDate = parseInt(
     `${startYear}${String(startMonth).padStart(2, "0")}${String(startDay).padStart(2, "0")}`,
   );
 
-  preloader.preloadTiles(currentDate, currentTile);
-  preloader.preloadLandmaskTiles(currentTile);
+  preloader.preloadTiles(currentDate, oceanTile);
+  preloader.preloadLandmaskTiles(landTile);
 }
 
 function updateMarker() {
@@ -715,6 +725,10 @@ function updateReleaseRadius() {
 
 function updateGridVisualization() {
     const data = proteus.get_unstranded_positions_with_mass();
+    if (!data || data.length === 0) {
+      map.getSource("concentration").setData({ type: "FeatureCollection", features: [] });
+      return;
+    }
     const lons = [];
     const lats = [];
     const masses = [];
@@ -865,6 +879,9 @@ function getStrandedGeojson() {
 
 function getHeatmapGeojson() {
   const data = proteus.get_unstranded_positions_with_mass();
+  if (!data ||data.length === 0) {
+    return { type: "FeatureCollection", features: [] };
+  }
   const lons = [];
   const lats = [];
   const masses = [];
@@ -906,9 +923,10 @@ async function simulationStep(version) {
 
     await proteus.step(stepSize);
     if (stepCount % stepsPerDay === 0) {
-      const currentTiles = getTileIndices(proteus.get_positions());
-      preloader.preloadTiles(todayDateInt, currentTiles);
-      preloader.preloadLandmaskTiles(currentTiles);
+      const oceanTiles = getTileIndices(proteus.get_positions(), -80);
+      const landTiles = getTileIndices(proteus.get_positions(), -90);
+      preloader.preloadTiles(todayDateInt, oceanTiles);
+      preloader.preloadLandmaskTiles(landTiles);
       preloader.preloadFutureSteps(todayDateInt, proteus.get_positions(), 2, 0);
       for (const url of window.__tileCache.keys()) {
         const match = url.match(/(\d{4})\/(\d{2})\/(\d{2})/);
@@ -1116,7 +1134,6 @@ async function resetSimulation() {
   updateMarker();
   updateSimulationDate();
   updateTotalDays();
-  createHeatmapColorLegend(false);
 }
 
 function updateSimulationDate() {
