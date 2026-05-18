@@ -234,55 +234,54 @@ impl DataLoader {
             v_drift / meters_per_degree_lat,
         ))
     }
-    pub fn get_velocities_wind_batch_grouped(
+    pub fn get_velocities_wind_sst(
         &self,
         positions: &[(f32, f32, f32)],
         day: u32,
         hour: u32,
-    ) -> Vec<((f32, f32), (f32, f32))> {
+    ) -> Vec<((f32, f32), (f32, f32), f32)> {
         let mut groups: HashMap<TileKey, Vec<(usize, (f32, f32, f32))>> = HashMap::new();
-        
+
         for (i, &(lon, lat, depth)) in positions.iter().enumerate() {
             let key = self.get_tile_key(lon, lat, day);
             groups.entry(key).or_insert_with(Vec::new).push((i, (lon, lat, depth)));
         }
-        
-        let mut results = vec![((0.0, 0.0), (0.0, 0.0)); positions.len()];
-        
+
+        let mut results = vec![((0.0, 0.0), (0.0, 0.0), 0.0_f32); positions.len()];
+
         for (key, group) in groups {
             if let Some(tile) = self.cache.get(&key) {
                 let has_wind = tile.n_steps > 0 && !tile.u_wind.is_empty();
-                
+                let has_sst = !tile.sst.is_empty();
+
                 let h = (hour as usize).min(tile.n_hours.saturating_sub(1));
                 let wind_step = if has_wind {
                     ((hour / 6) as usize).min(tile.n_steps.saturating_sub(1))
                 } else {
                     0
                 };
-                
-                // Current data
+
                 let cells_per_hour = tile.n_lon * tile.n_lat;
                 let hour_offset = h * cells_per_hour;
-                
-                // Wind data
+
                 let cells_per_step = if has_wind { tile.n_lon_wind * tile.n_lat_wind } else { 1 };
                 let step_offset = if has_wind { wind_step * cells_per_step } else { 0 };
-                
+
                 let tile_min_lon = self.min_lon + (key.lon_idx as f32) * self.tile_size;
                 let tile_min_lat = self.min_lat + (key.lat_idx as f32) * self.tile_size;
-                
+
                 for (idx, (lon, lat, depth)) in group {
-                    // Current velocity (bilinear at 1/12°)
+                    // ---- Current velocity (bilinear at 1/12°) ----
                     let (lon_cell, lat_cell) = self.get_cell_index(lon, lat, tile, self.lon_step, self.lat_step);
                     let cell_lon_min = tile_min_lon + (lon_cell as f32) * self.lon_step;
                     let cell_lat_min = tile_min_lat + (lat_cell as f32) * self.lat_step;
                     let x_frac = ((lon - cell_lon_min) / self.lon_step).clamp(0.0, 1.0);
                     let y_frac = ((lat - cell_lat_min) / self.lat_step).clamp(0.0, 1.0);
-                    
-                    let (depth_idx, t) = find_depth_indices(&tile.depths, depth);
+
+                    let (depth_idx, _t) = find_depth_indices(&tile.depths, depth);
                     let stride = cells_per_hour;
                     let idx_bot = hour_offset + depth_idx * stride + lat_cell * tile.n_lon + lon_cell;
-                    
+
                     let cu0 = tile.u[idx_bot];
                     let cu1 = tile.u[idx_bot + 1];
                     let cu2 = tile.u[idx_bot + tile.n_lon];
@@ -291,28 +290,28 @@ impl DataLoader {
                     let cv1 = tile.v[idx_bot + 1];
                     let cv2 = tile.v[idx_bot + tile.n_lon];
                     let cv3 = tile.v[idx_bot + tile.n_lon + 1];
-                    
+
                     let u_current = lerp(lerp(cu0, cu1, x_frac), lerp(cu2, cu3, x_frac), y_frac);
                     let v_current = lerp(lerp(cv0, cv1, x_frac), lerp(cv2, cv3, x_frac), y_frac);
-                    
+
                     let meters_per_degree_lat = 111_120.0;
                     let meters_per_degree_lon = 111_120.0 * lat.to_radians().cos();
-                    
+
                     let current = (
                         u_current / meters_per_degree_lon,
                         v_current / meters_per_degree_lat,
                     );
-                    
-                    // Wind drift (bilinear at 0.25°) — only if wind data available
-                    let wind = if has_wind {
+
+                    // ---- Wind (raw 10m components, no drift angle applied) ----
+                    let wind_raw = if has_wind {
                         let (wlon_cell, wlat_cell) = self.get_cell_index(lon, lat, tile, self.lon_step_wind, self.lat_step_wind);
                         let wcell_lon_min = tile_min_lon + (wlon_cell as f32) * self.lon_step_wind;
                         let wcell_lat_min = tile_min_lat + (wlat_cell as f32) * self.lat_step_wind;
                         let wx_frac = ((lon - wcell_lon_min) / self.lon_step_wind).clamp(0.0, 1.0);
                         let wy_frac = ((lat - wcell_lat_min) / self.lat_step_wind).clamp(0.0, 1.0);
-                        
+
                         let w_idx = step_offset + wlat_cell * tile.n_lon_wind + wlon_cell;
-                        
+
                         let wu0 = tile.u_wind[w_idx];
                         let wv0 = tile.v_wind[w_idx];
                         let wu1 = tile.u_wind[w_idx + 1];
@@ -321,28 +320,40 @@ impl DataLoader {
                         let wv2 = tile.v_wind[w_idx + tile.n_lon_wind];
                         let wu3 = tile.u_wind[w_idx + tile.n_lon_wind + 1];
                         let wv3 = tile.v_wind[w_idx + tile.n_lon_wind + 1];
-                        
+
                         let u_wind = lerp(lerp(wu0, wu1, wx_frac), lerp(wu2, wu3, wx_frac), wy_frac);
                         let v_wind = lerp(lerp(wv0, wv1, wx_frac), lerp(wv2, wv3, wx_frac), wy_frac);
-                        
-                        let wind_speed = (u_wind * u_wind + v_wind * v_wind).sqrt().max(0.1);
-                        let theta_deg = 25.0 * (-wind_speed.powi(3) / 1184.75).exp();
-                        let theta = if lat >= 0.0 { theta_deg.to_radians() } else { -theta_deg.to_radians() };
-                        let cos_t = theta.cos();
-                        let sin_t = theta.sin();
-                        
-                        let u_drift = 0.03 * (u_wind * cos_t - v_wind * sin_t);
-                        let v_drift = 0.03 * (u_wind * sin_t + v_wind * cos_t);
-                        (u_drift / meters_per_degree_lon, v_drift / meters_per_degree_lat)
+
+                        (u_wind, v_wind)
                     } else {
                         (0.0, 0.0)
                     };
-                    
-                    results[idx] = (current, wind);
+
+                    // ---- SST (bilinear at 0.25°) ----
+                    let sst = if has_sst && has_wind {
+                        let (wlon_cell, wlat_cell) = self.get_cell_index(lon, lat, tile, self.lon_step_wind, self.lat_step_wind);
+                        let wcell_lon_min = tile_min_lon + (wlon_cell as f32) * self.lon_step_wind;
+                        let wcell_lat_min = tile_min_lat + (wlat_cell as f32) * self.lat_step_wind;
+                        let wx_frac = ((lon - wcell_lon_min) / self.lon_step_wind).clamp(0.0, 1.0);
+                        let wy_frac = ((lat - wcell_lat_min) / self.lat_step_wind).clamp(0.0, 1.0);
+
+                        let s_idx = step_offset + wlat_cell * tile.n_lon_wind + wlon_cell;
+
+                        let s0 = tile.sst[s_idx];
+                        let s1 = tile.sst[s_idx + 1];
+                        let s2 = tile.sst[s_idx + tile.n_lon_wind];
+                        let s3 = tile.sst[s_idx + tile.n_lon_wind + 1];
+
+                        lerp(lerp(s0, s1, wx_frac), lerp(s2, s3, wx_frac), wy_frac)
+                    } else {
+                        20.0 // fallback to reference temperature if no SST data
+                    };
+
+                    results[idx] = (current, wind_raw, sst);
                 }
             }
         }
-        
+
         results
     }
 
