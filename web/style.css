@@ -435,7 +435,7 @@ body {
     top: 15px;
     display: none;
     grid-template-columns: repeat(1fr);
-    column-gap: 30px;
+    column-gap: 20px;
     font-family: Montserrat;
     padding: 10px;
     padding-left: 15px;
