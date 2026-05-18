@@ -78,11 +78,10 @@ const openBtn = document.getElementById("open");
 const sidebar = document.querySelector(".sidebar");
 const overlay = document.getElementById("overlay-checkbox");
 const statsDisplay = document.querySelector(".stats-container");
-const active = document.getElementById("active");
 const emulsified = document.getElementById("emulsified");
-const inactive = document.getElementById("inactive");
 const stranded = document.getElementById("stranded");
 const evaporated = document.getElementById("evaporated");
+const totalMass = document.getElementById("total-mass");
 
 let today = new Date();
 let proteus = null;
@@ -104,7 +103,7 @@ let rawLat = 26.6;
 let csValue = 0.1;
 let particleCount = 10000;
 let spreadKm = 1.0;
-let oilType = oilMenu ? oilMenu.value : "arabian_light";
+let oilType = oilMenu.value;
 let startYear = today.getFullYear();
 let startMonth = today.getMonth() + 1;
 let startDay = today.getDate();
@@ -114,22 +113,22 @@ let isError = false;
 let playbackMode = false;
 let stepCount = 0;
 let boundingBox = [];
-let releaseAmount = 100.0;
+let releaseAmount = 1000.0;
 let releaseDuration = 1.0;
 
-const GRID_UPDATE_INTERVAL = 200;
-const GRID_SIZE = 0.05;
+const GRID_UPDATE_INTERVAL = 100;
+let GRID_SIZE = 0.02;
 const CONCENTRATIONS = [
-  particleCount / 20000,
-  particleCount / 10000,
-  particleCount / 5000,
-  particleCount / 2500,
-  particleCount / 1250,
-  particleCount / 625,
-  particleCount / 312.5,
-  particleCount / 156.25,
-  particleCount / 78.125,
-  particleCount / 39.0625,
+    0.0001,
+    0.0002,
+    0.0005,
+    0.001,
+    0.002,
+    0.005,
+    0.01,
+    0.02,
+    0.05,
+    0.1,
 ];
 const COLORS = [
   "rgb(60, 90, 190)",
@@ -250,13 +249,13 @@ function exportScenario() {
       const geometries = [
         {
           type: "MultiPoint",
-          coordinates: snapshot.activeGeojson.features.map(
+          coordinates: snapshot.unstrandedGeojson.features.map(
             (f) => f.geometry.coordinates,
           ),
         },
         {
           type: "MultiPoint",
-          coordinates: snapshot.inactiveGeojson.features.map(
+          coordinates: snapshot.strandedGeojson.features.map(
             (f) => f.geometry.coordinates,
           ),
         },
@@ -281,8 +280,8 @@ function exportScenario() {
           day: snapshot.day,
           date: snapshot.dateStr,
           stats: snapshot.stats,
-          active_particles: snapshot.activeGeojson.features.length,
-          inactive_particles: snapshot.inactiveGeojson.features.length,
+          unstranded_particles: snapshot.unstrandedGeojson.features.length,
+          stranded_particles: snapshot.strandedGeojson.features.length,
         },
         geometry: {
           type: "GeometryCollection",
@@ -348,14 +347,14 @@ function loadGeoJsonResults(data) {
       day: feature.properties.day,
       dateStr: feature.properties.date,
       stats: feature.properties.stats,
-      activeGeojson: {
+      unstrandedGeojson: {
         type: "FeatureCollection",
         features: geometries[0].coordinates.map((coord) => ({
           type: "Feature",
           geometry: { type: "Point", coordinates: coord },
         })),
       },
-      inactiveGeojson: {
+      strandedGeojson: {
         type: "FeatureCollection",
         features: geometries[1].coordinates.map((coord) => ({
           type: "Feature",
@@ -403,6 +402,7 @@ function loadGeoJsonResults(data) {
   updateReleaseDuration();
   updateReleaseRadius();
   showTimeline();
+  updateConcentrationLayer();
 
   map.setPaintProperty("overlay-layer", "raster-opacity", 0.05);
 
@@ -464,16 +464,29 @@ function addDays(dateInt, days) {
   );
 }
 
+
 function updateBoundingBox() {
   boundingBox = proteus.get_particle_bounding_box();
+  const TARGET_CELLS = 5000;
+  
+  const width = boundingBox[1] - boundingBox[0];
+  const height = boundingBox[3] - boundingBox[2];
+  const area = width * height;
+
+  let gridSize = Math.sqrt(area / TARGET_CELLS);
+  
+  gridSize = Math.max(0.02, Math.min(0.2, gridSize));
+  
+  GRID_SIZE = gridSize;
 }
+
 async function initialize() {
   await init();
   setup_panic_hook();
   initGridLayer();
   let lon = normalizeLongitude(rawLon);
   let lat = rawLat;
-
+  oilType = oilMenu.value;
   proteus = new Proteus(
     normalizeLongitude(lon),
     lat,
@@ -485,6 +498,7 @@ async function initialize() {
     startDay,
     releaseAmount,
     releaseDuration,
+    oilType
   );
 
   updateMarker();
@@ -537,14 +551,14 @@ function initGridLayer() {
       },
     });
 
-    map.addSource("particles-active", {
+    map.addSource("particles-unstranded", {
       type: "geojson",
       data: { type: "FeatureCollection", features: [] },
     });
     map.addLayer({
-      id: "active-particles-layer",
+      id: "unstranded-particles-layer",
       type: "circle",
-      source: "particles-active",
+      source: "particles-unstranded",
       paint: {
         "circle-radius": 1.4,
         "circle-color": "rgb(255, 255, 255)",
@@ -552,14 +566,14 @@ function initGridLayer() {
       },
     });
 
-    map.addSource("particles-inactive", {
+    map.addSource("particles-stranded", {
       type: "geojson",
       data: { type: "FeatureCollection", features: [] },
     });
     map.addLayer({
-      id: "inactive-particles-layer",
+      id: "stranded-particles-layer",
       type: "circle",
-      source: "particles-inactive",
+      source: "particles-stranded",
       paint: {
         "circle-radius": 2,
         "circle-color": "rgb(255, 59, 20)",
@@ -595,12 +609,12 @@ function initGridLayer() {
 function toggleVisualizationMode() {
   if (visualizationMode === "grid") {
     map.setLayoutProperty("concentration-fill", "visibility", "visible");
-    map.setLayoutProperty("active-particles-layer", "visibility", "none");
-    map.setLayoutProperty("inactive-particles-layer", "visibility", "none");
+    map.setLayoutProperty("unstranded-particles-layer", "visibility", "none");
+    map.setLayoutProperty("stranded-particles-layer", "visibility", "none");
   } else {
     map.setLayoutProperty("concentration-fill", "visibility", "none");
-    map.setLayoutProperty("active-particles-layer", "visibility", "visible");
-    map.setLayoutProperty("inactive-particles-layer", "visibility", "visible");
+    map.setLayoutProperty("unstranded-particles-layer", "visibility", "visible");
+    map.setLayoutProperty("stranded-particles-layer", "visibility", "visible");
   }
 }
 
@@ -700,45 +714,47 @@ function updateReleaseRadius() {
 }
 
 function updateGridVisualization() {
-  const positions = proteus.get_active_positions();
+    const data = proteus.get_unstranded_positions_with_mass();
+    const lons = [];
+    const lats = [];
+    const masses = [];
 
-  const lons = [];
-  const lats = [];
+    for (let i = 0; i < data.length; i += 3) {
+        lons.push(data[i]);
+        lats.push(data[i + 1]);
+        masses.push(data[i + 2]);
+    }
 
-  for (let i = 0; i < positions.length; i += 2) {
-    lons.push(positions[i]);
-    lats.push(positions[i + 1]);
-  }
-
-  heatmap.clear();
-  heatmap.add_particles(lons, lats, null);
-  heatmap.smooth();
-
-  const geojsonStr = heatmap.to_contour_geojson(CONCENTRATIONS);
-  const geojson = JSON.parse(geojsonStr);
-  map.getSource("concentration").setData(geojson);
+    heatmap.clear();
+    heatmap.add_particles(lons, lats, masses);
+    heatmap.smooth();
+    const scaledConcentrations = getScaledConcentrations();
+    const thresholdsInTonsPerCell = scaledConcentrations.map(tonsPerKm2ToTonsPerCell);
+    const geojsonStr = heatmap.to_contour_geojson(thresholdsInTonsPerCell);
+    const geojson = JSON.parse(geojsonStr);
+    map.getSource("concentration").setData(geojson);
 }
 
 function updateParticleVisualization() {
-  let activePositions = proteus.get_active_positions();
-  let inactivePositions = proteus.get_inactive_positions();
+  let unstrandedPositions = proteus.get_unstranded_positions();
+  let strandedPositions = proteus.get_stranded_positions();
 
-  const geojsonActive = {
+  const geojsonUnstranded = {
     type: "FeatureCollection",
     features: [],
   };
 
-  const geojsonInactive = {
+  const geojsonStranded = {
     type: "FeatureCollection",
     features: [],
   };
 
-  for (let i = 0; i < activePositions.length; i += 2) {
-    const lon = activePositions[i];
-    const lat = activePositions[i + 1];
+  for (let i = 0; i < unstrandedPositions.length; i += 2) {
+    const lon = unstrandedPositions[i];
+    const lat = unstrandedPositions[i + 1];
 
     if (Math.abs(lat) <= 90 && lon >= -180 && lon <= 180) {
-      geojsonActive.features.push({
+      geojsonUnstranded.features.push({
         type: "Feature",
         geometry: {
           type: "Point",
@@ -749,12 +765,12 @@ function updateParticleVisualization() {
     }
   }
 
-  for (let i = 0; i < inactivePositions.length; i += 2) {
-    const lon = inactivePositions[i];
-    const lat = inactivePositions[i + 1];
+  for (let i = 0; i < strandedPositions.length; i += 2) {
+    const lon = strandedPositions[i];
+    const lat = strandedPositions[i + 1];
 
     if (Math.abs(lat) <= 90 && lon >= -180 && lon <= 180) {
-      geojsonInactive.features.push({
+      geojsonStranded.features.push({
         type: "Feature",
         geometry: {
           type: "Point",
@@ -765,19 +781,20 @@ function updateParticleVisualization() {
     }
   }
 
-  map.getSource("particles-active").setData(geojsonActive);
-  map.getSource("particles-inactive").setData(geojsonInactive);
+  map.getSource("particles-unstranded").setData(geojsonUnstranded);
+  map.getSource("particles-stranded").setData(geojsonStranded);
 }
 
 function createHeatmapColorLegend(show = true) {
-  const oldLegend = document.getElementById("concentration-legend");
-  if (oldLegend) oldLegend.remove();
+    const oldLegend = document.getElementById("concentration-legend");
+    if (oldLegend) oldLegend.remove();
+    if (!show) return;
 
-  if (!show) return;
-
-  const legendDiv = document.createElement("div");
-  legendDiv.id = "concentration-legend";
-  legendDiv.style.cssText = `
+    const scaled = getScaledConcentrations();
+    
+    const legendDiv = document.createElement("div");
+    legendDiv.id = "concentration-legend";
+    legendDiv.style.cssText = `
         position: absolute;
         bottom: 100px;
         right: 25px;
@@ -786,54 +803,38 @@ function createHeatmapColorLegend(show = true) {
         z-index: 1;
     `;
 
-  let html = "";
-  html += '<div style="display:flex; flex-direction:column; gap:2px;">';
-  for (let i = 0; i < 10; i++) {
-    html += `<div style="background: ${COLORS[9 - i]}; height: 20px; width: 30px;"></div>`;
-  }
-  html += "</div>";
+    let html = "";
+    html += '<div style="display:flex; flex-direction:column; gap:2px;">';
+    for (let i = 0; i < 10; i++) {
+        html += `<div style="background: ${COLORS[9 - i]}; height: 20px; width: 30px;"></div>`;
+    }
+    html += "</div>";
 
-  html +=
-    '<div style="display:flex; flex-direction:column; gap:2px; text-align:right;">';
-  for (let i = 0; i < 10; i++) {
-    html += `<div id="legend-val-${i}" style="color: white; font-family: monospace; font-size: 10px; height: 20px; line-height: 20px;">-</div>`;
-  }
-  html += "</div>";
+    html += '<div style="display:flex; flex-direction:column; gap:2px; text-align:right;">';
+    for (let i = 0; i < 10; i++) {
+        const val = scaled[9 - i];
+        const label = val.toFixed(4) + " tons/km²";
+        html += `<div style="color: white; font-family: monospace; font-size: 10px; height: 20px; line-height: 20px;">${label}</div>`;
+    }
+    html += "</div>";
 
-  legendDiv.innerHTML = html;
-  document.getElementById("map").appendChild(legendDiv);
-
-  const tonsPerParticle = releaseAmount / particleCount;
-
-  const kmPerDegreeLon = 111.0 * Math.cos((rawLat * Math.PI) / 180);
-  const kmPerDegreeLat = 111.0;
-
-  const cellWidthKm = GRID_SIZE * kmPerDegreeLon;
-  const cellHeightKm = GRID_SIZE * kmPerDegreeLat;
-  const cellAreaKm2 = cellWidthKm * cellHeightKm;
-
-  for (let i = 0; i < 10; i++) {
-    const concentration = CONCENTRATIONS[9 - i];
-    const tonsPerKm2 = (concentration / cellAreaKm2) * tonsPerParticle;
-
-    const label = document.getElementById(`legend-val-${i}`);
-    label.textContent = tonsPerKm2.toExponential(1) + " tons/km²";
-  }
+    legendDiv.innerHTML = html;
+    document.getElementById("map").appendChild(legendDiv);
 }
 function captureSnapshot(day) {
   const snapshot = {
     day: day + 1,
     dateStr: proteus.current_time_str(),
     stats: getStatsDisplay(),
-    activeGeojson: getActiveGeojson(),
-    inactiveGeojson: getInactiveGeojson(),
+    unstrandedGeojson: getUnstrandedGeojson(),
+    strandedGeojson: getStrandedGeojson(),
     heatmapGeojson: getHeatmapGeojson(),
   };
   simulationHistory.push(snapshot);
 }
 
-function getActiveGeojson() {
-  const positions = proteus.get_active_positions();
+function getUnstrandedGeojson() {
+  const positions = proteus.get_unstranded_positions();
   const features = [];
   for (let i = 0; i < positions.length; i += 2) {
     features.push({
@@ -847,8 +848,8 @@ function getActiveGeojson() {
   return { type: "FeatureCollection", features };
 }
 
-function getInactiveGeojson() {
-  const positions = proteus.get_inactive_positions();
+function getStrandedGeojson() {
+  const positions = proteus.get_stranded_positions();
   const features = [];
   for (let i = 0; i < positions.length; i += 2) {
     features.push({
@@ -863,14 +864,17 @@ function getInactiveGeojson() {
 }
 
 function getHeatmapGeojson() {
-  const positions = proteus.get_active_positions();
-
+  const data = proteus.get_unstranded_positions_with_mass();
   const lons = [];
   const lats = [];
-  for (let i = 0; i < positions.length; i += 2) {
-    lons.push(positions[i]);
-    lats.push(positions[i + 1]);
+  const masses = [];
+
+  for (let i = 0; i < data.length; i += 3) {
+      lons.push(data[i]);
+      lats.push(data[i + 1]);
+      masses.push(data[i + 2]);
   }
+
 
   heatmap = new HeatmapGenerator(
     boundingBox[0] - GRID_SIZE * 2,
@@ -880,9 +884,13 @@ function getHeatmapGeojson() {
     GRID_SIZE,
   );
 
-  heatmap.add_particles(lons, lats, null);
+  heatmap.clear();
+  heatmap.add_particles(lons, lats, masses);
   heatmap.smooth();
-  return JSON.parse(heatmap.to_contour_geojson(CONCENTRATIONS));
+  const scaledConcentrations = getScaledConcentrations();          // tons/km², scaled by release size
+  const thresholdsInTonsPerCell = scaledConcentrations.map(tonsPerKm2ToTonsPerCell);  // tons per cell
+  const geojsonStr = heatmap.to_contour_geojson(thresholdsInTonsPerCell);
+  return JSON.parse(geojsonStr);
 }
 
 async function simulationStep(version) {
@@ -917,7 +925,6 @@ async function simulationStep(version) {
       captureSnapshot(currentDay);
       updateStatsDisplay();
     }
-
     updateBoundingBox();
     const now = performance.now();
     if (visualizationMode === "grid") {
@@ -978,6 +985,7 @@ async function startSimulation() {
   updateReleaseAmount();
   updateReleaseDuration();
   updateReleaseRadius();
+  updateConcentrationLayer();
 
   if (window.currentMarker) {
     window.currentMarker.remove();
@@ -985,6 +993,7 @@ async function startSimulation() {
 
   let lon = normalizeLongitude(rawLon);
   let lat = rawLat;
+  oilType = oilMenu.value;
 
   const currentZoom = map.getZoom();
 
@@ -1011,6 +1020,7 @@ async function startSimulation() {
     startDay,
     releaseAmount,
     releaseDuration,
+    oilType
   );
   simulationStep(simulationVersion);
 
@@ -1068,6 +1078,7 @@ async function resetSimulation() {
 
   let lon = normalizeLongitude(rawLon);
   let lat = rawLat;
+  oilType = oilMenu.value;
 
   proteus = new Proteus(
     normalizeLongitude(lon),
@@ -1080,16 +1091,17 @@ async function resetSimulation() {
     startDay,
     releaseAmount,
     releaseDuration,
+    oilType
   );
 
   map
     .getSource("concentration")
     .setData({ type: "FeatureCollection", features: [] });
   map
-    .getSource("particles-active")
+    .getSource("particles-unstranded")
     .setData({ type: "FeatureCollection", features: [] });
   map
-    .getSource("particles-inactive")
+    .getSource("particles-stranded")
     .setData({ type: "FeatureCollection", features: [] });
 
   dayDisplay.textContent = "";
@@ -1228,11 +1240,12 @@ function updateTimelineDisplay(index) {
 
   document.getElementById("timeline-current").textContent = snapshot.dateStr;
   document.getElementById("timeline-slider").value = index;
-  active.textContent = `${snapshot.stats.active}%`;
-  inactive.textContent = `${snapshot.stats.inactive}%`;
-
-  map.getSource("particles-active").setData(snapshot.activeGeojson);
-  map.getSource("particles-inactive").setData(snapshot.inactiveGeojson);
+  stranded.textContent = `${snapshot.stats.stranded}%`;
+  emulsified.textContent = `${snapshot.stats.emulsified}%`;
+  evaporated.textContent = `${snapshot.stats.evaporated}%`;
+  totalMass.textContent = `${snapshot.stats.total_mass} tons`;
+  map.getSource("particles-unstranded").setData(snapshot.unstrandedGeojson);
+  map.getSource("particles-stranded").setData(snapshot.strandedGeojson);
   map.getSource("concentration").setData(snapshot.heatmapGeojson);
 }
 
@@ -1281,22 +1294,49 @@ function updateOverlay() {
 }
 
 function updateStatsDisplay() {
-  const activePercent = getStatsDisplay().active;
-  const inactivePercent = getStatsDisplay().inactive;
-  active.textContent = `${activePercent}%`;
-  inactive.textContent = `${inactivePercent}%`;
+    stranded.textContent = `${proteus.stranded_fraction().toFixed(1)}%`;
+    emulsified.textContent = `${proteus.mass_weighted_emulsification().toFixed(1)}%`;
+    evaporated.textContent = `${proteus.mass_weighted_evaporation().toFixed(1)}%`;
+    totalMass.textContent = `${proteus.total_floating_mass_tons().toFixed(1)} tons`;
 }
 
 function getStatsDisplay() {
-  const activeCount = proteus.get_active_positions().length / 2;
-  const inactiveCount = proteus.get_inactive_positions().length / 2;
-  const activePercent = ((activeCount / (activeCount + inactiveCount)) * 100).toFixed(1);
-  const inactivePercent = ((inactiveCount / (activeCount + inactiveCount)) * 100).toFixed(1);
-  
-  return {
-    active: activePercent,
-    inactive: inactivePercent,
-  };
+    return {
+        stranded: proteus.stranded_fraction().toFixed(1),
+        emulsified: proteus.mass_weighted_emulsification().toFixed(1),
+        evaporated: proteus.mass_weighted_evaporation().toFixed(1),
+        total_mass: proteus.total_floating_mass_tons().toFixed(1),
+    };
+}
+function getScaledConcentrations() {
+    const scale = releaseAmount / 100.0;
+    return CONCENTRATIONS.map(c => c * scale);
 }
 
+function tonsPerKm2ToTonsPerCell(value) {
+    const kmPerDegreeLon = 111.0 * Math.cos((rawLat * Math.PI) / 180);
+    const kmPerDegreeLat = 111.0;
+    const cellWidthKm = GRID_SIZE * kmPerDegreeLon;
+    const cellHeightKm = GRID_SIZE * kmPerDegreeLat;
+    const cellAreaKm2 = cellWidthKm * cellHeightKm;
+    return value * cellAreaKm2;
+}
+function updateConcentrationLayer() {
+    const scaledConcentrations = getScaledConcentrations();
+    const thresholdsInTonsPerCell = scaledConcentrations.map(tonsPerKm2ToTonsPerCell);
+    
+    // Build the interpolation stops: [threshold0, color0, threshold1, color1, ...]
+    const stops = [];
+    for (let i = 0; i < 10; i++) {
+        stops.push(thresholdsInTonsPerCell[i]);
+        stops.push(COLORS[i]);
+    }
+    
+    map.setPaintProperty("concentration-fill", "fill-color", [
+        "interpolate",
+        ["linear"],
+        ["get", "concentration"],
+        ...stops
+    ]);
+}
 initialize().catch(console.error);

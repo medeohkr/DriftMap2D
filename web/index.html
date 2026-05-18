@@ -44,16 +44,16 @@
         <div class="oil-display-container">
             <span class="oil-text">Oil Type:</span>
             <select name="oil-menu" id="oil-menu">
-            <option value="arabian-light">ARABIAN LIGHT (Light Crude)</option>
-            <option value="bonny-light">BONNY LIGHT (Medium Crude)</option>
-            <option value="ifo-380">IFO 380 (Heavy Fuel Oil)</option>
-            <option value="venezuelan-heavy">VENEZUELAN HEAVY (Extra Heavy)</option>
             <option value="marine-diesel">MARINE DIESEL (Refined)</option>
+            <option value="bonny-light">BONNY LIGHT (Light Crude)</option>
+            <option value="arabian-light">ARABIAN LIGHT (Medium Crude)</option>
+            <option value="venezuelan-heavy">VENEZUELAN HEAVY (Heavy Crude)</option>
+            <option value="ifo-380">IFO 380 (Heavy Fuel Oil)</option>
             </select>
         </div>
         <div class="release-manager-container">
             <span class="release-amount-text">Release Amount</span>
-            <input type="number" id="release-amount-field" value="100.0" step="10">
+            <input type="number" id="release-amount-field" value="1000.0" step="10">
             <span class="release-units-text">tons</span>
             <span class="release-duration-text">Release Duration</span>
             <input type="number" id="release-duration-field" value="1.0" step="1.0">
@@ -107,18 +107,16 @@
     </div>
     <div class="stats-container">
         <div class="stats-description-container">
-            <span class="stats-primary-text">Active</span>
-            <span class="stats-secondary-text">Emulsified</span>
-            <span class="stats-primary-text">Inactive</span>
-            <span class="stats-secondary-text">Stranded</span>
-            <span class="stats-secondary-text">Evaporated</span>
+            <span class="stats-primary-text">Stranded</span>
+            <span class="stats-primary-text">Emulsified</span>
+            <span class="stats-primary-text">Evaporated</span>
+            <span class="stats-primary-text">Total Floating Mass</span>
         </div>
         <div class="stats-data-container">
-            <span class="stats-data-primary" id="active">0%</span>
-            <span class="stats-data-secondary" id="emulsified">0%</span>
-            <span class="stats-data-primary" id="inactive">0%</span>
             <span class="stats-data-secondary" id="stranded">0%</span>
+            <span class="stats-data-secondary" id="emulsified">0%</span>
             <span class="stats-data-secondary" id="evaporated">0%</span>
+            <span class="stats-data-secondary" id="total-mass">0 tons</span>
         </div>
 
     </div>

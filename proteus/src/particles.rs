@@ -1,3 +1,5 @@
+use js_sys::Float32Array;
+
 /// Structure of Arrays (SoA) particle storage for cache-efficient simulation.
 /// All fields are public for direct access by integrators and physics modules.
 pub struct Particles {
@@ -13,7 +15,12 @@ pub struct Particles {
     
     // State fields
     pub active: Vec<bool>,
-    
+    pub stranded: Vec<bool>,
+    pub f_evap: Vec<f32>,
+    pub y_w: Vec<f32>,
+    pub mu_bulk_cp: Vec<f32>, 
+    pub rho_bulk: Vec<f32>,   
+    pub mass_components: Vec<Vec<f32>>,  // per particle: mass of each distillation cut
     
     // Metadata
     pub len: usize,
@@ -34,8 +41,14 @@ impl Particles {
             mass: Vec::with_capacity(capacity),
             age: Vec::with_capacity(capacity),
             active: Vec::with_capacity(capacity),
+            stranded: Vec::with_capacity(capacity),
+            f_evap: Vec::with_capacity(capacity),
+            y_w: Vec::with_capacity(capacity),
+            mu_bulk_cp: Vec::with_capacity(capacity),
+            rho_bulk: Vec::with_capacity(capacity),
             len: 0,
             capacity,
+            mass_components: Vec::with_capacity(capacity),
         }
     }
     
@@ -51,6 +64,11 @@ impl Particles {
         mass: f32,
         age: f32,
         active: bool,
+        stranded: bool,
+        f_evap: f32,
+        y_w: f32,
+        mu_bulk_cp: f32,
+        rho_bulk: f32
     ) -> usize {
         self.x.push(x);
         self.y.push(y);
@@ -59,6 +77,11 @@ impl Particles {
         self.mass.push(mass);
         self.age.push(age);
         self.active.push(active);
+        self.stranded.push(stranded);
+        self.f_evap.push(f_evap);
+        self.y_w.push(y_w);
+        self.mu_bulk_cp.push(mu_bulk_cp);
+        self.rho_bulk.push(rho_bulk);
         self.len += 1;
         self.len - 1
     }
@@ -79,6 +102,11 @@ impl Particles {
             self.mass.swap(index, last);
             self.age.swap(index, last);
             self.active.swap(index, last);
+            self.stranded.swap(index, last);
+            self.f_evap.swap(index, last);
+            self.y_w.swap(index, last);
+            self.mu_bulk_cp.swap(index, last);
+            self.rho_bulk.swap(index, last);
         }
         
         // Pop the last element
@@ -89,6 +117,11 @@ impl Particles {
         self.mass.pop();
         self.age.pop();
         self.active.pop();
+        self.stranded.pop();
+        self.f_evap.pop();
+        self.y_w.pop();
+        self.mu_bulk_cp.pop();
+        self.rho_bulk.pop();
         
         self.len -= 1;
     }
@@ -101,15 +134,20 @@ impl Particles {
         self.mass.clear();
         self.age.clear();
         self.active.clear();
+        self.stranded.clear();
+        self.f_evap.clear();
+        self.y_w.clear();
+        self.mu_bulk_cp.clear();
+        self.rho_bulk.clear();
         self.len = 0;
-    }
-
-    pub fn active_count(&self) -> usize {
-        self.active.iter().filter(|&&a| a).count()
     }
     
     pub fn inactive_count(&self) -> usize {
         self.active.iter().filter(|&&a| !a).count()
+    }
+
+    pub fn stranded_count(&self) -> usize {
+        self.stranded.iter().filter(|&&a| a).count()
     }
 
     pub fn bounding_box(&self) -> (f32, f32, f32, f32) {
@@ -133,19 +171,16 @@ impl Particles {
         let mut xmax = f32::MIN;
         let mut ymin = f32::MAX;
         let mut ymax = f32::MIN;
-        let mut bounding_box = Vec::with_capacity(4);
         
         for i in 0..self.len {
-            xmin = xmin.min(self.x[i]);
-            xmax = xmax.max(self.x[i]);
-            ymin = ymin.min(self.y[i]);
-            ymax = ymax.max(self.y[i]);       
+            if self.active[i] && !self.stranded[i] {
+                xmin = xmin.min(self.x[i]);
+                xmax = xmax.max(self.x[i]);
+                ymin = ymin.min(self.y[i]);
+                ymax = ymax.max(self.y[i]);
+            }
         }
-        bounding_box.push(xmin);
-        bounding_box.push(xmax);
-        bounding_box.push(ymin);
-        bounding_box.push(ymax);
         
-        bounding_box
+        vec![xmin, xmax, ymin, ymax]
     }
 }
