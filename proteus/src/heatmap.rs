@@ -34,32 +34,56 @@ pub struct EulerianGrid {
 }
 
 impl EulerianGrid {
-    pub fn new(lon_min: f64, lon_max: f64, lat_min: f64, lat_max: f64, cell_size: f64) -> Self {
-        let nx = ((lon_max - lon_min) / cell_size).ceil() as usize;
-        let ny = ((lat_max - lat_min) / cell_size).ceil() as usize;
-        
-        Self {
-            lon_min,
-            lon_max,
-            lat_min,
-            lat_max,
-            cell_size,
-            nx,
-            ny,
-            grid: vec![0.0; nx * ny],
-            smooth_kernel: [
-                1.0/16.0, 2.0/16.0, 1.0/16.0,
-                2.0/16.0, 4.0/16.0, 2.0/16.0,
-                1.0/16.0, 2.0/16.0, 1.0/16.0,
-            ],
-        }
+pub fn new(lon_min: f64, lon_max: f64, lat_min: f64, lat_max: f64, cell_size: f64) -> Self {
+    // Guard against invalid bounds
+    if lon_min >= lon_max || lat_min >= lat_max {
+        return Self {
+            lon_min: 0.0,
+            lon_max: 1.0,
+            lat_min: 0.0,
+            lat_max: 1.0,
+            cell_size: 1.0,
+            nx: 1,
+            ny: 1,
+            grid: vec![0.0; 1],
+            smooth_kernel: [1.0/16.0, 2.0/16.0, 1.0/16.0,
+                            2.0/16.0, 4.0/16.0, 2.0/16.0,
+                            1.0/16.0, 2.0/16.0, 1.0/16.0],
+        };
     }
     
+    let nx = ((lon_max - lon_min) / cell_size).ceil() as usize;
+    let ny = ((lat_max - lat_min) / cell_size).ceil() as usize;
+    
+    // Ensure at least 1x1 grid
+    let nx = nx.max(1);
+    let ny = ny.max(1);
+    
+    Self {
+        lon_min,
+        lon_max,
+        lat_min,
+        lat_max,
+        cell_size,
+        nx,
+        ny,
+        grid: vec![0.0; nx * ny],
+        smooth_kernel: [
+            1.0/16.0, 2.0/16.0, 1.0/16.0,
+            2.0/16.0, 4.0/16.0, 2.0/16.0,
+            1.0/16.0, 2.0/16.0, 1.0/16.0,
+        ],
+    }
+}
     pub fn clear(&mut self) {
         self.grid.fill(0.0);
     }
     
     pub fn add_particle(&mut self, lon: f64, lat: f64, concentration: f32) {
+        if self.nx == 0 || self.ny == 0 {
+            return;
+        }
+
         let ix = ((lon - self.lon_min) / self.cell_size).floor() as usize;
         let iy = ((lat - self.lat_min) / self.cell_size).floor() as usize;
         
@@ -77,6 +101,10 @@ impl EulerianGrid {
     }
     
     pub fn smooth(&mut self) {
+        if self.grid.is_empty() {
+            return;
+        }
+
         let mut smoothed = vec![0.0; self.grid.len()];
         
         for iy in 1..self.ny - 1 {
@@ -222,6 +250,9 @@ impl EulerianGrid {
     }
     
     fn marching_squares(&self, threshold: f32) -> Vec<Vec<Point2D>> {
+        if self.nx < 2 || self.ny < 2 {
+            return Vec::new();
+        }
         // Pre-allocate with estimated capacity (roughly 25% of cells will have contours)
         let estimated_capacity = (self.nx * self.ny) / 4;
         let mut polygons = Vec::with_capacity(estimated_capacity);

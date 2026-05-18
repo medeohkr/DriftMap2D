@@ -77,8 +77,8 @@ impl Proteus {
             -180.0, -80.0
         );
         let landmask = LandMaskLoader::new(
-            "https://tiles.driftmap2d.com/landmask",
-            -180.0, -80.0
+            "https://tiles.driftmap2d.com/roaring_landmask", // Local path for landmask tiles
+            -180.0, -90.0, 90.0
         );
         
         Self {
@@ -101,7 +101,7 @@ impl Proteus {
 
     pub async fn init_landmask(&mut self, lon: f32, lat: f32) -> Result<(), JsValue> {
         let lon_idx = ((lon + 180.0) / 10.0).floor() as usize;
-        let lat_idx = ((lat + 80.0) / 10.0).floor() as usize;
+        let lat_idx = ((lat + 90.0) / 10.0).floor() as usize;
 
         for dx in -1i32..=1 {
             for dy in -1i32..=1 {
@@ -119,22 +119,50 @@ impl Proteus {
         let current_date_int = self.get_current_date_int();
         self.loader.set_current_day(current_date_int, self.hour_count);
         
-        let needed_tiles = self.loader.update_tiles(&self.simulation.get_particles());
+        // ========== OCEAN TILES ==========
+        let needed_ocean_tiles = self.loader.update_tiles(&self.simulation.get_particles());
         
-        if let Err(e) = self.loader.load_by_date(current_date_int, &needed_tiles).await {
-            web_sys::console::error_1(&format!("Failed to load tiles: {:?}", e).into());
+        if let Err(e) = self.loader.load_by_date(current_date_int, &needed_ocean_tiles).await {
+            web_sys::console::error_1(&format!("Failed to load ocean tiles: {:?}", e).into());
             return Err(JsValue::from_str(&format!("{:?}", e)));
         }
         
-        // Load landmask tiles for needed region
-        for tile in &needed_tiles {
-            if let Err(e) = self.landmask.load_tile(tile.lon_idx, tile.lat_idx).await {
-                // Silently skip missing landmask tiles — just won't strand there
+        // ========== LANDMASK TILES (calculated separately with min_lat = -90°) ==========
+        let particles = self.simulation.get_particles();
+        let mut landmask_tiles = std::collections::HashSet::new();
+        
+        for i in 0..particles.len {
+            if particles.active[i] && !particles.stranded[i] {
+                // Calculate tile indices using landmask coordinate system (min_lat = -90°)
+                let lon_idx = ((particles.x[i] + 180.0) / 10.0).floor() as i32;
+                let lat_idx = ((particles.y[i] + 90.0) / 10.0).floor() as i32;  // +90 for landmask
+                
+                // Add surrounding tiles (buffer of 1)
+                for dx in -1..=1 {
+                    for dy in -1..=1 {
+                        let lx = lon_idx + dx;
+                        let ly = lat_idx + dy;
+                        // 36 longitude tiles (360°/10°), 18 latitude tiles (180°/10°)
+                        if lx >= 0 && lx < 36 && ly >= 0 && ly < 18 {
+                            landmask_tiles.insert((lx as usize, ly as usize));
+                        }
+                    }
+                }
             }
         }
         
+        // Load landmask tiles
+        for (lon_idx, lat_idx) in landmask_tiles {
+            if let Err(e) = self.landmask.load_tile(lon_idx, lat_idx).await {
+                // Log warning but don't fail simulation
+                web_sys::console::warn_1(&format!("Landmask tile load failed: {}_{}: {}", lon_idx, lat_idx, e).into());
+            }
+        }
+        
+        // ========== RUN SIMULATION STEP ==========
         self.simulation.update_particles_batch(dt_days, &self.loader, self.hour_count, &self.landmask);
         
+        // ========== UPDATE TIME ==========
         self.days_since_start += dt_days;
         let total_hours = self.days_since_start * 24.0;
         self.hour_count = (total_hours.floor() % 24.0) as u32;
