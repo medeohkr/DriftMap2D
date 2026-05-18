@@ -103,15 +103,11 @@ impl Proteus {
         let lon_idx = ((lon + 180.0) / 10.0).floor() as usize;
         let lat_idx = ((lat + 90.0) / 10.0).floor() as usize;
 
-        for dx in -1i32..=1 {
-            for dy in -1i32..=1 {
-                let lx = (lon_idx as i32 + dx).max(0).min(35) as usize;
-                let ly = (lat_idx as i32 + dy).max(0).min(16) as usize;
-                if let Err(e) = self.landmask.load_tile(lx, ly).await {
-                    web_sys::console::warn_1(&format!("Landmask tile load failed: {}", e).into());
-                }
-            }
+        // Load ONLY the exact tile containing the release point
+        if let Err(e) = self.landmask.load_tile(lon_idx, lat_idx).await {
+            web_sys::console::warn_1(&format!("Landmask tile load failed: {}", e).into());
         }
+
         Ok(())
     }
 
@@ -135,22 +131,13 @@ impl Proteus {
             if particles.active[i] && !particles.stranded[i] {
                 // Calculate tile indices using landmask coordinate system (min_lat = -90°)
                 let lon_idx = ((particles.x[i] + 180.0) / 10.0).floor() as i32;
-                let lat_idx = ((particles.y[i] + 90.0) / 10.0).floor() as i32;  // +90 for landmask
-                
-                // Add surrounding tiles (buffer of 1)
-                for dx in -1..=1 {
-                    for dy in -1..=1 {
-                        let lx = lon_idx + dx;
-                        let ly = lat_idx + dy;
-                        // 36 longitude tiles (360°/10°), 18 latitude tiles (180°/10°)
-                        if lx >= 0 && lx < 36 && ly >= 0 && ly < 18 {
-                            landmask_tiles.insert((lx as usize, ly as usize));
-                        }
-                    }
+                let lat_idx = ((particles.y[i] + 90.0) / 10.0).floor() as i32;
+
+                if lon_idx >= 0 && lon_idx < 36 && lat_idx >= 0 && lat_idx < 18 {
+                    landmask_tiles.insert((lon_idx as usize, lat_idx as usize));
                 }
             }
         }
-        
         // Load landmask tiles
         for (lon_idx, lat_idx) in landmask_tiles {
             if let Err(e) = self.landmask.load_tile(lon_idx, lat_idx).await {

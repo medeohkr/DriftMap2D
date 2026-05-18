@@ -107,8 +107,8 @@ let oilType = oilMenu.value;
 let startYear = today.getFullYear();
 let startMonth = today.getMonth() + 1;
 let startDay = today.getDate();
-let stepSize = 1 / 48;
-let totalDays = 6.0;
+let stepSize = 1 / 96;
+let totalDays = 7.0;
 let isError = false;
 let playbackMode = false;
 let stepCount = 0;
@@ -1260,7 +1260,7 @@ function updateTimelineDisplay(index) {
   stranded.textContent = `${snapshot.stats.stranded}%`;
   emulsified.textContent = `${snapshot.stats.emulsified}%`;
   evaporated.textContent = `${snapshot.stats.evaporated}%`;
-  totalMass.textContent = `${snapshot.stats.total_mass} tons`;
+  totalMass.textContent = `${snapshot.stats.total_mass} t`;
   map.getSource("particles-unstranded").setData(snapshot.unstrandedGeojson);
   map.getSource("particles-stranded").setData(snapshot.strandedGeojson);
   map.getSource("concentration").setData(snapshot.heatmapGeojson);
@@ -1314,7 +1314,7 @@ function updateStatsDisplay() {
     stranded.textContent = `${proteus.stranded_fraction().toFixed(1)}%`;
     emulsified.textContent = `${proteus.mass_weighted_emulsification().toFixed(1)}%`;
     evaporated.textContent = `${proteus.mass_weighted_evaporation().toFixed(1)}%`;
-    totalMass.textContent = `${proteus.total_floating_mass_tons().toFixed(1)} tons`;
+    totalMass.textContent = `${proteus.total_floating_mass_tons().toFixed(1)} t`;
 }
 
 function getStatsDisplay() {
