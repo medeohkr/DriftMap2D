@@ -513,6 +513,30 @@ body {
     line-height: 20px;
     white-space: nowrap;
 }
+.legend-collapse-container {
+    position: absolute;
+    right: 189px;
+    bottom: 332px;
+}
+.legend-collapse-button {
+    position: absolute;
+    border: none;
+    border-radius: 2px;
+    background-color: rgb(20, 20, 20);
+    color: white;
+    box-shadow: 1px 1px 3px rgb(0, 0, 0);
+    cursor: pointer;
+    width: 20px;
+    height: 20px;
+    font-weight: 800;
+}
+#legend-collapse {
+    display: none;
+}
+#legend-open {
+    display: none;
+    left: 154px;
+}
 /* ===== MOBILE: Tablet (≤768px) ===== */
 @media (max-width: 768px) {
     .sidebar {
@@ -741,6 +765,15 @@ body {
         font-size: 8px;
         line-height: 15px;
     }
+    .legend-collapse-container {
+        position: absolute;
+        right: 160px;
+        bottom: 260px;
+    }
+    #legend-open {
+        display: none;
+        left: 130px;
+    }
 }
 /* ===== MOBILE: Phone (≤480px) ===== */
 @media (max-width: 480px) {
@@ -960,7 +993,7 @@ body {
     }
     #concentration-legend {
         bottom: 142px;
-        right: 15px;
+        right: 10px;
 
         padding: 4px 8px;
     }
@@ -971,5 +1004,14 @@ body {
     .legend-labels div {
         font-size: 7px;
         line-height: 12px;
+    }
+    .legend-collapse-container {
+        position: absolute;
+        right: 140px;
+        bottom: 223px;
+    }
+    #legend-open {
+        display: none;
+        left: 110px;
     }
 }
