@@ -228,7 +228,7 @@ function validateSimulation() {
   const maxDate = new Date(today);
   const minDate = new Date(today);
   maxDate.setDate(today.getDate() + 10);
-  minDate.setDate(today.getDate() + 10);
+  minDate.setDate(today.getDate() - 30);
   if (simStart > maxDate) {
     errors.push(
       `Start date is beyond available forecast (max ${maxDate.toISOString().split("T")[0]})`,
