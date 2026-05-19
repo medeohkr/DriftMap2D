@@ -70,6 +70,8 @@ const emulsified = document.getElementById("emulsified");
 const stranded = document.getElementById("stranded");
 const evaporated = document.getElementById("evaporated");
 const totalMass = document.getElementById("total-mass");
+const collapseLegendBtn = document.getElementById("legend-collapse");
+const openLegendBtn = document.getElementById("legend-open");
 
 // ========== GLOBAL STATE ==========
 let today = new Date();
@@ -101,6 +103,7 @@ let stepCount = 0;
 let boundingBox = [];
 let releaseAmount = 1000.0;
 let releaseDuration = 1.0;
+let legendCollapsed = false;
 
 const GRID_UPDATE_INTERVAL = 100;
 let GRID_SIZE = 0.02;
@@ -335,6 +338,8 @@ function toggleVisualizationMode() {
 function toggleParticleMode() {
   if (visualizationMode === "particles") return;
   createHeatmapColorLegend(false);
+  collapseLegendBtn.style.display = "none";
+  openLegendBtn.style.display = "none";
   visualizationMode = "particles";
   toggleVisualizationMode();
   heatmapToggle.style.background = "none";
@@ -347,6 +352,14 @@ function toggleParticleMode() {
 function toggleHeatmapMode() {
   if (visualizationMode === "grid") return;
   createHeatmapColorLegend(true);
+  if (legendCollapsed) {
+    createHeatmapColorLegend(true);
+    document.getElementById("concentration-legend").style.display = "none";
+    openLegendBtn.style.display = "inline-block";
+  } else {
+    collapseLegendBtn.style.display = "inline-block";
+  }
+
   visualizationMode = "grid";
   toggleVisualizationMode();
   heatmapToggle.style.background = "white";
@@ -1150,6 +1163,18 @@ openBtn.addEventListener("click", () => {
   sidebar.style.display = "flex";
   openBtn.style.display = "none";
   collapseBtn.style.display = "inline-block";
+});
+collapseLegendBtn.addEventListener("click", () => {
+  document.getElementById("concentration-legend").style.display = "none";
+  openLegendBtn.style.display = "inline-block";
+  collapseLegendBtn.style.display = "none";
+  legendCollapsed = true;
+});
+openLegendBtn.addEventListener("click", () => {
+  document.getElementById("concentration-legend").style.display = "flex";
+  openLegendBtn.style.display = "none";
+  collapseLegendBtn.style.display = "inline-block";
+  legendCollapsed = false;
 });
 
 // ========== COORDINATE DISPLAY ==========
