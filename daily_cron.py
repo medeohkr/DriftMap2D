@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Daily forecast update: download SMOC + ECMWF day by day, tile immediately, upload to R2.
-Maintains a 40-day rolling window (30 days hindcast + 10 days forecast).
+Daily forecast update: download ECMWF once, then SMOC day by day,
+tile immediately, upload to R2.
 """
 
 import os
@@ -23,7 +23,7 @@ else:
     BASE_DIR = Path("D:/projects/driftmap/data")
 
 BUCKET = "driftmap-tiles"
-FORECAST_DAYS = 11
+FORECAST_DAYS = 11  # Yesterday + 10 forecast days
 HINDCAST_DAYS = 30
 
 TILE_SIZE = 10.0
@@ -33,7 +33,6 @@ N_LAT_TILES = 17
 NC_DIR = BASE_DIR / "smoc_nc"
 WIND_DIR = BASE_DIR / "ecmwf"
 TILES_DIR = BASE_DIR / "forecast_tiles"
-VIZ_DIR = BASE_DIR / "visualization"
 
 # R2 credentials
 ACCOUNT_ID = os.environ.get("ACCOUNT_ID", "").strip()
@@ -45,9 +44,6 @@ CMEMS_PASS = os.environ.get("CMEMS_PASS", "").strip()
 if not all([ACCOUNT_ID, ACCESS_KEY, SECRET_KEY]):
     print("❌ ERROR: Missing R2 credentials")
     sys.exit(1)
-
-if not CMEMS_USER or not CMEMS_PASS:
-    print("⚠️  WARNING: Missing CMEMS credentials, SMOC download may fail")
 
 s3 = boto3.client(
     's3',
@@ -78,11 +74,45 @@ def delete_oldest_day():
     return deleted
 
 
+def download_ecmwf():
+    """Download ECMWF wind + SST once (contains all forecast steps)."""
+    from ecmwf.opendata import Client
+    
+    today = datetime.utcnow()
+    yesterday = today - timedelta(days=1)
+    date_str = yesterday.strftime("%Y-%m-%d")
+    
+    WIND_DIR.mkdir(parents=True, exist_ok=True)
+    out_file = str(WIND_DIR / f"ecmwf_{date_str.replace('-', '')}_00z.grib2")
+    
+    print(f"📡 Downloading ECMWF forecast (initialized {date_str})...")
+    
+    for source in ["aws", "ecmwf"]:
+        try:
+            client = Client(source=source)
+            client.retrieve(
+                date=date_str,
+                time="00",
+                step=list(range(0, 264, 6)),  # 0 to 264 = 11 days of 6-hourly
+                param=["10u", "10v", "skt"],
+                target=out_file,
+                type="fc",
+                levtype="sfc",
+            )
+            if Path(out_file).exists():
+                print(f"  ✅ ECMWF: {Path(out_file).stat().st_size / 1e6:.1f} MB")
+                return out_file
+        except Exception as e:
+            print(f"  {source} source failed: {e}")
+    
+    print("  ❌ Failed to get ECMWF data")
+    return None
+
+
 def download_smoc_day(date):
     """Download a single day of SMOC data (24 hours, hourly)."""
     import copernicusmarine
     
-    # Login with credentials
     if CMEMS_USER and CMEMS_PASS:
         copernicusmarine.login(username=CMEMS_USER, password=CMEMS_PASS)
     else:
@@ -108,7 +138,6 @@ def download_smoc_day(date):
         force_download=True,
     )
     
-    # Verify file
     if Path(out_file).exists() and Path(out_file).stat().st_size > 0:
         print(f"    ✅ SMOC: {Path(out_file).stat().st_size / 1e6:.1f} MB")
         return out_file
@@ -117,36 +146,7 @@ def download_smoc_day(date):
         return None
 
 
-def download_ecmwf_day(date):
-    """Download a single day of ECMWF wind + SST (6-hourly)."""
-    from ecmwf.opendata import Client
-    
-    WIND_DIR.mkdir(parents=True, exist_ok=True)
-    out_file = str(WIND_DIR / f"ecmwf_{date.strftime('%Y%m%d')}.grib2")
-    
-    print(f"    Downloading ECMWF {date.date()}...")
-    
-    for source in ["aws", "ecmwf"]:
-        try:
-            client = Client(source=source)
-            client.retrieve(
-                date=date.strftime("%Y-%m-%d"),
-                time="00",
-                step=[0, 6, 12, 18],
-                param=["10u", "10v", "skt"],
-                target=out_file,
-                type="fc",
-                levtype="sfc",
-            )
-            if Path(out_file).exists():
-                print(f"    ✅ ECMWF: {Path(out_file).stat().st_size / 1e6:.1f} MB")
-                return out_file
-        except Exception as e:
-            print(f"      {source} failed: {e}")
-    return None
-
-
-def tile_and_upload_day(date, wind_file):
+def tile_and_upload_day(date, wind_file, wind_data_cache):
     """Tile a single day and upload immediately, then delete."""
     
     nc_file = NC_DIR / f"smoc_{date.strftime('%Y%m%d')}.nc"
@@ -154,33 +154,28 @@ def tile_and_upload_day(date, wind_file):
         print(f"    ❌ SMOC file not found: {nc_file}")
         return 0
     
+    # Load SMOC data
     ds = xr.open_dataset(str(nc_file))
     lons = ds['longitude'].values
     lats = ds['latitude'].values
     
     # Current data: 24 hours (hourly)
-    u_day = ds['utotal'].isel(depth=0).values  # shape: (24, lat, lon)
+    u_day = ds['utotal'].isel(depth=0).values
     v_day = ds['vtotal'].isel(depth=0).values
     n_hours = 24
     
-    # Load wind if available
-    has_wind = False
-    u_wind_global = v_wind_global = skt_global = wind_lons = wind_lats = None
-    n_wind_steps = 0
+    # Get wind data for this specific day from the cached global wind
+    # Each day has 4 wind steps (6-hourly: 0, 6, 12, 18 UTC)
+    day_offset = (date - wind_data_cache['reference_date']).days
+    wind_start_step = day_offset * 4
+    wind_end_step = wind_start_step + 4
     
-    if wind_file and Path(wind_file).exists():
-        try:
-            ds_wind = xr.open_dataset(wind_file, engine="cfgrib")
-            u_wind_global = ds_wind['u10'].values  # shape: (4, lat, lon)
-            v_wind_global = ds_wind['v10'].values
-            skt_global = ds_wind['skt'].values if 'skt' in ds_wind else np.zeros_like(u_wind_global)
-            wind_lons = ds_wind['longitude'].values
-            wind_lats = ds_wind['latitude'].values
-            n_wind_steps = u_wind_global.shape[0]
-            has_wind = True
-            ds_wind.close()
-        except Exception as e:
-            print(f"    ⚠️ Wind load failed: {e}")
+    u_wind_global = wind_data_cache['u_wind'][wind_start_step:wind_end_step]
+    v_wind_global = wind_data_cache['v_wind'][wind_start_step:wind_end_step]
+    sst_global = wind_data_cache['sst'][wind_start_step:wind_end_step]
+    wind_lons = wind_data_cache['lons']
+    wind_lats = wind_data_cache['lats']
+    n_wind_steps = 4
     
     day_dir = TILES_DIR / date.strftime("%Y/%m/%d")
     day_dir.mkdir(parents=True, exist_ok=True)
@@ -200,6 +195,12 @@ def tile_and_upload_day(date, wind_file):
             if len(lat_idx) == 0:
                 continue
             
+            # Extract wind for this tile
+            wind_lon_mask = (wind_lons >= lon_min) & (wind_lons < lon_max)
+            wind_lat_mask = (wind_lats >= lat_min) & (wind_lats < lat_max)
+            wind_lon_idx = np.where(wind_lon_mask)[0]
+            wind_lat_idx = np.where(wind_lat_mask)[0]
+            
             tile_path = day_dir / f"{tilex:03d}_{tiley:03d}.bin"
             
             try:
@@ -207,7 +208,6 @@ def tile_and_upload_day(date, wind_file):
                     # Header
                     f.write(struct.pack('<I', len(lon_idx)))   # n_lon
                     f.write(struct.pack('<I', len(lat_idx)))   # n_lat
-                    # f.write(struct.pack('<I', n_hours))        # n_hours (24)
                     f.write(struct.pack('<I', 1))              # n_levels
                     f.write(struct.pack('<f', 0.0))            # level
                     
@@ -220,37 +220,27 @@ def tile_and_upload_day(date, wind_file):
                         u_tile.tofile(f)
                         v_tile.tofile(f)
                     
-                    if has_wind:
-                        # Extract wind for this tile
-                        wind_lon_mask = (wind_lons >= lon_min) & (wind_lons < lon_max)
-                        wind_lat_mask = (wind_lats >= lat_min) & (wind_lats < lat_max)
-                        wind_lon_idx = np.where(wind_lon_mask)[0]
-                        wind_lat_idx = np.where(wind_lat_mask)[0]
+                    # Wind header (only 4 steps per day)
+                    if len(wind_lon_idx) > 0 and len(wind_lat_idx) > 0:
+                        wind_nlon = len(wind_lon_idx)
+                        wind_nlat = len(wind_lat_idx)
                         
-                        if len(wind_lon_idx) > 0 and len(wind_lat_idx) > 0:
-                            wind_nlon = len(wind_lon_idx)
-                            wind_nlat = len(wind_lat_idx)
-                            
-                            f.write(struct.pack('<I', wind_nlon))
-                            f.write(struct.pack('<I', wind_nlat))
-                            f.write(struct.pack('<I', n_wind_steps))
-                            
-                            for h in range(n_wind_steps):
-                                u_w = u_wind_global[h, wind_lat_idx[0]:wind_lat_idx[-1]+1, wind_lon_idx[0]:wind_lon_idx[-1]+1]
-                                v_w = v_wind_global[h, wind_lat_idx[0]:wind_lat_idx[-1]+1, wind_lon_idx[0]:wind_lon_idx[-1]+1]
-                                u_w = np.nan_to_num(u_w, nan=0.0).astype(np.float16)
-                                v_w = np.nan_to_num(v_w, nan=0.0).astype(np.float16)
-                                u_w.tofile(f)
-                                v_w.tofile(f)
-                            
-                            for h in range(n_wind_steps):
-                                s = skt_global[h, wind_lat_idx[0]:wind_lat_idx[-1]+1, wind_lon_idx[0]:wind_lon_idx[-1]+1]
-                                s = np.nan_to_num(s, nan=273.15).astype(np.float16)
-                                s.tofile(f)
-                        else:
-                            f.write(struct.pack('<I', 0))
-                            f.write(struct.pack('<I', 0))
-                            f.write(struct.pack('<I', 0))
+                        f.write(struct.pack('<I', wind_nlon))
+                        f.write(struct.pack('<I', wind_nlat))
+                        f.write(struct.pack('<I', n_wind_steps))
+                        
+                        for h in range(n_wind_steps):
+                            u_w = u_wind_global[h, wind_lat_idx[0]:wind_lat_idx[-1]+1, wind_lon_idx[0]:wind_lon_idx[-1]+1]
+                            v_w = v_wind_global[h, wind_lat_idx[0]:wind_lat_idx[-1]+1, wind_lon_idx[0]:wind_lon_idx[-1]+1]
+                            u_w = np.nan_to_num(u_w, nan=0.0).astype(np.float16)
+                            v_w = np.nan_to_num(v_w, nan=0.0).astype(np.float16)
+                            u_w.tofile(f)
+                            v_w.tofile(f)
+                        
+                        for h in range(n_wind_steps):
+                            s = sst_global[h, wind_lat_idx[0]:wind_lat_idx[-1]+1, wind_lon_idx[0]:wind_lon_idx[-1]+1]
+                            s = np.nan_to_num(s, nan=273.15).astype(np.float16)
+                            s.tofile(f)
                     else:
                         f.write(struct.pack('<I', 0))
                         f.write(struct.pack('<I', 0))
@@ -279,8 +269,6 @@ def tile_and_upload_day(date, wind_file):
     # Clean up
     shutil.rmtree(day_dir)
     os.remove(nc_file)
-    if wind_file and Path(wind_file).exists():
-        os.remove(wind_file)
     
     return tiles
 
@@ -299,12 +287,39 @@ def main():
     NC_DIR.mkdir(parents=True, exist_ok=True)
     WIND_DIR.mkdir(parents=True, exist_ok=True)
     
+    # Step 2: Download ECMWF once (contains all forecast steps)
+    print("\n📡 Step 2: Downloading ECMWF forecast...")
+    wind_file = download_ecmwf()
+    if not wind_file:
+        print("  ❌ Failed to get ECMWF data. Exiting.")
+        sys.exit(1)
+    
+    # Load and cache wind data for quick access
+    print("\n📂 Step 3: Loading ECMWF data into memory...")
+    ds_wind = xr.open_dataset(wind_file, engine="cfgrib")
+    u_wind_global = ds_wind['u10'].values  # (steps, lat, lon)
+    v_wind_global = ds_wind['v10'].values
+    sst_global = ds_wind['skt'].values if 'skt' in ds_wind else np.zeros_like(u_wind_global)
+    wind_lons = ds_wind['longitude'].values
+    wind_lats = ds_wind['latitude'].values
+    
+    wind_data_cache = {
+        'u_wind': u_wind_global,
+        'v_wind': v_wind_global,
+        'sst': sst_global,
+        'lons': wind_lons,
+        'lats': wind_lats,
+        'reference_date': datetime.utcnow() - timedelta(days=1),  # Yesterday
+    }
+    ds_wind.close()
+    print(f"  ✅ Wind data loaded: {u_wind_global.shape[0]} steps, {len(wind_lats)} lat, {len(wind_lons)} lon")
+    
+    # Step 4: Process each day
     today = datetime.utcnow()
     yesterday = today - timedelta(days=1)
     
     total_tiles = 0
-    
-    print(f"\n📡 Step 2: Processing {FORECAST_DAYS} days...")
+    print(f"\n📡 Step 4: Processing {FORECAST_DAYS} days...")
     
     for day_offset in range(FORECAST_DAYS):
         day_date = yesterday + timedelta(days=day_offset)
@@ -316,15 +331,15 @@ def main():
             print(f"    ⚠️ Skipping day {day_date.date()} - SMOC download failed")
             continue
         
-        # Download ECMWF (only once per run, reuse)
-        wind_file = None
-        wind_file = download_ecmwf_day(day_date)
-        
         # Tile and upload this day
-        tiles = tile_and_upload_day(day_date, wind_file)
+        tiles = tile_and_upload_day(day_date, wind_file, wind_data_cache)
         total_tiles += tiles
-        
         print(f"    Cumulative tiles: {total_tiles}")
+    
+    # Clean up wind file
+    if wind_file and Path(wind_file).exists():
+        os.remove(wind_file)
+        print(f"\n🧹 Cleaned up wind file")
     
     print(f"\n✅ Complete: {total_tiles} tiles uploaded")
 

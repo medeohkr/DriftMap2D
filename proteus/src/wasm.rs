@@ -167,30 +167,6 @@ impl Proteus {
         positions
     }
 
-    // pub fn get_active_positions(&self) -> Vec<f32> {
-    //     let particles = self.simulation.get_particles();
-    //     let mut positions = Vec::with_capacity(particles.len);
-    //     for i in 0..particles.len {
-    //         if particles.active[i] {
-    //             positions.push(particles.x[i]);
-    //             positions.push(particles.y[i]);
-    //         }
-    //     }
-    //     positions
-    // }
-
-    // pub fn get_inactive_positions(&self) -> Vec<f32> {
-    //     let particles = self.simulation.get_particles();
-    //     let mut positions = Vec::with_capacity(particles.len);
-    //     for i in 0..particles.len {
-    //         if !particles.active[i] {
-    //             positions.push(particles.x[i]);
-    //             positions.push(particles.y[i]);
-    //         }
-    //     }
-    //     positions
-    // }
-
     pub fn get_stranded_positions(&self) -> Vec<f32> {
         let particles = self.simulation.get_particles();
         let mut positions = Vec::with_capacity(particles.len);
@@ -300,5 +276,8 @@ impl Proteus {
             }
         }
         data
+    }
+    pub fn is_on_land(&self, lon: f32, lat: f32) -> bool {
+        self.landmask.is_on_land(lon, lat)
     }
 }
