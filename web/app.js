@@ -226,12 +226,18 @@ function validateSimulation() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const maxDate = new Date(today);
+  const minDate = new Date(today);
   maxDate.setDate(today.getDate() + 10);
-
+  minDate.setDate(today.getDate() + 10);
   if (simStart > maxDate) {
     errors.push(
       `Start date is beyond available forecast (max ${maxDate.toISOString().split("T")[0]})`,
     );
+  }
+  if (simStart < minDate) {
+    errors.push(
+      `Start date is before available range (min ${minDate.toISOString().split("T")[0]})`
+    )
   }
 
   const simEnd = new Date(simStart);
