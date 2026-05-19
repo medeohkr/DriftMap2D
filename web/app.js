@@ -946,6 +946,8 @@ function initGridLayer() {
     map.addSource("concentration", {
       type: "geojson",
       data: { type: "FeatureCollection", features: [] },
+      tolerance: 0,
+      maxzoom: 24,
     });
     map.addLayer({
       id: "concentration-fill",
