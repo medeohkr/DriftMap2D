@@ -1,4 +1,3 @@
-// app.js - Cleaned and Fixed
 import init, {
   Proteus,
   setup_panic_hook,
@@ -89,7 +88,7 @@ let lastGridUpdate = 0;
 let visualizationMode = "particles";
 let rawLon = 56.5;
 let rawLat = 26.6;
-let csValue = 0.1;
+let csValue = 0.0;
 let particleCount = 10000;
 let spreadKm = 1.0;
 let oilType = oilMenu.value;
@@ -106,7 +105,7 @@ let releaseDuration = 1.0;
 let legendCollapsed = false;
 
 const GRID_UPDATE_INTERVAL = 150;
-let GRID_SIZE = 0.02;
+let GRID_SIZE = 0.025;
 
 const CONCENTRATIONS = [
   0.0002, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2,
@@ -189,16 +188,7 @@ function updateTotalDays() {
 function updateReleaseAmount() {
   if (simulationHistory.length === 0) {
     releaseAmount = parseFloat(releaseAmountField.value);
-    if (visualizationMode === "grid") {
-      createHeatmapColorLegend(true);
-      if (legendCollapsed) {
-        createHeatmapColorLegend(true);
-        document.getElementById("concentration-legend").style.display = "none";
-        openLegendBtn.style.display = "inline-block";
-      } else {
-        collapseLegendBtn.style.display = "inline-block";
-      }
-    }
+    updateLegend();
   }
 }
 
@@ -360,27 +350,14 @@ function toggleParticleMode() {
 
 function toggleHeatmapMode() {
   if (visualizationMode === "grid") return;
-  createHeatmapColorLegend(true);
-  if (legendCollapsed) {
-    createHeatmapColorLegend(true);
-    document.getElementById("concentration-legend").style.display = "none";
-    openLegendBtn.style.display = "inline-block";
-  } else {
-    collapseLegendBtn.style.display = "inline-block";
-  }
-
   visualizationMode = "grid";
   toggleVisualizationMode();
+  updateLegend();
   heatmapToggle.style.background = "white";
   heatmapToggle.style.color = "black";
   particleToggle.style.background = "none";
   particleToggle.style.color = "white";
-  if (simulationHistory.length && !playbackMode) updateGridVisualization();
-  if (playbackMode) {
-    map
-      .getSource("concentration")
-      .setData(simulationHistory[timelineSlider.value].heatmapGeojson);
-  }
+  if (!playbackMode) updateGridVisualization();
 }
 
 function updateParticleVisualization() {
@@ -519,6 +496,27 @@ function updatePlaybackSpeed() {
   }
 }
 
+function updatePositionFromFields() {
+  if (!isNaN(lonField.value) && !isNaN(latField.value)) {
+    rawLon = parseFloat(lonField.value);
+    rawLat = parseFloat(latField.value);
+  }
+  updateMarker();
+}
+
+function updateLegend() {
+  if (visualizationMode === "grid") {
+    createHeatmapColorLegend(true);
+    if (legendCollapsed) {
+      createHeatmapColorLegend(true);
+      document.getElementById("concentration-legend").style.display = "none";
+      openLegendBtn.style.display = "inline-block";
+    } else {
+      collapseLegendBtn.style.display = "inline-block";
+    }
+  }
+
+}
 // ========== SIMULATION CORE ==========
 async function simulationStep(version) {
   if (!simulationRunning || version !== simulationVersion) return;
@@ -928,6 +926,7 @@ function loadGeoJsonResults(data) {
   updateReleaseRadius();
   showTimeline();
   updateConcentrationLayer();
+  updateLegend();
 
   map.setPaintProperty("overlay-layer", "raster-opacity", 0.05);
 
@@ -937,16 +936,6 @@ function loadGeoJsonResults(data) {
     window.currentMarker.remove();
   }
 
-  if (visualizationMode == "grid") {
-    createHeatmapColorLegend(true);
-    if (legendCollapsed) {
-      createHeatmapColorLegend(true);
-      document.getElementById("concentration-legend").style.display = "none";
-      openLegendBtn.style.display = "inline-block";
-    } else {
-      collapseLegendBtn.style.display = "inline-block";
-    }
-  }
   if (autoZoom.checked) {
     map.flyTo({
       center: [rawLon, rawLat],
@@ -1151,7 +1140,7 @@ timelineSlider.addEventListener("input", (e) =>
 
 releaseAmountField.addEventListener("input", () => {
   releaseAmount = parseFloat(releaseAmountField.value);
-  if (visualizationMode === "grid") createHeatmapColorLegend(true);
+  updateLegend();
 });
 releaseDurationField.addEventListener("input", () => {
   releaseDuration = parseFloat(releaseDurationField.value);
@@ -1170,14 +1159,6 @@ totalDaysField.addEventListener("input", () => {
 });
 latField.addEventListener("input", updatePositionFromFields);
 lonField.addEventListener("input", updatePositionFromFields);
-
-function updatePositionFromFields() {
-  if (!isNaN(lonField.value) && !isNaN(latField.value)) {
-    rawLon = parseFloat(lonField.value);
-    rawLat = parseFloat(latField.value);
-  }
-  updateMarker();
-}
 
 collapseBtn.addEventListener("click", () => {
   sidebar.style.display = "none";
