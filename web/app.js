@@ -105,7 +105,7 @@ let releaseAmount = 1000.0;
 let releaseDuration = 1.0;
 let legendCollapsed = false;
 
-const GRID_UPDATE_INTERVAL = 100;
+const GRID_UPDATE_INTERVAL = 150;
 let GRID_SIZE = 0.02;
 
 const CONCENTRATIONS = [
@@ -276,12 +276,7 @@ function updateMarker() {
 }
 
 function updateBoundingBox() {
-  const bb = proteus.get_particle_bounding_box();
-  const width = bb[1] - bb[0];
-  const height = bb[3] - bb[2];
-  if (width <= 0 || height <= 0) return;
-  GRID_SIZE = Math.max(0.02, Math.min(0.05, Math.sqrt((width * height) / 4000)));
-  boundingBox = bb;
+  boundingBox = proteus.get_particle_bounding_box();
 }
 
 function updateStatsDisplay() {
@@ -661,7 +656,6 @@ async function startSimulation() {
   simulationRunning = true;
   simulationVersion++;
   lastGridUpdate = 0;
-  GRID_SIZE = 0.02;
 
   map.setPaintProperty("overlay-layer", "raster-opacity", 0.05);
 
