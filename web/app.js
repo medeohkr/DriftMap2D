@@ -586,7 +586,7 @@ async function simulationStep(version) {
 
 function captureSnapshot(day) {
   simulationHistory.push({
-    day: day + 1,
+    day: day,
     dateStr: proteus.current_time_str(),
     stats: getStatsDisplay(),
     unstrandedGeojson: getUnstrandedGeojson(),
