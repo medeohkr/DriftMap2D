@@ -109,7 +109,7 @@ const GRID_UPDATE_INTERVAL = 100;
 let GRID_SIZE = 0.02;
 
 const CONCENTRATIONS = [
-  0.0001, 0.0002, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1,
+  0.0002, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2,
 ];
 const COLORS = [
   "rgb(60, 90, 190)",
@@ -170,6 +170,7 @@ function updateConcentrationLayer() {
     ...stops,
   ]);
 }
+
 function updateSimulationDate() {
   if (simulationHistory.length === 0) {
     let inputDate = startDate.value.split("-");
@@ -254,8 +255,8 @@ function validateSimulation() {
     errors.push(`Release amount (${releaseAmount}) must be positive.`);
   if (particleCount <= 0 || particleCount > 50000)
     errors.push(`Particle count must be between 1 and 50000.`);
-  if (spreadKm <= 0 || spreadKm > 100)
-    errors.push(`Spread radius must be between 0 and 100 km.`);
+  if (spreadKm < 0 || spreadKm > 50)
+    errors.push(`Spread radius must be between 0 and 50 km.`);
 
   return errors;
 }
@@ -276,11 +277,10 @@ function updateMarker() {
 
 function updateBoundingBox() {
   const bb = proteus.get_particle_bounding_box();
-  if (bb[0] === Infinity || bb[0] === -Infinity) return;
   const width = bb[1] - bb[0];
   const height = bb[3] - bb[2];
   if (width <= 0 || height <= 0) return;
-  GRID_SIZE = Math.max(0.02, Math.min(0.2, Math.sqrt((width * height) / 5000)));
+  GRID_SIZE = Math.max(0.02, Math.min(0.05, Math.sqrt((width * height) / 4000)));
   boundingBox = bb;
 }
 
@@ -372,7 +372,8 @@ function toggleHeatmapMode() {
   heatmapToggle.style.color = "black";
   particleToggle.style.background = "none";
   particleToggle.style.color = "white";
-  if (simulationHistory.length) updateGridVisualization();
+  if (simulationHistory.length && !playbackMode) updateGridVisualization();
+  if (playbackMode) {map.getSource("concentration").setData(simulationHistory[timelineSlider.value].heatmapGeojson); }
 }
 
 function updateParticleVisualization() {
@@ -537,12 +538,13 @@ async function simulationStep(version) {
       }
     }
 
-    if (stepCount % (stepsPerDay / 24) === 1) {
+    updateBoundingBox();
+
+    if (stepCount % (stepsPerDay / 24) === 0) {
       captureSnapshot(Math.floor(proteus.current_day()));
       updateStatsDisplay();
     }
 
-    updateBoundingBox();
 
     if (
       visualizationMode === "grid" &&
@@ -562,8 +564,7 @@ async function simulationStep(version) {
     }
 
     dayDisplay.textContent = proteus.current_time_str();
-
-    if (proteus.current_day() < totalDays) {
+    if (proteus.current_day() < totalDays + stepSize) {
       animationId = requestAnimationFrame(() => simulationStep(version));
     } else {
       simulationRunning = false;
@@ -574,9 +575,6 @@ async function simulationStep(version) {
       resumeBtn.style.display = "none";
       exportGeojsonBtn.style.display = "inline-block";
     }
-  } catch (error) {
-    console.error("Simulation step failed:", error);
-    simulationRunning = false;
   } finally {
     stepCount++;
   }
@@ -633,7 +631,6 @@ function getHeatmapGeojson() {
     lats.push(data[i + 1]);
     masses.push(data[i + 2]);
   }
-
   heatmap = new HeatmapGenerator(
     boundingBox[0] - GRID_SIZE * 2,
     boundingBox[1] + GRID_SIZE * 2,
@@ -664,8 +661,16 @@ async function startSimulation() {
   simulationRunning = true;
   simulationVersion++;
   lastGridUpdate = 0;
+  GRID_SIZE = 0.02;
 
   map.setPaintProperty("overlay-layer", "raster-opacity", 0.05);
+
+  updatePositionFromFields();
+  updateSimulationDate();
+  updateTotalDays();
+  updateReleaseAmount();
+  updateReleaseDuration();
+  updateReleaseRadius();
   updateConcentrationLayer();
 
   if (window.currentMarker) window.currentMarker.remove();
@@ -681,7 +686,6 @@ async function startSimulation() {
       duration: 2000,
     });
   }
-  if (visualizationMode === "grid") createHeatmapColorLegend(true);
 
   proteus = new Proteus(
     lon,
@@ -772,6 +776,7 @@ async function resetSimulation() {
 
   updateFields();
   updateMarker();
+  updateConcentrationLayer();
 }
 
 // ========== EXPORT/IMPORT ==========
