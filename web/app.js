@@ -189,8 +189,15 @@ function updateTotalDays() {
 function updateReleaseAmount() {
   if (simulationHistory.length === 0) {
     releaseAmount = parseFloat(releaseAmountField.value);
-    if (visualizationMode == "grid") {
+    if (visualizationMode === "grid") {
       createHeatmapColorLegend(true);
+      if (legendCollapsed) {
+        createHeatmapColorLegend(true);
+        document.getElementById("concentration-legend").style.display = "none";
+        openLegendBtn.style.display = "inline-block";
+      } else {
+        collapseLegendBtn.style.display = "inline-block";
+      }
     }
   }
 }
@@ -237,8 +244,8 @@ function validateSimulation() {
   }
   if (simStart < minDate) {
     errors.push(
-      `Start date is before available range (min ${minDate.toISOString().split("T")[0]})`
-    )
+      `Start date is before available range (min ${minDate.toISOString().split("T")[0]})`,
+    );
   }
 
   const simEnd = new Date(simStart);
@@ -250,14 +257,15 @@ function validateSimulation() {
   }
 
   if (isNaN(totalDays) || totalDays <= 0)
-    errors.push(`Total days (${totalDays}) must be positive.`);
-  if (releaseAmount <= 0)
-    errors.push(`Release amount (${releaseAmount}) must be positive.`);
-  if (particleCount <= 0 || particleCount > 50000)
+    errors.push(`Total days must be positive.`);
+  if (isNaN(releaseAmount) || releaseAmount <= 0)
+    errors.push(`Release amount must be positive.`);
+  if (isNaN(particleCount) || particleCount <= 0 || particleCount > 50000)
     errors.push(`Particle count must be between 1 and 50000.`);
-  if (spreadKm < 0 || spreadKm > 50)
+  if (isNaN(spreadKm) || spreadKm < 0 || spreadKm > 50)
     errors.push(`Spread radius must be between 0 and 50 km.`);
-
+  if (isNaN(releaseDuration) || releaseDuration < 0)
+    errors.push(`Release duration must be positive`);
   return errors;
 }
 
@@ -368,7 +376,11 @@ function toggleHeatmapMode() {
   particleToggle.style.background = "none";
   particleToggle.style.color = "white";
   if (simulationHistory.length && !playbackMode) updateGridVisualization();
-  if (playbackMode) {map.getSource("concentration").setData(simulationHistory[timelineSlider.value].heatmapGeojson); }
+  if (playbackMode) {
+    map
+      .getSource("concentration")
+      .setData(simulationHistory[timelineSlider.value].heatmapGeojson);
+  }
 }
 
 function updateParticleVisualization() {
@@ -539,7 +551,6 @@ async function simulationStep(version) {
       captureSnapshot(Math.floor(proteus.current_day()));
       updateStatsDisplay();
     }
-
 
     if (
       visualizationMode === "grid" &&
@@ -928,6 +939,13 @@ function loadGeoJsonResults(data) {
 
   if (visualizationMode == "grid") {
     createHeatmapColorLegend(true);
+    if (legendCollapsed) {
+      createHeatmapColorLegend(true);
+      document.getElementById("concentration-legend").style.display = "none";
+      openLegendBtn.style.display = "inline-block";
+    } else {
+      collapseLegendBtn.style.display = "inline-block";
+    }
   }
   if (autoZoom.checked) {
     map.flyTo({
