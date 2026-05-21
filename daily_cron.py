@@ -303,8 +303,7 @@ def main():
     
     # Step 2: Download ECMWF once (contains all forecast steps)
     print("\n📡 Step 2: Downloading ECMWF forecast...")
-    # wind_file = download_ecmwf()
-    wind_file = "D:\projects\driftmap\data\ecmwf\ecmwf_20260520_00z.grib2"
+    wind_file = download_ecmwf()
     if not wind_file:
         print("  ❌ Failed to get ECMWF data. Exiting.")
         sys.exit(1)

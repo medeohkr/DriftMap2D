@@ -451,8 +451,7 @@ impl DataLoader {
         let n_lon_wind = u32::from_le_bytes([bytes[offset], bytes[offset + 1], bytes[offset + 2], bytes[offset + 3]]) as usize;
         let n_lat_wind = u32::from_le_bytes([bytes[offset + 4], bytes[offset + 5], bytes[offset + 6], bytes[offset + 7]]) as usize;
         let n_steps = u32::from_le_bytes([bytes[offset + 8], bytes[offset + 9], bytes[offset + 10], bytes[offset + 11]]) as usize;
-        // let n_steps = 4;
-        log!("{n_lon_wind}, {n_lat_wind} {n_steps}");
+
         offset += 12;
         
         let n_cells_wind = n_lon_wind * n_lat_wind;
