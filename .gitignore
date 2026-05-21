@@ -8,3 +8,4 @@ web/.wrangler/
 .wrangler/
 roaring_landmask/
 web/images/
+scripts/archive/

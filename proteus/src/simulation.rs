@@ -170,20 +170,32 @@ impl Simulation {
 
         // ---- Apply positions, diffusion, and stranding ----
         for (i, &(idx, lon, lat, depth)) in unstranded_data.iter().enumerate() {
-            let (new_lon, new_lat) = new_positions[i];
-
+            let (mut new_lon, mut new_lat) = new_positions[i];
+            
+            // NORMALIZE FIRST - before any data queries
+            while new_lon < -180.0 { new_lon += 360.0; }
+            while new_lon >= 180.0 { new_lon -= 360.0; }
+            new_lat = new_lat.clamp(-80.0, 90.0);
+            
             let diff_damp = oil_weathering::diffusion_damping(
                 self.particles.y_w[idx],
                 y_w_final_ref,
             );
 
+            // Now use the normalized position for diffusion
             let (dx, dy) = self.diffusion.smagorinsky_step(
-                loader, lon, lat, depth, loader.current_day, dt_days, hour, diff_damp,
+                loader, new_lon, new_lat, depth, loader.current_day, dt_days, hour, diff_damp,
             );
 
             let final_lon = new_lon + dx;
             let final_lat = new_lat + dy;
 
+            // Normalize again after adding diffusion offset
+            let mut final_lon = final_lon;
+            while final_lon < -180.0 { final_lon += 360.0; }
+            while final_lon >= 180.0 { final_lon -= 360.0; }
+            let final_lat = final_lat.clamp(-80.0, 90.0);
+            
             if landmask.is_on_land(final_lon, final_lat) {
                 self.particles.stranded[idx] = true;
             }
