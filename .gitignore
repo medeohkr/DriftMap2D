@@ -2,7 +2,6 @@ web/data/
 target/
 web/pkg/
 data/
-scripts/
 .vscode/
 wrangler.toml
 web/.wrangler/

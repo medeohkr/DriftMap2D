@@ -107,7 +107,7 @@ impl Simulation {
         for (i, &(idx, _, _, _)) in unstranded_data.iter().enumerate() {
             let ((_cu, _cv), (wu_raw, wv_raw), sst) = env_data[i];
             let wind_speed = (wu_raw * wu_raw + wv_raw * wv_raw).sqrt();
-
+            // log!("{wind_speed}");
             oil_weathering::step_particle_weathering(
                 &mut self.particles,
                 idx,

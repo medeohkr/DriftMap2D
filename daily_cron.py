@@ -3,7 +3,6 @@
 Daily forecast update: download ECMWF once, then SMOC day by day,
 tile immediately, upload to R2.
 """
-
 import os
 import sys
 import struct
@@ -87,7 +86,7 @@ def download_ecmwf():
     
     print(f"📡 Downloading ECMWF forecast (initialized {date_str})...")
     
-    for source in ["aws", "ecmwf"]:
+    for source in ["ecmwf", "aws"]:
         try:
             client = Client(source=source)
             client.retrieve(
@@ -165,10 +164,10 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
     n_hours = 24
     
     # Get wind data for this specific day from the cached global wind
-    # Each day has 4 wind steps (6-hourly: 0, 6, 12, 18 UTC)
     day_offset = (date - wind_data_cache['reference_date']).days
     wind_start_step = day_offset * 4
     wind_end_step = wind_start_step + 4
+    print(f"    Wind steps: {wind_start_step} to {wind_end_step}, day offset: {day_offset}")
     
     u_wind_global = wind_data_cache['u_wind'][wind_start_step:wind_end_step]
     v_wind_global = wind_data_cache['v_wind'][wind_start_step:wind_end_step]
@@ -176,6 +175,16 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
     wind_lons = wind_data_cache['lons']
     wind_lats = wind_data_cache['lats']
     n_wind_steps = 4
+    
+    # FIX 1: Reverse latitude dimension to ascending order (-90 to 90)
+    # ECMWF provides latitudes descending (90 to -90), but we need ascending
+    wind_lats = wind_lats[::-1]  # Now -90 to 90
+    u_wind_global = u_wind_global[:, ::-1, :]  # Reverse lat dimension for all steps
+    v_wind_global = v_wind_global[:, ::-1, :]
+    sst_global = sst_global[:, ::-1, :]
+    
+    print(f"    Normalized wind coords: lon[{wind_lons[0]:.1f} to {wind_lons[-1]:.1f}], "
+          f"lat[{wind_lats[0]:.1f} to {wind_lats[-1]:.1f}]")
     
     day_dir = TILES_DIR / date.strftime("%Y/%m/%d")
     day_dir.mkdir(parents=True, exist_ok=True)
@@ -198,8 +207,16 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
             # Extract wind for this tile
             wind_lon_mask = (wind_lons >= lon_min) & (wind_lons < lon_max)
             wind_lat_mask = (wind_lats >= lat_min) & (wind_lats < lat_max)
-            wind_lon_idx = np.where(wind_lon_mask)[0]
-            wind_lat_idx = np.where(wind_lat_mask)[0]
+            wind_lon_indices = np.where(wind_lon_mask)[0]
+            wind_lat_indices = np.where(wind_lat_mask)[0]
+            
+            if len(wind_lon_indices) == 0 or len(wind_lat_indices) == 0:
+                print(f"      ⚠️ No wind data for tile ({tilex},{tiley})")
+                wind_nlon = 0
+                wind_nlat = 0
+            else:
+                wind_nlon = len(wind_lon_indices)
+                wind_nlat = len(wind_lat_indices)
             
             tile_path = day_dir / f"{tilex:03d}_{tiley:03d}.bin"
             
@@ -220,41 +237,38 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
                         u_tile.tofile(f)
                         v_tile.tofile(f)
                     
-                    # Wind header (only 4 steps per day)
-                    if len(wind_lon_idx) > 0 and len(wind_lat_idx) > 0:
-                        wind_nlon = len(wind_lon_idx)
-                        wind_nlat = len(wind_lat_idx)
-                        
-                        f.write(struct.pack('<I', wind_nlon))
-                        f.write(struct.pack('<I', wind_nlat))
-                        f.write(struct.pack('<I', n_wind_steps))
-                        
+                    # Wind header
+                    f.write(struct.pack('<I', wind_nlon))
+                    f.write(struct.pack('<I', wind_nlat))
+                    f.write(struct.pack('<I', n_wind_steps))
+                    
+                    if wind_nlon > 0 and wind_nlat > 0:
+                        # FIX 2: Interleave wind and SST by step (u, v, sst for each step)
                         for h in range(n_wind_steps):
-                            u_w = u_wind_global[h, wind_lat_idx[0]:wind_lat_idx[-1]+1, wind_lon_idx[0]:wind_lon_idx[-1]+1]
-                            v_w = v_wind_global[h, wind_lat_idx[0]:wind_lat_idx[-1]+1, wind_lon_idx[0]:wind_lon_idx[-1]+1]
+                            u_w = u_wind_global[h][np.ix_(wind_lat_indices, wind_lon_indices)]
+                            v_w = v_wind_global[h][np.ix_(wind_lat_indices, wind_lon_indices)]
+                            s = sst_global[h][np.ix_(wind_lat_indices, wind_lon_indices)]
+                            
                             u_w = np.nan_to_num(u_w, nan=0.0).astype(np.float16)
                             v_w = np.nan_to_num(v_w, nan=0.0).astype(np.float16)
+                            s = np.nan_to_num(s, nan=273.15).astype(np.float16)
+                            
                             u_w.tofile(f)
                             v_w.tofile(f)
-                        
-                        for h in range(n_wind_steps):
-                            s = sst_global[h, wind_lat_idx[0]:wind_lat_idx[-1]+1, wind_lon_idx[0]:wind_lon_idx[-1]+1]
-                            s = np.nan_to_num(s, nan=273.15).astype(np.float16)
                             s.tofile(f)
-                    else:
-                        f.write(struct.pack('<I', 0))
-                        f.write(struct.pack('<I', 0))
-                        f.write(struct.pack('<I', 0))
                 
                 tiles += 1
             except Exception as e:
                 print(f"      ⚠️ Tile ({tilex},{tiley}) failed: {e}")
+                import traceback
+                traceback.print_exc()
                 if tile_path.exists():
                     tile_path.unlink()
     
     ds.close()
     
-    # Upload tiles for this day
+    # Upload tiles for this day to R2
+    print(f"    📤 Uploading {tiles} tiles to R2...")
     uploaded = 0
     for bin_file in day_dir.glob("*.bin"):
         key = f"tiles/{date.strftime('%Y/%m/%d')}/{bin_file.name}"
@@ -266,12 +280,12 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
     
     print(f"    ✅ Tiled and uploaded: {uploaded}/{tiles} tiles")
     
-    # Clean up
+    # Clean up local files
     shutil.rmtree(day_dir)
-    os.remove(nc_file)
+    if nc_file.exists():
+        os.remove(nc_file)
     
-    return tiles
-
+    return uploaded
 
 def main():
     print(f"\n{'='*60}")
@@ -289,7 +303,8 @@ def main():
     
     # Step 2: Download ECMWF once (contains all forecast steps)
     print("\n📡 Step 2: Downloading ECMWF forecast...")
-    wind_file = download_ecmwf()
+    # wind_file = download_ecmwf()
+    wind_file = "D:\projects\driftmap\data\ecmwf\ecmwf_20260520_00z.grib2"
     if not wind_file:
         print("  ❌ Failed to get ECMWF data. Exiting.")
         sys.exit(1)
