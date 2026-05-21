@@ -356,17 +356,44 @@ impl DataLoader {
 
         results
     }
-
+    /// Get just current velocities (no wind/SST) for multiple positions
+    pub fn get_velocities_batch(
+        &self,
+        positions: &[(f32, f32)],
+        depth: f32,
+        day: u32,
+        hour: u32,
+    ) -> Vec<(f32, f32)> {
+        let positions_3d: Vec<(f32, f32, f32)> = positions.iter()
+            .map(|&(lon, lat)| (lon, lat, depth))
+            .collect();
+        
+        let env_data = self.get_velocities_wind_sst(&positions_3d, day, hour);
+        
+        env_data.into_iter()
+            .map(|((cu, cv), _, _)| (cu, cv))
+            .collect()
+    }
     fn fetch_tiles(&self, particles: &Particles) -> HashSet<TileKey> {
         let (xmin, xmax, ymin, ymax) = particles.bounding_box();
         if xmin == f32::MAX {
             return HashSet::new();
         }
         
+        // log!("Bounding box: x[{}, {}], y[{}, {}]", xmin, xmax, ymin, ymax);
+        
         let lon_min_idx = ((xmin - self.min_lon) / self.tile_size).floor() as usize;
         let lon_max_idx = ((xmax - self.min_lon) / self.tile_size).floor() as usize;
         let lat_min_idx = ((ymin - self.min_lat) / self.tile_size).floor() as usize;
         let lat_max_idx = ((ymax - self.min_lat) / self.tile_size).floor() as usize;
+        
+        // log!("Tile range: lon[{}..{}], lat[{}..{}]", lon_min_idx, lon_max_idx, lat_min_idx, lat_max_idx);
+        
+        // FIX: Clamp to valid tile ranges
+        let lon_min_idx = lon_min_idx.min(35);
+        let lon_max_idx = lon_max_idx.min(35);
+        let lat_min_idx = lat_min_idx.min(16);
+        let lat_max_idx = lat_max_idx.min(16);
         
         let mut tiles = HashSet::new();
         for lon_idx in lon_min_idx..=lon_max_idx {
@@ -527,23 +554,55 @@ impl DataLoader {
     }
     
     pub fn get_tile_key(&self, lon: f32, lat: f32, day: u32) -> TileKey {
-        let lon_idx = ((lon - self.min_lon) / self.tile_size).floor() as usize;
-        let lat_idx = ((lat - self.min_lat) / self.tile_size).floor() as usize;
-        TileKey { lon_idx, lat_idx, day }
+        let lon_idx = ((lon - self.min_lon) / self.tile_size).floor() as i32;
+        let lat_idx = ((lat - self.min_lat) / self.tile_size).floor() as i32;
+        
+        let key = TileKey {
+            lon_idx: lon_idx.max(0).min(35) as usize,
+            lat_idx: lat_idx.max(0).min(16) as usize,
+            day,
+        };
+        
+        // Debug if near boundaries
+        // if lon > 179.0 || lon < -179.0 {
+        //     // log!("get_tile_key: lon={:.4}, lat={:.4} -> tile ({}, {})", 
+        //         lon, lat, key.lon_idx, key.lat_idx);
+        // }
+        
+        key
     }
     
     pub fn get_cell_index(&self, lon: f32, lat: f32, tile: &TileData, lon_step: f32, lat_step: f32) -> (usize, usize) {
-        let tile_min_lon = self.min_lon + ((lon - self.min_lon) / self.tile_size).floor() * self.tile_size;
-        let tile_min_lat = self.min_lat + ((lat - self.min_lat) / self.tile_size).floor() * self.tile_size;
+        let tile_lon_idx = ((lon - self.min_lon) / self.tile_size).floor() as i32;
+        let tile_lat_idx = ((lat - self.min_lat) / self.tile_size).floor() as i32;
         
-        let lon_cell = ((lon - tile_min_lon) / lon_step).floor() as usize;
-        let lat_cell = ((lat - tile_min_lat) / lat_step).floor() as usize;
+        let tile_min_lon = self.min_lon + (tile_lon_idx as f32) * self.tile_size;
+        let tile_min_lat = self.min_lat + (tile_lat_idx as f32) * self.tile_size;
         
-        (lon_cell.clamp(0, tile.n_lon - 2), lat_cell.clamp(0, tile.n_lat - 2))
+        let lon_cell = ((lon - tile_min_lon) / lon_step).floor() as i32;
+        let lat_cell = ((lat - tile_min_lat) / lat_step).floor() as i32;
+        
+        // Debug boundary issues
+        // if lon_cell < 0 || lon_cell >= tile.n_lon as i32 || lat_cell < 0 || lat_cell >= tile.n_lat as i32 {
+        //     log!("get_cell_index OUT OF BOUNDS: lon={:.4}, lat={:.4}", lon, lat);
+        //     log!("  tile_min=({:.4},{:.4}), lon_cell={}, lat_cell={}, tile_nlon={}, tile_nlat={}",
+        //         tile_min_lon, tile_min_lat, lon_cell, lat_cell, tile.n_lon, tile.n_lat);
+        // }
+        
+        let lon_cell = lon_cell.max(0).min(tile.n_lon as i32 - 2) as usize;
+        let lat_cell = lat_cell.max(0).min(tile.n_lat as i32 - 2) as usize;
+        
+        (lon_cell, lat_cell)
     }
     
     pub fn set_current_day(&mut self, day: u32, hour: u32) {
         self.current_day = day;
         self.current_hour = hour;
+    }
+    pub fn normalize_lon(&self, lon: f32) -> f32 {
+        let mut lon = lon;
+        while lon < -180.0 { lon += 360.0; }
+        while lon >= 180.0 { lon -= 360.0; }
+        lon
     }
 }

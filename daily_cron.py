@@ -126,7 +126,7 @@ def download_smoc_day(date):
         dataset_id="cmems_mod_glo_phy_anfc_merged-uv_PT1H-i",
         variables=["utotal", "vtotal"],
         minimum_longitude=-180,
-        maximum_longitude=179.916,
+        maximum_longitude=179.9166717529297,
         minimum_latitude=-80,
         maximum_latitude=90,
         start_datetime=date.strftime("%Y-%m-%dT00:00:00"),
@@ -193,7 +193,11 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
     for tilex in range(N_LON_TILES):
         lon_min = -180 + TILE_SIZE * tilex
         lon_max = lon_min + TILE_SIZE
-        lon_idx = np.where((lons >= lon_min) & (lons < lon_max))[0]
+        # For the last longitude tile (tilex=35)
+        if tilex == N_LON_TILES - 1:
+            lon_idx = np.where((lons >= lon_min) & (lons <= 180.0))[0]  # Include 180.0
+        else:
+            lon_idx = np.where((lons >= lon_min) & (lons < lon_max))[0]
         if len(lon_idx) == 0:
             continue
         

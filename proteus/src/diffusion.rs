@@ -36,10 +36,21 @@ impl Diffusion {
         let dx = 0.01;
         let dy = 0.01;
 
-        let (updx, vpdx) = loader.get_velocity(lon + dx, lat, depth, day, hour).unwrap_or((0.0, 0.0));
-        let (umdx, vmdx) = loader.get_velocity(lon - dx, lat, depth, day, hour).unwrap_or((0.0, 0.0));
-        let (updy, vpdy) = loader.get_velocity(lon, lat + dy, depth, day, hour).unwrap_or((0.0, 0.0));
-        let (umdy, vmdy) = loader.get_velocity(lon, lat - dy, depth, day, hour).unwrap_or((0.0, 0.0));
+        // Batch all 4 probe positions
+        let probes = [
+            (loader.normalize_lon(lon + dx), lat),
+            (loader.normalize_lon(lon - dx), lat),
+            (lon, (lat + dy).clamp(-80.0, 90.0)),
+            (lon, (lat - dy).clamp(-80.0, 90.0)),
+        ];
+        
+        // Query all velocities in one batch call
+        let velocities = loader.get_velocities_batch(&probes, depth, day, hour);
+        
+        let (updx, vpdx) = velocities[0];
+        let (umdx, vmdx) = velocities[1];
+        let (updy, vpdy) = velocities[2];
+        let (umdy, vmdy) = velocities[3];
 
         let dudx = (updx - umdx) / (2.0 * dx);
         let dudy = (updy - umdy) / (2.0 * dy);
@@ -54,6 +65,7 @@ impl Diffusion {
         let k = k.max(0.01);
         let dt_seconds = dt_days * 86400.0;
         let sigma = (2.0 * k * dt_seconds).sqrt();
+        let sigma = sigma.min(1000.0);
 
         let dx_meters = self.normal.sample(&mut self.rng) * sigma;
         let dy_meters = self.normal.sample(&mut self.rng) * sigma;
