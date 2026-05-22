@@ -38,8 +38,8 @@ impl Diffusion {
 
         // Batch all 4 probe positions
         let probes = [
-            (loader.normalize_lon(lon + dx), lat),
-            (loader.normalize_lon(lon - dx), lat),
+            (lon + dx, lat),
+            (lon - dx, lat),
             (lon, (lat + dy).clamp(-80.0, 90.0)),
             (lon, (lat - dy).clamp(-80.0, 90.0)),
         ];

@@ -270,27 +270,6 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
                     tile_path.unlink()
     
     ds.close()
-    
-    # Upload tiles for this day to R2
-    print(f"    📤 Uploading {tiles} tiles to R2...")
-    uploaded = 0
-    for bin_file in day_dir.glob("*.bin"):
-        key = f"tiles/{date.strftime('%Y/%m/%d')}/{bin_file.name}"
-        try:
-            s3.upload_file(str(bin_file), BUCKET, key)
-            uploaded += 1
-        except Exception as e:
-            print(f"      ❌ Upload failed: {bin_file.name} - {e}")
-    
-    print(f"    ✅ Tiled and uploaded: {uploaded}/{tiles} tiles")
-    
-    # Clean up local files
-    shutil.rmtree(day_dir)
-    if nc_file.exists():
-        os.remove(nc_file)
-    
-    return uploaded
-
 def main():
     print(f"\n{'='*60}")
     print(f"🌊 Daily tile update: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
@@ -298,7 +277,7 @@ def main():
     
     # Delete oldest day from R2
     print("\n🗑️  Step 1: Removing days outside rolling window...")
-    delete_oldest_day()
+    # delete_oldest_day()
     
     # Prepare directories
     TILES_DIR.mkdir(parents=True, exist_ok=True)
@@ -350,9 +329,7 @@ def main():
             continue
         
         # Tile and upload this day
-        tiles = tile_and_upload_day(day_date, wind_file, wind_data_cache)
-        total_tiles += tiles
-        print(f"    Cumulative tiles: {total_tiles}")
+        tile_and_upload_day(day_date, wind_file, wind_data_cache)
     
     # Clean up wind file
     if wind_file and Path(wind_file).exists():

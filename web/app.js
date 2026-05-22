@@ -275,6 +275,7 @@ function updateMarker() {
 
 function updateBoundingBox() {
   boundingBox = proteus.get_particle_bounding_box();
+  // console.log(`${boundingBox[0]}min ${boundingBox[1]}max`)
 }
 
 function updateStatsDisplay() {
