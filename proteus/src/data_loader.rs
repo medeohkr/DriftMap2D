@@ -92,6 +92,7 @@ impl DataLoader {
     
     /// Load tiles for a given day. One request gets all 24 hours.
     pub async fn load_by_date(&mut self, date: u32, tiles: &HashSet<TileKey>) -> Result<(), LoaderError> {
+            log!("load_by_date: {} tiles: {:?}", tiles.len(), tiles.iter().map(|t| (t.lon_idx, t.lat_idx)).collect::<Vec<_>>());
         for tile in tiles {
             if self.cache.contains_key(tile) || self.pending.contains(tile) {
                 continue;
@@ -114,126 +115,6 @@ impl DataLoader {
         Ok(())
     }
     
-    /// Get velocity at a specific hour. Hour is an INDEX (0-23) into the loaded daily tile.
-    pub fn get_velocity(&self, lon: f32, lat: f32, depth_m: f32, day: u32, hour: u32) -> Option<(f32, f32)> {
-        let key = self.get_tile_key(lon, lat, day);
-        let tile_data = self.cache.get(&key)?;
-        
-        // Clamp hour to what's available
-        let h = (hour as usize).min(tile_data.n_hours.saturating_sub(1));
-        
-        let (lon_cell, lat_cell) = self.get_cell_index(lon, lat, tile_data, self.lon_step, self.lat_step);
-        let (depth_idx, t) = find_depth_indices(&tile_data.depths, depth_m);
-
-        let cells_per_hour = tile_data.n_lon * tile_data.n_lat;
-        let hour_offset = h * cells_per_hour;  // Jump to this hour's data
-        let stride = cells_per_hour;
-        
-        let idx_bot = hour_offset + depth_idx * stride + lat_cell * tile_data.n_lon + lon_cell;
-        
-        // Bottom layer corners
-        let u0 = tile_data.u[idx_bot];
-        let v0 = tile_data.v[idx_bot];
-        let u1 = tile_data.u[idx_bot + 1];
-        let v1 = tile_data.v[idx_bot + 1];
-        let u2 = tile_data.u[idx_bot + tile_data.n_lon];
-        let v2 = tile_data.v[idx_bot + tile_data.n_lon];
-        let u3 = tile_data.u[idx_bot + tile_data.n_lon + 1];
-        let v3 = tile_data.v[idx_bot + tile_data.n_lon + 1];
-
-        // Vertical interpolation
-        // let (uz0, vz0, uz1, vz1, uz2, vz2, uz3, vz3) = 
-        //     if depth_idx + 1 < tile_data.depths.len() {
-        //         let idx_top = hour_offset + (depth_idx + 1) * stride + lat_cell * tile_data.n_lon + lon_cell;
-        //         (
-        //             lerp(u0, tile_data.u[idx_top], t),
-        //             lerp(v0, tile_data.v[idx_top], t),
-        //             lerp(u1, tile_data.u[idx_top + 1], t),
-        //             lerp(v1, tile_data.v[idx_top + 1], t),
-        //             lerp(u2, tile_data.u[idx_top + tile_data.n_lon], t),
-        //             lerp(v2, tile_data.v[idx_top + tile_data.n_lon], t),
-        //             lerp(u3, tile_data.u[idx_top + tile_data.n_lon + 1], t),
-        //             lerp(v3, tile_data.v[idx_top + tile_data.n_lon + 1], t),
-        //         )
-        //     } else {
-        //         (u0, v0, u1, v1, u2, v2, u3, v3)
-        //     };
-        
-        // Bilinear interpolation
-        let tile_min_lon = self.min_lon + (key.lon_idx as f32) * self.tile_size;
-        let tile_min_lat = self.min_lat + (key.lat_idx as f32) * self.tile_size;
-        let cell_lon_min = tile_min_lon + (lon_cell as f32) * self.lon_step;
-        let cell_lat_min = tile_min_lat + (lat_cell as f32) * self.lat_step;
-        let x_frac = (lon - cell_lon_min) / self.lon_step;
-        let y_frac = (lat - cell_lat_min) / self.lat_step;
-        
-        let u_interp = lerp(lerp(u0, u1, x_frac), lerp(u2, u3, x_frac), y_frac);
-        let v_interp = lerp(lerp(v0, v1, x_frac), lerp(v2, v3, x_frac), y_frac);
-        
-        let meters_per_degree_lat = 111_120.0;
-        let meters_per_degree_lon = 111_120.0 * lat.to_radians().cos();
-        
-        Some((
-            u_interp / meters_per_degree_lon,
-            v_interp / meters_per_degree_lat,
-        ))
-    }
-    pub fn get_wind(&self, lon: f32, lat: f32, day: u32, hour: u32) -> Option<(f32, f32)> {
-        let key = self.get_tile_key(lon, lat, day);
-        let tile_data = self.cache.get(&key)?;
-        
-        // Return None if tile has no wind data
-        if tile_data.n_steps == 0 || tile_data.u_wind.is_empty() {
-            return None;
-        }
-        let wind_step = ((hour / 6) as usize).min(tile_data.n_steps.saturating_sub(1));
-        
-        let (lon_cell, lat_cell) = self.get_cell_index(
-            lon, lat, tile_data, self.lon_step_wind, self.lat_step_wind
-        );
-        
-        let cells_per_step = tile_data.n_lon_wind * tile_data.n_lat_wind;
-        let step_offset = wind_step * cells_per_step;
-        
-        let idx = step_offset + lat_cell * tile_data.n_lon_wind + lon_cell;
-        
-        let u0 = tile_data.u_wind[idx];
-        let v0 = tile_data.v_wind[idx];
-        let u1 = tile_data.u_wind[idx + 1];
-        let v1 = tile_data.v_wind[idx + 1];
-        let u2 = tile_data.u_wind[idx + tile_data.n_lon_wind];
-        let v2 = tile_data.v_wind[idx + tile_data.n_lon_wind];
-        let u3 = tile_data.u_wind[idx + tile_data.n_lon_wind + 1];
-        let v3 = tile_data.v_wind[idx + tile_data.n_lon_wind + 1];
-        
-        let tile_min_lon = self.min_lon + (key.lon_idx as f32) * self.tile_size;
-        let tile_min_lat = self.min_lat + (key.lat_idx as f32) * self.tile_size;
-        let cell_lon_min = tile_min_lon + (lon_cell as f32) * self.lon_step_wind;
-        let cell_lat_min = tile_min_lat + (lat_cell as f32) * self.lat_step_wind;
-        let x_frac = (lon - cell_lon_min) / self.lon_step_wind;
-        let y_frac = (lat - cell_lat_min) / self.lat_step_wind;
-        
-        let u_interp = lerp(lerp(u0, u1, x_frac), lerp(u2, u3, x_frac), y_frac);
-        let v_interp = lerp(lerp(v0, v1, x_frac), lerp(v2, v3, x_frac), y_frac);
-        
-        let wind_speed = (u_interp * u_interp + v_interp * v_interp).sqrt().max(0.1);
-        let theta_deg = 25.0 * (-wind_speed.powi(3) / 1184.75).exp();
-        let theta = if lat >= 0.0 { theta_deg.to_radians() } else { -theta_deg.to_radians() };
-        let cos_t = theta.cos();
-        let sin_t = theta.sin();
-        
-        let u_drift = 0.03 * (u_interp * cos_t - v_interp * sin_t);
-        let v_drift = 0.03 * (u_interp * sin_t + v_interp * cos_t);
-        
-        // Convert m/s to deg/s
-        let meters_per_degree_lat = 111_120.0;
-        let meters_per_degree_lon = 111_120.0 * lat.to_radians().cos();
-        
-        Some((
-            u_drift / meters_per_degree_lon,
-            v_drift / meters_per_degree_lat,
-        ))
-    }
     pub fn get_velocities_wind_sst(
         &self,
         positions: &[(f32, f32, f32)],
@@ -241,8 +122,8 @@ impl DataLoader {
         hour: u32,
     ) -> Vec<((f32, f32), (f32, f32), f32)> {
         let mut groups: HashMap<TileKey, Vec<(usize, (f32, f32, f32))>> = HashMap::new();
-
         for (i, &(lon, lat, depth)) in positions.iter().enumerate() {
+            let lon = self.normalize_lon(lon);
             let key = self.get_tile_key(lon, lat, day);
             groups.entry(key).or_insert_with(Vec::new).push((i, (lon, lat, depth)));
         }
@@ -272,7 +153,7 @@ impl DataLoader {
 
                 for (idx, (lon, lat, depth)) in group {
                     // ---- Current velocity (bilinear at 1/12°) ----
-                    let (lon_cell, lat_cell) = self.get_cell_index(lon, lat, tile, self.lon_step, self.lat_step);
+                    let (lon_cell, lat_cell) = self.get_cell_index(lon, lat, tile, self.lon_step, self.lat_step, tile_min_lon, tile_min_lat);
                     let cell_lon_min = tile_min_lon + (lon_cell as f32) * self.lon_step;
                     let cell_lat_min = tile_min_lat + (lat_cell as f32) * self.lat_step;
                     let x_frac = ((lon - cell_lon_min) / self.lon_step).clamp(0.0, 1.0);
@@ -304,7 +185,7 @@ impl DataLoader {
 
                     // ---- Wind (raw 10m components, no drift angle applied) ----
                     let wind_raw = if has_wind {
-                        let (wlon_cell, wlat_cell) = self.get_cell_index(lon, lat, tile, self.lon_step_wind, self.lat_step_wind);
+                        let (wlon_cell, wlat_cell) = self.get_cell_index(lon, lat, tile, self.lon_step_wind, self.lat_step_wind, tile_min_lon, tile_min_lat);
                         let wcell_lon_min = tile_min_lon + (wlon_cell as f32) * self.lon_step_wind;
                         let wcell_lat_min = tile_min_lat + (wlat_cell as f32) * self.lat_step_wind;
                         let wx_frac = ((lon - wcell_lon_min) / self.lon_step_wind).clamp(0.0, 1.0);
@@ -331,7 +212,7 @@ impl DataLoader {
 
                     // ---- SST (bilinear at 0.25°) ----
                     let sst = if has_sst && has_wind {
-                        let (wlon_cell, wlat_cell) = self.get_cell_index(lon, lat, tile, self.lon_step_wind, self.lat_step_wind);
+                        let (wlon_cell, wlat_cell) = self.get_cell_index(lon, lat, tile, self.lon_step_wind, self.lat_step_wind, tile_min_lon, tile_min_lat);
                         let wcell_lon_min = tile_min_lon + (wlon_cell as f32) * self.lon_step_wind;
                         let wcell_lat_min = tile_min_lat + (wlat_cell as f32) * self.lat_step_wind;
                         let wx_frac = ((lon - wcell_lon_min) / self.lon_step_wind).clamp(0.0, 1.0);
@@ -375,36 +256,31 @@ impl DataLoader {
             .collect()
     }
     fn fetch_tiles(&self, particles: &Particles) -> HashSet<TileKey> {
-        let (xmin, xmax, ymin, ymax) = particles.bounding_box();
-        if xmin == f32::MAX {
-            return HashSet::new();
-        }
-        
-        // log!("Bounding box: x[{}, {}], y[{}, {}]", xmin, xmax, ymin, ymax);
-        
-        let lon_min_idx = ((xmin - self.min_lon) / self.tile_size).floor() as usize;
-        let lon_max_idx = ((xmax - self.min_lon) / self.tile_size).floor() as usize;
-        let lat_min_idx = ((ymin - self.min_lat) / self.tile_size).floor() as usize;
-        let lat_max_idx = ((ymax - self.min_lat) / self.tile_size).floor() as usize;
-        
-        // log!("Tile range: lon[{}..{}], lat[{}..{}]", lon_min_idx, lon_max_idx, lat_min_idx, lat_max_idx);
-        
-        // FIX: Clamp to valid tile ranges
-        let lon_min_idx = lon_min_idx.min(35);
-        let lon_max_idx = lon_max_idx.min(35);
-        let lat_min_idx = lat_min_idx.min(16);
-        let lat_max_idx = lat_max_idx.min(16);
-        
         let mut tiles = HashSet::new();
-        for lon_idx in lon_min_idx..=lon_max_idx {
-            for lat_idx in lat_min_idx..=lat_max_idx {
+        
+        for i in 0..particles.len {
+            if !particles.active[i] || particles.stranded[i] {
+                continue;
+            }
+            
+            let lon = particles.x[i];
+            let lat = particles.y[i];
+            
+            // Normalize before calculating tile index
+            let lon = self.normalize_lon(lon);
+            
+            let lon_idx = ((lon - self.min_lon) / self.tile_size).floor() as i32;
+            let lat_idx = ((lat - self.min_lat) / self.tile_size).floor() as i32;
+            
+            if lon_idx >= 0 && lon_idx < 36 && lat_idx >= 0 && lat_idx < 17 {
                 tiles.insert(TileKey {
-                    lon_idx,
-                    lat_idx,
+                    lon_idx: lon_idx as usize,
+                    lat_idx: lat_idx as usize,
                     day: self.current_day,
                 });
             }
         }
+        
         tiles
     }
     
@@ -563,35 +439,16 @@ impl DataLoader {
             day,
         };
         
-        // Debug if near boundaries
-        // if lon > 179.0 || lon < -179.0 {
-        //     // log!("get_tile_key: lon={:.4}, lat={:.4} -> tile ({}, {})", 
-        //         lon, lat, key.lon_idx, key.lat_idx);
-        // }
-        
         key
     }
     
-    pub fn get_cell_index(&self, lon: f32, lat: f32, tile: &TileData, lon_step: f32, lat_step: f32) -> (usize, usize) {
-        let tile_lon_idx = ((lon - self.min_lon) / self.tile_size).floor() as i32;
-        let tile_lat_idx = ((lat - self.min_lat) / self.tile_size).floor() as i32;
-        
-        let tile_min_lon = self.min_lon + (tile_lon_idx as f32) * self.tile_size;
-        let tile_min_lat = self.min_lat + (tile_lat_idx as f32) * self.tile_size;
-        
+    pub fn get_cell_index(&self, lon: f32, lat: f32, tile: &TileData, lon_step: f32, lat_step: f32, tile_min_lon: f32, tile_min_lat: f32) -> (usize, usize) {
         let lon_cell = ((lon - tile_min_lon) / lon_step).floor() as i32;
         let lat_cell = ((lat - tile_min_lat) / lat_step).floor() as i32;
-        
-        // Debug boundary issues
-        // if lon_cell < 0 || lon_cell >= tile.n_lon as i32 || lat_cell < 0 || lat_cell >= tile.n_lat as i32 {
-        //     log!("get_cell_index OUT OF BOUNDS: lon={:.4}, lat={:.4}", lon, lat);
-        //     log!("  tile_min=({:.4},{:.4}), lon_cell={}, lat_cell={}, tile_nlon={}, tile_nlat={}",
-        //         tile_min_lon, tile_min_lat, lon_cell, lat_cell, tile.n_lon, tile.n_lat);
-        // }
-        
+
         let lon_cell = lon_cell.max(0).min(tile.n_lon as i32 - 2) as usize;
         let lat_cell = lat_cell.max(0).min(tile.n_lat as i32 - 2) as usize;
-        
+
         (lon_cell, lat_cell)
     }
     

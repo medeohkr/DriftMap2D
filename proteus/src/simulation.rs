@@ -59,6 +59,12 @@ impl Simulation {
         hour: u32,
         landmask: &LandMaskLoader,
     ) {
+        for i in 0..self.particles.len {
+            if self.particles.active[i] {
+                while self.particles.x[i] < -180.0 { self.particles.x[i] += 360.0; }
+                while self.particles.x[i] >= 180.0 { self.particles.x[i] -= 360.0; }
+            }
+        }
         let dt: f32 = dt_days * 86400.0;
         let props = self.oil_type.properties();
         let y_w_final_ref = props.y_w_final_max;
