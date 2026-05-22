@@ -92,7 +92,7 @@ impl DataLoader {
     
     /// Load tiles for a given day. One request gets all 24 hours.
     pub async fn load_by_date(&mut self, date: u32, tiles: &HashSet<TileKey>) -> Result<(), LoaderError> {
-            log!("load_by_date: {} tiles: {:?}", tiles.len(), tiles.iter().map(|t| (t.lon_idx, t.lat_idx)).collect::<Vec<_>>());
+            // log!("load_by_date: {} tiles: {:?}", tiles.len(), tiles.iter().map(|t| (t.lon_idx, t.lat_idx)).collect::<Vec<_>>());
         for tile in tiles {
             if self.cache.contains_key(tile) || self.pending.contains(tile) {
                 continue;

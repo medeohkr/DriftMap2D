@@ -569,7 +569,7 @@ async function simulationStep(version) {
     }
 
     dayDisplay.textContent = proteus.current_time_str();
-    if (proteus.current_day() < totalDays + stepSize) {
+    if (proteus.current_day() < totalDays) {
       animationId = requestAnimationFrame(() => simulationStep(version));
     } else {
       simulationRunning = false;
