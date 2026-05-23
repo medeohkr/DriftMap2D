@@ -1,33 +1,3 @@
-import xarray as xr
-import numpy as np
-import matplotlib.pyplot as plt
-from PIL import Image
-import io
-import copernicusmarine
-from datetime import datetime, timedelta, date
-
-# copernicusmarine.login(".", ".")
-
-
-TODAY = datetime.now()
-today_str = TODAY.strftime("%Y-%m-%dT00:00:00")
-
-# copernicusmarine.subset(
-#     dataset_id="cmems_mod_glo_phy_anfc_merged-uv_PT1H-i",
-#     variables=["utotal", "vtotal"],
-#     minimum_longitude=-180,
-#     maximum_longitude=179.91668701171875,
-#     minimum_latitude=-80,
-#     maximum_latitude=90,
-#     start_datetime=today_str,
-#     end_datetime=today_str,
-#     minimum_depth=0.49402499198913574,
-#     maximum_depth=0.49402499198913574,
-#     output_directory="data/visualization",
-#     output_filename=f"viz_{date.today()}.nc"
-# )
-
-# current_date = end_date + timedelta(days=1)
 import datetime
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
@@ -35,7 +5,7 @@ import numpy as np
 import xarray as xr
 
 # 1. Load data
-ds = xr.open_dataset("data/visualization/viz_2026-05-13.nc")
+ds = xr.open_dataset("data\smoc_nc\smoc_20260520.nc")
 
 # 2. Calculate speed
 u = ds['utotal'].isel(time=0, depth=0)

@@ -33,6 +33,10 @@ map.addControl(
   new maplibregl.ScaleControl({ maxWidth: 100, unit: "metric" }),
   "bottom-right",
 );
+const slideHandle = document.getElementById('slide-handle');
+slideHandle.addEventListener('click', () => {
+    document.querySelector('.sidebar-wrapper').classList.toggle('open');
+});
 
 // ========== DOM ELEMENTS ==========
 const latField = document.querySelector(".lat-field");
@@ -60,8 +64,6 @@ const exportGeojsonBtn = document.getElementById("export-geojson");
 const importGeojsonBtn = document.getElementById("import-geojson");
 const importGeojsonFile = document.getElementById("import-geojson-file");
 const autoZoom = document.getElementById("autozoom-checkbox");
-const collapseBtn = document.getElementById("collapse");
-const openBtn = document.getElementById("open");
 const sidebar = document.querySelector(".sidebar");
 const overlay = document.getElementById("overlay-checkbox");
 const statsDisplay = document.querySelector(".stats-container");
@@ -95,7 +97,7 @@ let oilType = oilMenu.value;
 let startYear = today.getFullYear();
 let startMonth = today.getMonth() + 1;
 let startDay = today.getDate();
-let stepSize = 1 / 96;
+let stepsPerDay = 96;
 let totalDays = 7.0;
 let playbackMode = false;
 let stepCount = 0;
@@ -523,10 +525,9 @@ async function simulationStep(version) {
   if (!simulationRunning || version !== simulationVersion) return;
 
   try {
-    const stepsPerDay = Math.round(1 / stepSize);
     const todayDateInt = proteus.current_date_int();
 
-    await proteus.step(stepSize);
+    await proteus.step(stepsPerDay);
 
     if (stepCount % stepsPerDay === 0) {
       const oceanTiles = getTileIndices(proteus.get_positions(), -80);
@@ -569,7 +570,7 @@ async function simulationStep(version) {
     }
 
     dayDisplay.textContent = proteus.current_time_str();
-    if (proteus.current_day() < totalDays) {
+    if (stepCount < totalDays*96) {
       animationId = requestAnimationFrame(() => simulationStep(version));
     } else {
       simulationRunning = false;
@@ -1024,11 +1025,12 @@ function initGridLayer() {
     map.addSource("overlay-png", {
       type: "image",
       url: "https://tiles.driftmap2d.com/currents.png",
+      // url: "images/currents.png",
       coordinates: [
-        [-199.8, 85.05],
-        [199.61, 85.05],
-        [199.61, -80.0],
-        [-199.8, -80.0],
+        [-199.71, 85.05],
+        [199.71, 85.05],
+        [199.71, -80.00],
+        [-199.71, -80.00],
       ],
     });
     map.addLayer({
@@ -1161,16 +1163,6 @@ totalDaysField.addEventListener("input", () => {
 latField.addEventListener("input", updatePositionFromFields);
 lonField.addEventListener("input", updatePositionFromFields);
 
-collapseBtn.addEventListener("click", () => {
-  sidebar.style.display = "none";
-  openBtn.style.display = "inline-block";
-  collapseBtn.style.display = "none";
-});
-openBtn.addEventListener("click", () => {
-  sidebar.style.display = "flex";
-  openBtn.style.display = "none";
-  collapseBtn.style.display = "inline-block";
-});
 collapseLegendBtn.addEventListener("click", () => {
   document.getElementById("concentration-legend").style.display = "none";
   openLegendBtn.style.display = "inline-block";

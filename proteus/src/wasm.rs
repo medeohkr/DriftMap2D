@@ -19,7 +19,8 @@ pub struct Proteus {
     landmask: LandMaskLoader,
     days_since_start: f32,
     start_date: NaiveDate,
-    hour_count: u32
+    hour_count: u32,
+    step_count: u32
 }
 
 #[wasm_bindgen]
@@ -87,7 +88,8 @@ impl Proteus {
             landmask,
             days_since_start: 0.0,
             start_date,
-            hour_count: 0
+            hour_count: 0,
+            step_count: 0
         }
     }
     
@@ -111,11 +113,20 @@ impl Proteus {
         Ok(())
     }
 
-    pub async fn step(&mut self, dt_days: f32) -> Result<(), JsValue> {
+    pub async fn step(&mut self, steps_per_day: u32) -> Result<(), JsValue> {
+        let dt_days = 1.0 / steps_per_day as f32;
         let current_date_int = self.get_current_date_int();
-        self.loader.set_current_day(current_date_int, self.hour_count);
         
-        // ========== OCEAN TILES ==========
+        // Calculate hour BEFORE using it (integer math, no float error)
+        let total_hours = 24 * self.step_count / steps_per_day;
+        let hour = total_hours % 24;
+        
+        self.loader.set_current_day(current_date_int, hour as u32);
+        
+        // Step 0: Release particles first
+        self.simulation.release_particles(dt_days);
+        
+        // Load tiles for the released particles
         let needed_ocean_tiles = self.loader.update_tiles(&self.simulation.get_particles());
         
         if let Err(e) = self.loader.load_by_date(current_date_int, &needed_ocean_tiles).await {
@@ -123,37 +134,29 @@ impl Proteus {
             return Err(JsValue::from_str(&format!("{:?}", e)));
         }
         
-        // ========== LANDMASK TILES (calculated separately with min_lat = -90°) ==========
+        // Load landmask tiles
         let particles = self.simulation.get_particles();
         let mut landmask_tiles = std::collections::HashSet::new();
-        
         for i in 0..particles.len {
             if particles.active[i] && !particles.stranded[i] {
-                // Calculate tile indices using landmask coordinate system (min_lat = -90°)
                 let lon_idx = ((particles.x[i] + 180.0) / 10.0).floor() as i32;
                 let lat_idx = ((particles.y[i] + 90.0) / 10.0).floor() as i32;
-
                 if lon_idx >= 0 && lon_idx < 36 && lat_idx >= 0 && lat_idx < 18 {
                     landmask_tiles.insert((lon_idx as usize, lat_idx as usize));
                 }
             }
         }
-        // Load landmask tiles
         for (lon_idx, lat_idx) in landmask_tiles {
             if let Err(e) = self.landmask.load_tile(lon_idx, lat_idx).await {
-                // Log warning but don't fail simulation
                 web_sys::console::warn_1(&format!("Landmask tile load failed: {}_{}: {}", lon_idx, lat_idx, e).into());
             }
         }
         
-        // ========== RUN SIMULATION STEP ==========
-        self.simulation.update_particles_batch(dt_days, &self.loader, self.hour_count, &self.landmask);
+        self.simulation.update_particles_batch(dt_days, &self.loader, hour as u32, &self.landmask);
         
-        // ========== UPDATE TIME ==========
-        self.days_since_start += dt_days;
-        let total_hours = self.days_since_start * 24.0;
-        self.hour_count = (total_hours.floor() % 24.0) as u32;
-        
+        self.days_since_start = self.step_count as f32 / steps_per_day as f32;
+        self.hour_count = hour as u32;
+        self.step_count += 1;
         Ok(())
     }
     
