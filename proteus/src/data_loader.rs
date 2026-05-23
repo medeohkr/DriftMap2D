@@ -50,7 +50,7 @@ pub struct DataLoader {
     
     pub current_day: u32,
     pub current_hour: u32,
-    cache: HashMap<TileKey, TileData>,
+    pub cache: HashMap<TileKey, TileData>,
     pending: HashSet<TileKey>,
 }
 
@@ -229,7 +229,7 @@ impl DataLoader {
                     } else {
                         20.0 // fallback to reference temperature if no SST data
                     };
-
+                    // log!("{sst}");
                     results[idx] = (current, wind_raw, sst);
                 }
             }

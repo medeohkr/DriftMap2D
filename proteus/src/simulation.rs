@@ -50,7 +50,28 @@ impl Simulation {
             initial_mass_per_particle,
         }
     }
-
+    pub fn release_particles(&mut self, dt_days: f32) {
+        let props = self.oil_type.properties();
+        
+        if let Some(seeds) = self.release_manager.update(dt_days) {
+            for seed in seeds {
+                self.particles.add_particle(
+                    seed.lon,
+                    seed.lat,
+                    seed.depth,
+                    0.0,
+                    seed.mass as f32 * 1000.0,
+                    0.0,
+                    true,
+                    false,
+                    0.0,
+                    0.0,
+                    props.dynamic_viscosity_cp,
+                    props.density_kgm3,
+                );
+            }
+        }
+    }
 
     pub fn update_particles_batch(
         &mut self,
@@ -69,26 +90,6 @@ impl Simulation {
         let props = self.oil_type.properties();
         let y_w_final_ref = props.y_w_final_max;
 
-        // ---- Release new particles ----
-        if let Some(seeds) = self.release_manager.update(dt_days) {
-            let props = self.oil_type.properties();
-            for seed in seeds {
-                self.particles.add_particle(
-                    seed.lon,
-                    seed.lat,
-                    seed.depth,
-                    0.0,
-                    seed.mass as f32 * 1000.0, // Convert tons to kg
-                    0.0,
-                    true,
-                    false,
-                    0.0,
-                    0.0,
-                    props.dynamic_viscosity_cp,
-                    props.density_kgm3,
-                );
-            }
-        }
 
         // ---- Collect active, unstranded particles ----
         let unstranded_data: Vec<(usize, f32, f32, f32)> = (0..self.particles.len)
@@ -113,12 +114,12 @@ impl Simulation {
         for (i, &(idx, _, _, _)) in unstranded_data.iter().enumerate() {
             let ((_cu, _cv), (wu_raw, wv_raw), sst) = env_data[i];
             let wind_speed = (wu_raw * wu_raw + wv_raw * wv_raw).sqrt();
-            // log!("{wind_speed}");
+            let sst_celsius = sst - 273.15;
             oil_weathering::step_particle_weathering(
                 &mut self.particles,
                 idx,
                 wind_speed,
-                sst,
+                sst_celsius,
                 self.initial_mass_per_particle,
                 dt,
                 self.oil_type,
@@ -172,7 +173,6 @@ impl Simulation {
         // ---- Integration ----
         let new_positions = 
         integrators::rk4_step_batch(&positions, dt, &get_combined_velocities);
-
 
         // ---- Apply positions, diffusion, and stranding ----
         for (i, &(idx, lon, lat, depth)) in unstranded_data.iter().enumerate() {

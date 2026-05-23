@@ -17,64 +17,71 @@
 </head>
 <body>
     <div id="map"></div>
-    <div class="sidebar">
-        <div class="header-container">
-            <img class="logo" src="images/DriftMap.webp">
-            <span class="title-text">DriftMap</span>
+    
+    <!-- Sidebar + collapse button wrapper -->
+    <div class="sidebar-wrapper open">
+        <div class="sidebar">
+            <div class="header-container">
+                <img class="logo" src="images/DriftMap.webp">
+                <span class="title-text">DriftMap</span>
+            </div>
+            <div class="sidebar-body">
+                <div class="import-container">
+                    <button id="import-geojson">Import Scenario</button>
+                    <input type="file" id="import-geojson-file" accept=".json,.geojson" style="display:none;">
+                    <input type="checkbox" id="autozoom-checkbox" checked>
+                    <span>Auto-zoom</span>
+                </div>
+                <div class="release-display-container">
+                    <span class="release-text">Release Location:</span>
+                    <span class="lat-text">Latitude:</span>
+                    <span class="lon-text">Longitude:</span>
+                    <input type="text" class="lat-field" value="26.60">
+                    <input type="text" class="lon-field" value="56.50">
+                </div>
+                <div class="simulation-time-container">
+                    <span class="start-date-text">Starting Date:</span>
+                    <input type="date" id="start-day-selector">
+                    <span class="total-day-text">Total Days:</span>
+                    <input type="number" id="total-day-field" value="7.0" step="1.0">
+                </div>
+                <div class="oil-display-container">
+                    <span class="oil-text">Oil Type:</span>
+                    <select name="oil-menu" id="oil-menu">
+                    <option value="marine-diesel">MARINE DIESEL (Refined)</option>
+                    <option value="bonny-light">BONNY LIGHT (Light Crude)</option>
+                    <option value="arabian-light">ARABIAN LIGHT (Medium Crude)</option>
+                    <option value="venezuelan-heavy">VENEZUELAN HEAVY (Heavy Crude)</option>
+                    <option value="ifo-380">IFO 380 (Heavy Fuel Oil)</option>
+                    </select>
+                </div>
+                <div class="release-manager-container">
+                    <span class="release-amount-text">Release Amount</span>
+                    <input type="number" id="release-amount-field" value="1000.0" step="10">
+                    <span class="release-units-text">tons</span>
+                    <span class="release-duration-text">Release Duration</span>
+                    <input type="number" id="release-duration-field" value="1.0" step="1.0">
+                    <span class="duration-units-text">days</span>
+                    <span class="release-radius-text">Initial Spill Radius</span>
+                    <input type="number" id="release-radius-field" value="1.0" step="1.0">
+                    <span class="radius-units-text">km</span>
+                </div>
+                <div class="simulation-btn-container">
+                    <button id="start-simulation" class="btn-primary">Render Scenario</button>
+                    <button id="stop-simulation" class="btn-primary">Pause Render</button>
+                    <button id="resume-simulation" class="btn-primary">Resume Render</button>
+                    <button id="export-geojson" class="btn-primary">Export Scenario</button>
+                    <button id="reset-simulation">
+                        <img class="reset-btn-img" src="images/ResetBtn.webp">
+                    </button>
+                </div>
+            </div>
         </div>
-        <div class="import-container">
-            <button id="import-geojson">Import Scenario</button>
-            <input type="file" id="import-geojson-file" accept=".json,.geojson" style="display:none;">
-            <input type="checkbox" id="autozoom-checkbox" checked>
-            <span>Auto-zoom</span>
-        </div>
-        <div class="release-display-container">
-            <span class="release-text">Release Location:</span>
-            <span class="lat-text">Latitude:</span>
-            <span class="lon-text">Longitude:</span>
-            <input type="text" class="lat-field" value="26.60">
-            <input type="text" class="lon-field" value="56.50">
-        </div>
-        <div class="simulation-time-container">
-            <span class="start-date-text">Starting Date:</span>
-            <input type="date" id="start-day-selector">
-            <span class="total-day-text">Total Days:</span>
-            <input type="number" id="total-day-field" value="7.0" step="1.0">
-        </div>
-        <div class="oil-display-container">
-            <span class="oil-text">Oil Type:</span>
-            <select name="oil-menu" id="oil-menu">
-            <option value="marine-diesel">MARINE DIESEL (Refined)</option>
-            <option value="bonny-light">BONNY LIGHT (Light Crude)</option>
-            <option value="arabian-light">ARABIAN LIGHT (Medium Crude)</option>
-            <option value="venezuelan-heavy">VENEZUELAN HEAVY (Heavy Crude)</option>
-            <option value="ifo-380">IFO 380 (Heavy Fuel Oil)</option>
-            </select>
-        </div>
-        <div class="release-manager-container">
-            <span class="release-amount-text">Release Amount</span>
-            <input type="number" id="release-amount-field" value="1000.0" step="10">
-            <span class="release-units-text">tons</span>
-            <span class="release-duration-text">Release Duration</span>
-            <input type="number" id="release-duration-field" value="1.0" step="1.0">
-            <span class="duration-units-text">days</span>
-            <span class="release-radius-text">Initial Spill Radius</span>
-            <input type="number" id="release-radius-field" value="1.0" step="1.0">
-            <span class="radius-units-text">km</span>
-        </div>
-        <div class="simulation-btn-container">
-            <button id="start-simulation" class="btn-primary">Render Scenario</button>
-            <button id="stop-simulation" class="btn-primary">Pause Render</button>
-            <button id="resume-simulation" class="btn-primary">Resume Render</button>
-            <button id="export-geojson" class="btn-primary">Export Scenario</button>
-            <button id="reset-simulation">
-                <img class = "reset-btn-img" src="images/ResetBtn.webp">
-            </button>
-        </div>
+        <div class="slide-handle" id="slide-handle"></div>
     </div>
-    <div class="simulation-info">
-        <span id="current-day"></span>
-    </div>
+    
+    <span id="current-day"></span>
+    
     <div id="timeline-container" class="timeline-container" style="display:none;">
         <div class="timeline-controls">
             <button id="timeline-rewind" class="timeline-btn">
@@ -93,6 +100,7 @@
             <span id="timeline-end">Day 0</span>
         </div>
     </div>
+    
     <div class="visualization-toggle-container">
         <button class="visualization-toggle" id="particle-toggle">Particles</button>
         <button class="visualization-toggle" id="heatmap-toggle">Heatmap</button>
@@ -101,10 +109,7 @@
             <span>Currents Overlay</span>
         </div>
     </div>
-    <div class="collapse-button-container">
-        <button class="collapse-button" id="collapse">&lt;</button>
-        <button class="collapse-button" id="open">&gt;</button>
-    </div>
+    
     <div class="stats-container">
         <div class="stats-description-container">
             <span class="stats-primary-text">Stranded</span>
@@ -119,10 +124,12 @@
             <span class="stats-data-secondary" id="total-mass">0 t</span>
         </div>
     </div>
+    
     <div class="legend-collapse-container">
         <button class="legend-collapse-button" id="legend-collapse">&gt;</button>
         <button class="legend-collapse-button" id="legend-open">&lt;</button>
     </div>
+    
     <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
     <script type="module" src="preloader.js"></script>
     <script type="module" src="app.js"></script>

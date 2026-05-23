@@ -13,6 +13,8 @@ import boto3
 from pathlib import Path
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import cartopy.crs as ccrs
+import matplotlib.pyplot as plt
 
 # ===== CONFIG =====
 
