@@ -254,6 +254,10 @@ function validateSimulation() {
     errors.push(`Spread radius must be between 0 and 50 km.`);
   if (isNaN(releaseDuration) || releaseDuration < 0)
     errors.push(`Release duration must be positive`);
+  if (isNaN(rawLon))
+    errors.push(`Release location must have a longitude value`)
+  if (isNaN(rawLat) || rawLat < -80 || rawLat > 85)
+    errors.push(`Latitude must be between -80° and 85°`)
   return errors;
 }
 
