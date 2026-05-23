@@ -521,7 +521,8 @@ function updateLegend() {
 }
 
 function zoom() {
-  if (autoZoom.checked && map.getZoom() < 6 - totalDays / 100) {
+  if (!autoZoom.checked) return;
+  if (map.getZoom() < 6 - totalDays / 100) {
     map.flyTo({
       center: [rawLon, rawLat],
       zoom: 6 - totalDays / 100,
