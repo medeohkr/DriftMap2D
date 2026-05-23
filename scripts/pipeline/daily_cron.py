@@ -272,6 +272,85 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
                     tile_path.unlink()
     
     ds.close()
+    
+    # Upload tiles for this day to R2
+    print(f"    📤 Uploading {tiles} tiles to R2...")
+    uploaded = 0
+    for bin_file in day_dir.glob("*.bin"):
+        key = f"tiles/{date.strftime('%Y/%m/%d')}/{bin_file.name}"
+        try:
+            s3.upload_file(str(bin_file), BUCKET, key)
+            uploaded += 1
+        except Exception as e:
+            print(f"      ❌ Upload failed: {bin_file.name} - {e}")
+    
+    print(f"    ✅ Tiled and uploaded: {uploaded}/{tiles} tiles")
+    
+    # Clean up local files
+    shutil.rmtree(day_dir)
+    if nc_file.exists():
+        os.remove(nc_file)
+    
+    return uploaded
+
+def generate_overlay(smoc_path):
+    ds = xr.open_dataset(smoc_path)
+
+    # 2. Calculate speed
+    u = ds['utotal'].isel(time=0, depth=0)
+    v = ds['vtotal'].isel(time=0, depth=0)
+    speed = np.sqrt(u**2 + v**2)
+
+    # Extract raw geographic coordinates from NetCDF
+    lon = ds.longitude.values
+    lat = ds.latitude.values
+    lon_min, lon_max = float(lon.min()), float(lon.max())
+    lat_min, lat_max = float(lat.min()), float(lat.max())
+
+    # 3. Create Figure using Cartopy Web Mercator (EPSG:3857)
+    fig = plt.figure(figsize=(10, 8), facecolor='none')
+
+    # ccrs.Mercator.GOOGLE matches MapLibre's internal engine
+    ax = fig.add_subplot(1, 1, 1, projection=ccrs.Mercator.GOOGLE)
+
+    # --- MODERN SYNTAX TO STRIP BACKGROUNDS & BORDERS ---
+    ax.patch.set_visible(False)          # Replaces background_patch
+    ax.spines['geo'].set_visible(False)  # Replaces outline_patch
+    ax.axis('off')
+
+    # Set the map view limits strictly to your NetCDF bounding box
+    ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
+
+    # Extract the actual pixel dimensions of your data array
+    data_height, data_width = speed.shape
+    print(f"Original Data Resolution: {data_width}x{data_height} pixels")
+
+    # Plot data forcing Cartopy to match your exact grid dimensions
+    im = ax.imshow(
+        speed,
+        extent=[lon_min, lon_max, lat_min, lat_max],
+        transform=ccrs.PlateCarree(),
+        cmap='viridis',
+        vmin=0,
+        vmax=1,
+        origin='lower',
+        interpolation='bilinear',
+        interpolation_stage='data',
+        regrid_shape=(data_height, data_width)  # <-- FORCE FULL RESOLUTION HERE
+    )
+
+
+    # 4. Save without margins or borders 
+    plt.subplots_adjust(left=0, right=1, bottom=0, top=1)
+
+    plt.savefig(
+        'currents.png',
+        dpi=150,
+        transparent=True
+    )
+    plt.close(fig)
+
+
 def main():
     print(f"\n{'='*60}")
     print(f"🌊 Daily tile update: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
@@ -279,24 +358,24 @@ def main():
     
     # Delete oldest day from R2
     print("\n🗑️  Step 1: Removing days outside rolling window...")
-    # delete_oldest_day()
+    delete_oldest_day()
     
     # Prepare directories
     TILES_DIR.mkdir(parents=True, exist_ok=True)
     NC_DIR.mkdir(parents=True, exist_ok=True)
     WIND_DIR.mkdir(parents=True, exist_ok=True)
     
-    # Step 2: Download ECMWF once (contains all forecast steps)
+    # Step 2: Download ECMWF once
     print("\n📡 Step 2: Downloading ECMWF forecast...")
-    wind_file = "D:\projects\driftmap\data\ecmwf\ecmwf_20260520_00z.grib2"
+    wind_file = "data/ecmwf/ecmwf_20260520_00z.grib2"
     if not wind_file:
         print("  ❌ Failed to get ECMWF data. Exiting.")
         sys.exit(1)
     
-    # Load and cache wind data for quick access
+    # Step 3: Load wind data
     print("\n📂 Step 3: Loading ECMWF data into memory...")
     ds_wind = xr.open_dataset(wind_file, engine="cfgrib")
-    u_wind_global = ds_wind['u10'].values  # (steps, lat, lon)
+    u_wind_global = ds_wind['u10'].values
     v_wind_global = ds_wind['v10'].values
     sst_global = ds_wind['skt'].values if 'skt' in ds_wind else np.zeros_like(u_wind_global)
     wind_lons = ds_wind['longitude'].values
@@ -308,7 +387,7 @@ def main():
         'sst': sst_global,
         'lons': wind_lons,
         'lats': wind_lats,
-        'reference_date': datetime.utcnow() - timedelta(days=1),  # Yesterday
+        'reference_date': datetime.utcnow() - timedelta(days=1),
     }
     ds_wind.close()
     print(f"  ✅ Wind data loaded: {u_wind_global.shape[0]} steps, {len(wind_lats)} lat, {len(wind_lons)} lon")
@@ -324,16 +403,38 @@ def main():
         day_date = yesterday + timedelta(days=day_offset)
         print(f"\n  Day {day_offset+1}/{FORECAST_DAYS}: {day_date.date()}")
         
-        # Download SMOC for this day
         nc_file = download_smoc_day(day_date)
         if not nc_file:
             print(f"    ⚠️ Skipping day {day_date.date()} - SMOC download failed")
             continue
-        
-        # Tile and upload this day
-        tile_and_upload_day(day_date, wind_file, wind_data_cache)
-    
-    # Clean up wind file
+        if day_offset == 1:
+            today = datetime.utcnow()
+            today_nc = NC_DIR / f"smoc_{today.strftime('%Y%m%d')}.nc"
+            
+            if today_nc.exists():
+                generate_overlay(str(today_nc))
+                overlay_path = "currents.png"
+                if Path(overlay_path).exists():
+                    print(f"  📤 Uploading overlay to R2...")
+                    s3.upload_file(
+                        overlay_path, 
+                        BUCKET, 
+                        "currents.png",
+                        ExtraArgs={'ContentType': 'image/png', 'CacheControl': 'max-age=3600'}
+                    )
+                    print(f"  ✅ Overlay uploaded")
+                    os.remove(overlay_path)
+            else:
+                print(f"  ⚠️ Today's SMOC file not found, skipping overlay")
+        tiles = tile_and_upload_day(day_date, wind_file, wind_data_cache)
+        total_tiles += tiles
+        print(f"    Cumulative tiles: {total_tiles}")
+
+    # Step 5: Generate overlay (OUTSIDE the for loop)
+    print("\n🎨 Step 5: Generating current overlay...")
+
+
+    # Clean up
     if wind_file and Path(wind_file).exists():
         os.remove(wind_file)
         print(f"\n🧹 Cleaned up wind file")

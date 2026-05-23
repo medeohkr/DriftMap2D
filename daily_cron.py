@@ -407,31 +407,32 @@ def main():
         if not nc_file:
             print(f"    ⚠️ Skipping day {day_date.date()} - SMOC download failed")
             continue
-        
+        if day_offset == 1:
+            today = datetime.utcnow()
+            today_nc = NC_DIR / f"smoc_{today.strftime('%Y%m%d')}.nc"
+            
+            if today_nc.exists():
+                generate_overlay(str(today_nc))
+                overlay_path = "currents.png"
+                if Path(overlay_path).exists():
+                    print(f"  📤 Uploading overlay to R2...")
+                    s3.upload_file(
+                        overlay_path, 
+                        BUCKET, 
+                        "currents.png",
+                        ExtraArgs={'ContentType': 'image/png', 'CacheControl': 'max-age=3600'}
+                    )
+                    print(f"  ✅ Overlay uploaded")
+                    os.remove(overlay_path)
+            else:
+                print(f"  ⚠️ Today's SMOC file not found, skipping overlay")
         tiles = tile_and_upload_day(day_date, wind_file, wind_data_cache)
         total_tiles += tiles
         print(f"    Cumulative tiles: {total_tiles}")
 
     # Step 5: Generate overlay (OUTSIDE the for loop)
     print("\n🎨 Step 5: Generating current overlay...")
-    today = datetime.utcnow()
-    today_nc = NC_DIR / f"smoc_{today.strftime('%Y%m%d')}.nc"
-    
-    if today_nc.exists():
-        generate_overlay(str(today_nc))
-        overlay_path = "currents.png"
-        if Path(overlay_path).exists():
-            print(f"  📤 Uploading overlay to R2...")
-            s3.upload_file(
-                overlay_path, 
-                BUCKET, 
-                "currents.png",
-                ExtraArgs={'ContentType': 'image/png', 'CacheControl': 'max-age=3600'}
-            )
-            print(f"  ✅ Overlay uploaded")
-            os.remove(overlay_path)
-    else:
-        print(f"  ⚠️ Today's SMOC file not found, skipping overlay")
+
 
     # Clean up
     if wind_file and Path(wind_file).exists():
