@@ -19,7 +19,7 @@ export class TilePreloader {
         
         const promise = fetch(url)
             .then(response => {
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                // if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 return response.arrayBuffer();
             })
             .then(buffer => {
@@ -87,7 +87,7 @@ export class TilePreloader {
         
         const promise = fetch(url)
             .then(response => {
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                // if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 return response.arrayBuffer();
             })
             .then(buffer => {
