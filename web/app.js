@@ -33,10 +33,6 @@ map.addControl(
   new maplibregl.ScaleControl({ maxWidth: 100, unit: "metric" }),
   "bottom-right",
 );
-const slideHandle = document.getElementById('slide-handle');
-slideHandle.addEventListener('click', () => {
-    document.querySelector('.sidebar-wrapper').classList.toggle('open');
-});
 
 // ========== DOM ELEMENTS ==========
 const latField = document.querySelector(".lat-field");
@@ -73,7 +69,7 @@ const evaporated = document.getElementById("evaporated");
 const totalMass = document.getElementById("total-mass");
 const collapseLegendBtn = document.getElementById("legend-collapse");
 const openLegendBtn = document.getElementById("legend-open");
-
+const slideHandle = document.getElementById('slide-handle');
 // ========== GLOBAL STATE ==========
 let today = new Date();
 let proteus = null;
@@ -92,18 +88,18 @@ let rawLon = 56.5;
 let rawLat = 26.6;
 let csValue = 0.1;
 let particleCount = 10000;
-let spreadKm = 1.0;
+let spreadKm = releaseRadiusField.value;
 let oilType = oilMenu.value;
 let startYear = today.getFullYear();
 let startMonth = today.getMonth() + 1;
 let startDay = today.getDate();
 let stepsPerDay = 96;
-let totalDays = 7.0;
+let totalDays = totalDaysField.value;
 let playbackMode = false;
 let stepCount = 0;
 let boundingBox = [];
-let releaseAmount = 1000.0;
-let releaseDuration = 1.0;
+let releaseAmount = releaseAmountField.value;
+let releaseDuration = releaseDurationField.value;
 let legendCollapsed = false;
 
 const GRID_UPDATE_INTERVAL = 150;
@@ -1174,6 +1170,9 @@ openLegendBtn.addEventListener("click", () => {
   openLegendBtn.style.display = "none";
   collapseLegendBtn.style.display = "inline-block";
   legendCollapsed = false;
+});
+slideHandle.addEventListener('click', () => {
+    document.querySelector('.sidebar-wrapper').classList.toggle('open');
 });
 
 // ========== COORDINATE DISPLAY ==========
