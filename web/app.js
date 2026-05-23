@@ -184,9 +184,11 @@ function updateTotalDays() {
 }
 
 function updateReleaseAmount() {
+  console.log(simulationHistory)
   if (simulationHistory.length === 0) {
     releaseAmount = parseFloat(releaseAmountField.value);
     updateLegend();
+    console.log(releaseAmount)
   }
 }
 
@@ -778,6 +780,11 @@ async function resetSimulation() {
   updateFields();
   updateMarker();
   updateConcentrationLayer();
+  updateSimulationDate();
+  updateTotalDays();
+  updateReleaseAmount();
+  updateReleaseRadius();
+  updateReleaseDuration();
 }
 
 // ========== EXPORT/IMPORT ==========
@@ -1137,25 +1144,11 @@ timelineSlider.addEventListener("input", (e) =>
   updateTimelineDisplay(parseInt(e.target.value)),
 );
 
-releaseAmountField.addEventListener("input", () => {
-  releaseAmount = parseFloat(releaseAmountField.value);
-  updateLegend();
-});
-releaseDurationField.addEventListener("input", () => {
-  releaseDuration = parseFloat(releaseDurationField.value);
-});
-releaseRadiusField.addEventListener("input", () => {
-  spreadKm = parseFloat(releaseRadiusField.value);
-});
-startDate.addEventListener("input", () => {
-  const parts = startDate.value.split("-");
-  startYear = parseInt(parts[0]);
-  startMonth = parseInt(parts[1]);
-  startDay = parseInt(parts[2]);
-});
-totalDaysField.addEventListener("input", () => {
-  totalDays = parseFloat(totalDaysField.value);
-});
+releaseAmountField.addEventListener("input", updateReleaseAmount);
+releaseDurationField.addEventListener("input", updateReleaseDuration);
+releaseRadiusField.addEventListener("input", updateReleaseRadius);
+startDate.addEventListener("input", updateSimulationDate);
+totalDaysField.addEventListener("input", updateTotalDays);
 latField.addEventListener("input", updatePositionFromFields);
 lonField.addEventListener("input", updatePositionFromFields);
 
