@@ -101,6 +101,7 @@ let boundingBox = [];
 let releaseAmount = releaseAmountField.value;
 let releaseDuration = releaseDurationField.value;
 let legendCollapsed = false;
+let stepInProgress = false;
 
 const GRID_UPDATE_INTERVAL = 150;
 let GRID_SIZE = 0.025;
@@ -539,6 +540,7 @@ function zoom() {
 // ========== SIMULATION CORE ==========
 async function simulationStep(version) {
   if (!simulationRunning || version !== simulationVersion) return;
+  stepInProgress = true;
 
   try {
     const todayDateInt = proteus.current_date_int();
@@ -599,6 +601,7 @@ async function simulationStep(version) {
     }
   } finally {
     stepCount++;
+    stepInProgress = false;
   }
 }
 
@@ -674,6 +677,10 @@ function getHeatmapGeojson() {
 async function startSimulation() {
   if (simulationRunning) return;
 
+  while (stepInProgress) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+  }
+
   const errors = validateSimulation();
   if (errors.length) {
     alert(`❌ Cannot start simulation:\n\n${errors.join("\n\n")}`);
@@ -744,6 +751,9 @@ function resumeSimulation() {
 }
 
 async function resetSimulation() {
+  while (stepInProgress) {
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
   simulationRunning = false;
   simulationVersion++;
   stepCount = 0;
