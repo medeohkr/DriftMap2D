@@ -184,11 +184,9 @@ function updateTotalDays() {
 }
 
 function updateReleaseAmount() {
-  console.log(simulationHistory)
   if (simulationHistory.length === 0) {
     releaseAmount = parseFloat(releaseAmountField.value);
     updateLegend();
-    console.log(releaseAmount)
   }
 }
 
@@ -275,7 +273,6 @@ function updateMarker() {
 
 function updateBoundingBox() {
   boundingBox = proteus.get_particle_bounding_box();
-  // console.log(`${boundingBox[0]}min ${boundingBox[1]}max`)
 }
 
 function updateStatsDisplay() {
@@ -518,6 +515,22 @@ function updateLegend() {
   }
 
 }
+
+function zoom() {
+  if (autoZoom.checked && map.getZoom() < 6 - totalDays / 100) {
+    map.flyTo({
+      center: [rawLon, rawLat],
+      zoom: 6 - totalDays / 100,
+      duration: 2000,
+    });
+  } else {
+    map.flyTo({
+      center: [rawLon, rawLat],
+      zoom: map.getZoom(),
+      duration: 2000,
+    });
+  }
+}
 // ========== SIMULATION CORE ==========
 async function simulationStep(version) {
   if (!simulationRunning || version !== simulationVersion) return;
@@ -675,6 +688,7 @@ async function startSimulation() {
   updateReleaseDuration();
   updateReleaseRadius();
   updateConcentrationLayer();
+  zoom();
 
   if (window.currentMarker) window.currentMarker.remove();
 
@@ -682,13 +696,6 @@ async function startSimulation() {
   const lat = rawLat;
   oilType = oilMenu.value;
 
-  if (autoZoom.checked && map.getZoom() < 5) {
-    map.flyTo({
-      center: [rawLon, rawLat],
-      zoom: 6 - totalDays / 100,
-      duration: 2000,
-    });
-  }
 
   proteus = new Proteus(
     lon,
@@ -932,6 +939,7 @@ function loadGeoJsonResults(data) {
   showTimeline();
   updateConcentrationLayer();
   updateLegend();
+  zoom();
 
   map.setPaintProperty("overlay-layer", "raster-opacity", 0.05);
 
@@ -939,15 +947,6 @@ function loadGeoJsonResults(data) {
 
   if (window.currentMarker) {
     window.currentMarker.remove();
-  }
-
-  if (autoZoom.checked) {
-    map.flyTo({
-      center: [rawLon, rawLat],
-      zoom: 6 - totalDays / 100,
-      duration: 2000,
-      essential: true,
-    });
   }
 }
 

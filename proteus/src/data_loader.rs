@@ -153,7 +153,7 @@ impl DataLoader {
 
                 for (idx, (lon, lat, depth)) in group {
                     // ---- Current velocity (bilinear at 1/12°) ----
-                    let (lon_cell, lat_cell) = self.get_cell_index(lon, lat, tile, self.lon_step, self.lat_step, tile_min_lon, tile_min_lat);
+                    let (lon_cell, lat_cell) = self.get_cell_index(lon, lat, tile.n_lon, tile.n_lat, self.lon_step, self.lat_step, tile_min_lon, tile_min_lat);
                     let cell_lon_min = tile_min_lon + (lon_cell as f32) * self.lon_step;
                     let cell_lat_min = tile_min_lat + (lat_cell as f32) * self.lat_step;
                     let x_frac = ((lon - cell_lon_min) / self.lon_step).clamp(0.0, 1.0);
@@ -185,14 +185,19 @@ impl DataLoader {
 
                     // ---- Wind (raw 10m components, no drift angle applied) ----
                     let wind_raw = if has_wind {
-                        let (wlon_cell, wlat_cell) = self.get_cell_index(lon, lat, tile, self.lon_step_wind, self.lat_step_wind, tile_min_lon, tile_min_lat);
+                        let (wlon_cell, wlat_cell) = self.get_cell_index(lon, lat, tile.n_lon_wind, tile.n_lat_wind, self.lon_step_wind, self.lat_step_wind, tile_min_lon, tile_min_lat);
                         let wcell_lon_min = tile_min_lon + (wlon_cell as f32) * self.lon_step_wind;
                         let wcell_lat_min = tile_min_lat + (wlat_cell as f32) * self.lat_step_wind;
                         let wx_frac = ((lon - wcell_lon_min) / self.lon_step_wind).clamp(0.0, 1.0);
                         let wy_frac = ((lat - wcell_lat_min) / self.lat_step_wind).clamp(0.0, 1.0);
 
                         let w_idx = step_offset + wlat_cell * tile.n_lon_wind + wlon_cell;
-
+                        // Before the line that panics, check bounds
+                        let idx = step_offset + wlat_cell * tile.n_lon_wind + wlon_cell;
+                        if idx + 1 >= tile.u_wind.len() || idx + tile.n_lon_wind >= tile.u_wind.len() {
+                            log!("WIND BOUNDS: idx={}, n_lon_wind={}, step_offset={}, wlat_cell={}, wlon_cell={}, len={}", 
+                                idx, tile.n_lon_wind, step_offset, wlat_cell, wlon_cell, tile.u_wind.len());
+                        }
                         let wu0 = tile.u_wind[w_idx];
                         let wv0 = tile.v_wind[w_idx];
                         let wu1 = tile.u_wind[w_idx + 1];
@@ -212,7 +217,7 @@ impl DataLoader {
 
                     // ---- SST (bilinear at 0.25°) ----
                     let sst = if has_sst && has_wind {
-                        let (wlon_cell, wlat_cell) = self.get_cell_index(lon, lat, tile, self.lon_step_wind, self.lat_step_wind, tile_min_lon, tile_min_lat);
+                        let (wlon_cell, wlat_cell) = self.get_cell_index(lon, lat, tile.n_lon_wind, tile.n_lat_wind, self.lon_step_wind, self.lat_step_wind, tile_min_lon, tile_min_lat);
                         let wcell_lon_min = tile_min_lon + (wlon_cell as f32) * self.lon_step_wind;
                         let wcell_lat_min = tile_min_lat + (wlat_cell as f32) * self.lat_step_wind;
                         let wx_frac = ((lon - wcell_lon_min) / self.lon_step_wind).clamp(0.0, 1.0);
@@ -442,13 +447,13 @@ impl DataLoader {
         key
     }
     
-    pub fn get_cell_index(&self, lon: f32, lat: f32, tile: &TileData, lon_step: f32, lat_step: f32, tile_min_lon: f32, tile_min_lat: f32) -> (usize, usize) {
+    pub fn get_cell_index(&self, lon: f32, lat: f32, n_lon: usize, n_lat: usize, lon_step: f32, lat_step: f32, tile_min_lon: f32, tile_min_lat: f32) -> (usize, usize) {
         let lon_cell = ((lon - tile_min_lon) / lon_step).floor() as i32;
         let lat_cell = ((lat - tile_min_lat) / lat_step).floor() as i32;
-
-        let lon_cell = lon_cell.max(0).min(tile.n_lon as i32 - 2) as usize;
-        let lat_cell = lat_cell.max(0).min(tile.n_lat as i32 - 2) as usize;
-
+        
+        let lon_cell = lon_cell.max(0).min(n_lon as i32 - 2) as usize;
+        let lat_cell = lat_cell.max(0).min(n_lat as i32 - 2) as usize;
+        
         (lon_cell, lat_cell)
     }
     
