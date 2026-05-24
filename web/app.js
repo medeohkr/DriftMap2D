@@ -101,7 +101,7 @@ let boundingBox = [];
 let releaseAmount = releaseAmountField.value;
 let releaseDuration = releaseDurationField.value;
 let legendCollapsed = false;
-let stepInProgress = false;
+let landmaskPromise = null;
 
 const GRID_UPDATE_INTERVAL = 150;
 let GRID_SIZE = 0.025;
@@ -305,7 +305,9 @@ async function updateFields() {
   );
   const oceanTile = getTileIndices([normalizeLongitude(rawLon), rawLat], -80);
   preloader.preloadTiles(currentDate, oceanTile);
-  await proteus.init_landmask(normalizeLongitude(rawLon), rawLat);
+  landmaskPromise = proteus.init_landmask(normalizeLongitude(rawLon), rawLat);
+  await landmaskPromise;
+  landmaskPromise = null;
   updateMarker();
 }
 
@@ -540,7 +542,6 @@ function zoom() {
 // ========== SIMULATION CORE ==========
 async function simulationStep(version) {
   if (!simulationRunning || version !== simulationVersion) return;
-  stepInProgress = true;
 
   try {
     const todayDateInt = proteus.current_date_int();
@@ -588,7 +589,7 @@ async function simulationStep(version) {
     }
 
     dayDisplay.textContent = proteus.current_time_str();
-    if (stepCount < totalDays*96) {
+    if (stepCount < totalDays * stepsPerDay) {
       animationId = requestAnimationFrame(() => simulationStep(version));
     } else {
       simulationRunning = false;
@@ -601,7 +602,6 @@ async function simulationStep(version) {
     }
   } finally {
     stepCount++;
-    stepInProgress = false;
   }
 }
 
@@ -677,8 +677,8 @@ function getHeatmapGeojson() {
 async function startSimulation() {
   if (simulationRunning) return;
 
-  while (stepInProgress) {
-      await new Promise(resolve => setTimeout(resolve, 10));
+  if (landmaskPromise) {
+      await landmaskPromise;
   }
 
   const errors = validateSimulation();
@@ -751,9 +751,6 @@ function resumeSimulation() {
 }
 
 async function resetSimulation() {
-  while (stepInProgress) {
-    await new Promise(resolve => setTimeout(resolve, 10));
-  }
   simulationRunning = false;
   simulationVersion++;
   stepCount = 0;
