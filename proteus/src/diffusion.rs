@@ -1,6 +1,7 @@
 use rand::prelude::*;
 use rand_distr::{Normal, Distribution};
 use crate::data_loader::DataLoader;
+use crate::landmask_loader::LandMaskLoader;
 macro_rules! log {
     ( $( $t:tt )* ) => {
         web_sys::console::log_1(&format!( $( $t )* ).into());
@@ -25,6 +26,7 @@ impl Diffusion {
     pub fn smagorinsky_step(
         &mut self,
         loader: &DataLoader,
+        landmask: &LandMaskLoader,
         lon: f32,
         lat: f32,
         depth: f32,
@@ -36,17 +38,20 @@ impl Diffusion {
         let dx = 0.01;
         let dy = 0.01;
 
-        // Batch all 4 probe positions
         let probes = [
-            (lon + dx, lat),
-            (lon - dx, lat),
+            (loader.normalize_lon(lon + dx), lat),
+            (loader.normalize_lon(lon - dx), lat),
             (lon, (lat + dy).clamp(-80.0, 90.0)),
             (lon, (lat - dy).clamp(-80.0, 90.0)),
         ];
-        
-        // Query all velocities in one batch call
+
+        // If any probe is on land, skip diffusion
+        if probes.iter().any(|&(plon, plat)| landmask.is_on_land(plon, plat)) {
+            return (0.0, 0.0);
+        }
+
         let velocities = loader.get_velocities_batch(&probes, depth, day, hour);
-        
+
         let (updx, vpdx) = velocities[0];
         let (umdx, vmdx) = velocities[1];
         let (updy, vpdy) = velocities[2];
@@ -62,10 +67,8 @@ impl Diffusion {
 
         let strain = (dudx.powi(2) + 0.5 * (dudy + dvdx).powi(2) + dvdy.powi(2)).sqrt();
         let k = self.cs * cell_area_m2 * strain * diffusion_damping;
-        let k = k.max(0.01);
         let dt_seconds = dt_days * 86400.0;
         let sigma = (2.0 * k * dt_seconds).sqrt();
-        let sigma = sigma.min(1000.0);
 
         let dx_meters = self.normal.sample(&mut self.rng) * sigma;
         let dy_meters = self.normal.sample(&mut self.rng) * sigma;
