@@ -20,7 +20,8 @@ pub struct Proteus {
     days_since_start: f32,
     start_date: NaiveDate,
     hour_count: u32,
-    step_count: u32
+    step_count: u32,
+    steps_per_day: u32
 }
 
 #[wasm_bindgen]
@@ -39,6 +40,7 @@ impl Proteus {
         start_year: i32,
         start_month: u32,
         start_day: u32,
+        steps_per_day: u32,
         release_amount: f64,
         release_duration: f32,
         oil_type: String) -> Self {
@@ -88,6 +90,7 @@ impl Proteus {
             landmask,
             days_since_start: 0.0,
             start_date,
+            steps_per_day,
             hour_count: 0,
             step_count: 0
         }
@@ -113,17 +116,19 @@ impl Proteus {
         Ok(())
     }
 
-    pub async fn step(&mut self, steps_per_day: u32) -> Result<(), JsValue> {
-        let dt_days = 1.0 / steps_per_day as f32;
+    pub async fn step(&mut self, step_count: u32) -> Result<(), JsValue> {
+        let dt_days = 1.0 / self.steps_per_day as f32;
+        self.step_count = step_count;
         let current_date_int = self.get_current_date_int();
         
-        // Calculate hour BEFORE using it (integer math, no float error)
-        let total_hours = 24 * self.step_count / steps_per_day;
-        let hour = total_hours % 24;
-        
+        if step_count == 0 {
+            self.simulation.release_particles(dt_days);
+            return Ok(());
+        }
+        let hour = (24 * self.step_count / self.steps_per_day) % 24;
+
         self.loader.set_current_day(current_date_int, hour as u32);
         
-        // Step 0: Release particles first
         self.simulation.release_particles(dt_days);
         
         // Load tiles for the released particles
@@ -133,7 +138,9 @@ impl Proteus {
             web_sys::console::error_1(&format!("Failed to load ocean tiles: {:?}", e).into());
             return Err(JsValue::from_str(&format!("{:?}", e)));
         }
-        
+        log!("step: {} hour: {}, days_since_start {}", self.step_count, hour, self.days_since_start);
+        log!("Needed tiles for date {}: {:?}", current_date_int, needed_ocean_tiles.iter().map(|t| (t.lon_idx, t.lat_idx)).collect::<Vec<_>>());
+
         // Load landmask tiles
         let particles = self.simulation.get_particles();
         let mut landmask_tiles = std::collections::HashSet::new();
@@ -154,7 +161,7 @@ impl Proteus {
         
         self.simulation.update_particles_batch(dt_days, &self.loader, hour as u32, &self.landmask);
         
-        self.days_since_start = self.step_count as f32 / steps_per_day as f32;
+        self.days_since_start = self.step_count as f32 / self.steps_per_day as f32;
         self.hour_count = hour as u32;
         self.step_count += 1;
         Ok(())
@@ -206,13 +213,9 @@ impl Proteus {
     pub fn current_day(&self) -> f32 {
         self.days_since_start
     }
-    
     pub fn current_date_int(&self) -> u32 {
-        let current_date = self.start_date + Days::new(self.days_since_start as u64);
-        let year = current_date.year();
-        let month = current_date.month();
-        let day = current_date.day();
-        (year as u32 * 10000) + (month * 100) + day
+        let date = self.start_date + Days::new(((self.step_count - 1 )/ self.steps_per_day) as u64);
+        date.year() as u32 * 10000 + date.month() * 100 + date.day()
     }
     
     pub fn current_time_str(&self) -> String {

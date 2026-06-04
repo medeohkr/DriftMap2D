@@ -67,12 +67,12 @@ def delete_prefix(prefix):
 
 
 def delete_oldest_day():
-    oldest = datetime.utcnow() - timedelta(days=HINDCAST_DAYS + 1)
-    prefix = f"tiles/{oldest.strftime('%Y/%m/%d')}/"
-    deleted = delete_prefix(prefix)
-    if deleted > 0:
-        print(f"  Deleted oldest day {oldest.date()}: {deleted} tiles")
-    return deleted
+    for i in range(3):
+        oldest = datetime.utcnow() - timedelta(days=HINDCAST_DAYS + 1 + i)
+        prefix = f"tiles/{oldest.strftime('%Y/%m/%d')}/"
+        deleted = delete_prefix(prefix)
+        if deleted > 0:
+            print(f"  Deleted oldest days {oldest.date()}: {deleted} tiles")
 
 
 def download_ecmwf():

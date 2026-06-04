@@ -104,22 +104,22 @@ let legendCollapsed = false;
 let landmaskPromise = null;
 
 const GRID_UPDATE_INTERVAL = 150;
-let GRID_SIZE = 0.025;
-
+const GRID_SIZE = 0.025;
+const PADDING = GRID_SIZE * 2;
 const CONCENTRATIONS = [
   0.0002, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2,
 ];
 const COLORS = [
-  "rgb(60, 90, 190)",
-  "rgb(80, 140, 200)",
-  "rgb(90, 175, 195)",
-  "rgb(100, 190, 160)",
-  "rgb(140, 200, 120)",
-  "rgb(200, 210, 100)",
-  "rgb(225, 210, 100)",
-  "rgb(225, 170, 90)",
-  "rgb(215, 135, 80)",
-  "rgb(200, 100, 80)",
+  "rgb(65, 85, 185)",    // 0.1 rad/hr - below concern
+  "rgb(60, 150, 130)",   // 0.5 rad/hr - very low
+  "rgb(70, 180, 120)",   // 1 rad/hr - low
+  "rgb(150, 200, 90)",   // 5 rad/hr - moderate
+  "rgb(195, 210, 100)",  // 10 rad/hr - elevated
+  "rgb(240, 180, 60)",   // 20 rad/hr - concerning
+  "rgb(240, 140, 40)",   // 50 rad/hr - dangerous
+  "rgb(220, 80, 40)",    // 100 rad/hr - severe
+  "rgb(190, 30, 50)",    // 200 rad/hr - critical
+  "rgb(140, 15, 100)",   // 500 rad/hr - lethal
 ];
 
 // ========== HELPER FUNCTIONS ==========
@@ -394,25 +394,8 @@ function updateParticleVisualization() {
 
 function updateGridVisualization() {
   const data = proteus.get_unstranded_positions_with_mass();
-  if (!data?.length) {
-    map
-      .getSource("concentration")
-      .setData({ type: "FeatureCollection", features: [] });
-    return;
-  }
-
-  const lons = [],
-    lats = [],
-    masses = [];
-  for (let i = 0; i < data.length; i += 3) {
-    lons.push(data[i]);
-    lats.push(data[i + 1]);
-    masses.push(data[i + 2]);
-  }
-
-  heatmap.clear();
-  heatmap.add_particles(lons, lats, masses);
-  heatmap.smooth();
+  if (!data?.length) return;
+  buildHeatmap();
   const geojson = JSON.parse(
     heatmap.to_contour_geojson(
       getScaledConcentrations().map(tonsPerKm2ToTonsPerCell),
@@ -421,6 +404,61 @@ function updateGridVisualization() {
   map.getSource("concentration").setData(geojson);
 }
 
+function buildHeatmap() {
+  const data = proteus.get_unstranded_positions_with_mass();
+  if (!data?.length) return;
+  const { lonMin, lonMax, needsShift } = getShiftedBounds(data);
+
+  heatmap = new HeatmapGenerator(
+    lonMin - PADDING, lonMax + PADDING,
+    boundingBox[2] - PADDING, boundingBox[3] + PADDING,
+    GRID_SIZE
+  );
+
+  const lons = [],
+    lats = [],
+    masses = [];
+  for (let i = 0; i < data.length; i += 3) {
+    let lon = data[i];
+    if (needsShift && lon < 0) lon += 360;
+    lons.push(lon);
+    lats.push(data[i + 1]);
+    masses.push(data[i + 2]);
+  }
+
+  heatmap.clear();
+  heatmap.add_particles(lons, lats, masses);
+  heatmap.smooth();
+}
+function getShiftedBounds(positions) {
+  let lonMin = boundingBox[0];
+  let lonMax = boundingBox[1];
+
+  if (lonMax - lonMin > 180) {
+    // Find actual particle extent in 0-360 space
+    let shiftedMin = Infinity;
+    let shiftedMax = -Infinity;
+    
+    for (let i = 0; i < positions.length; i += 3) {
+      let lon = positions[i];
+      if (lon < 0) lon += 360;
+      if (lon < shiftedMin) shiftedMin = lon;
+      if (lon > shiftedMax) shiftedMax = lon;
+    }
+    
+    return {
+      lonMin: shiftedMin,
+      lonMax: shiftedMax,
+      needsShift: true,
+    };
+  }
+
+  return {
+    lonMin: boundingBox[0],
+    lonMax: boundingBox[1],
+    needsShift: false,
+  };
+}
 function createHeatmapColorLegend(show = true) {
   const oldLegend = document.getElementById("concentration-legend");
   if (oldLegend) oldLegend.remove();
@@ -546,7 +584,7 @@ async function simulationStep(version) {
   try {
     const todayDateInt = proteus.current_date_int();
 
-    await proteus.step(stepsPerDay);
+    await proteus.step(stepCount);
 
     if (stepCount % stepsPerDay === 0) {
       const oceanTiles = getTileIndices(proteus.get_positions(), -80);
@@ -575,13 +613,6 @@ async function simulationStep(version) {
       visualizationMode === "grid" &&
       performance.now() - lastGridUpdate > GRID_UPDATE_INTERVAL
     ) {
-      heatmap = new HeatmapGenerator(
-        boundingBox[0] - GRID_SIZE * 2,
-        boundingBox[1] + GRID_SIZE * 2,
-        boundingBox[2] - GRID_SIZE * 2,
-        boundingBox[3] + GRID_SIZE * 2,
-        GRID_SIZE,
-      );
       updateGridVisualization();
       lastGridUpdate = performance.now();
     } else if (visualizationMode !== "grid") {
@@ -645,27 +676,7 @@ function getStrandedGeojson() {
 }
 
 function getHeatmapGeojson() {
-  const data = proteus.get_unstranded_positions_with_mass();
-  if (!data?.length) return { type: "FeatureCollection", features: [] };
-
-  const lons = [],
-    lats = [],
-    masses = [];
-  for (let i = 0; i < data.length; i += 3) {
-    lons.push(data[i]);
-    lats.push(data[i + 1]);
-    masses.push(data[i + 2]);
-  }
-  heatmap = new HeatmapGenerator(
-    boundingBox[0] - GRID_SIZE * 2,
-    boundingBox[1] + GRID_SIZE * 2,
-    boundingBox[2] - GRID_SIZE * 2,
-    boundingBox[3] + GRID_SIZE * 2,
-    GRID_SIZE,
-  );
-  heatmap.clear();
-  heatmap.add_particles(lons, lats, masses);
-  heatmap.smooth();
+  buildHeatmap();
   return JSON.parse(
     heatmap.to_contour_geojson(
       getScaledConcentrations().map(tonsPerKm2ToTonsPerCell),
@@ -718,10 +729,12 @@ async function startSimulation() {
     startYear,
     startMonth,
     startDay,
+    stepsPerDay,
     releaseAmount,
     releaseDuration,
     oilType,
   );
+  
   simulationStep(simulationVersion);
 
   startBtn.style.display = "none";
@@ -774,6 +787,7 @@ async function resetSimulation() {
     startYear,
     startMonth,
     startDay,
+    stepsPerDay,
     releaseAmount,
     releaseDuration,
     oilType,
@@ -1077,6 +1091,7 @@ async function initialize() {
     startYear,
     startMonth,
     startDay,
+    stepsPerDay,
     releaseAmount,
     releaseDuration,
     oilType,
