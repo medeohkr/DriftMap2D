@@ -129,78 +129,6 @@ pub fn new(lon_min: f64, lon_max: f64, lat_min: f64, lat_max: f64, cell_size: f6
             self.grid[start..end].copy_from_slice(&smoothed[start..end]);
         }
     }
-    
-    pub fn get_max_value(&self) -> f32 {
-        self.grid.iter().fold(0.0f32, |max, &val| if val > max { val } else { max })
-    }
-    
-    pub fn get_min_max(&self) -> (f32, f32) {
-        let mut min = f32::MAX;
-        let mut max = f32::MIN;
-        for &val in &self.grid {
-            if val > 0.0 {
-                if val < min { min = val; }
-                if val > max { max = val; }
-            }
-        }
-        (min, max)
-    }
-    
-    pub fn get_bounds(&self) -> (f64, f64, f64, f64) {
-        (self.lon_min, self.lon_max, self.lat_min, self.lat_max)
-    }
-    
-    pub fn get_dimensions(&self) -> (usize, usize) {
-        (self.nx, self.ny)
-    }
-    
-    pub fn get_grid(&self) -> &[f32] {
-        &self.grid
-    }
-    
-    // Generate blocky GeoJSON (for fallback visualization)
-    pub fn to_geojson(&self) -> String {
-        let mut features = Vec::new();
-        
-        for iy in 0..self.ny {
-            for ix in 0..self.nx {
-                let val = self.grid[iy * self.nx + ix];
-                if val == 0.0 { continue; }
-                
-                let lon = self.lon_min + ix as f64 * self.cell_size;
-                let lat = self.lat_min + iy as f64 * self.cell_size;
-                
-                let coordinates = vec![
-                    vec![lon, lat],
-                    vec![lon + self.cell_size, lat],
-                    vec![lon + self.cell_size, lat + self.cell_size],
-                    vec![lon, lat + self.cell_size],
-                    vec![lon, lat],
-                ];
-                
-                let feature = serde_json::json!({
-                    "type": "Feature",
-                    "geometry": {
-                        "type": "Polygon",
-                        "coordinates": [coordinates]
-                    },
-                    "properties": {
-                        "concentration": val
-                    }
-                });
-                
-                features.push(feature);
-            }
-        }
-        
-        let geojson = serde_json::json!({
-            "type": "FeatureCollection",
-            "features": features
-        });
-        
-        geojson.to_string()
-    }
-    
     // Generate smooth contour GeoJSON
     pub fn to_contour_geojson(&self, thresholds: &[f32]) -> String {
         let contours = self.generate_contours(thresholds);
@@ -407,15 +335,7 @@ impl HeatmapGenerator {
     pub fn smooth(&mut self) {
         self.grid.smooth();
     }
-    
-    pub fn get_max_value(&self) -> f32 {
-        self.grid.get_max_value()
-    }
-    
-    pub fn to_geojson(&self) -> String {
-        self.grid.to_geojson()
-    }
-    
+
     pub fn to_contour_geojson(&self, thresholds: &[f32]) -> String {
         self.grid.to_contour_geojson(thresholds)
     }

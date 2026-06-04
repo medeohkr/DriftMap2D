@@ -9,3 +9,4 @@ web/.wrangler/
 roaring_landmask/
 web/images/
 scripts/archive/
+.continue/

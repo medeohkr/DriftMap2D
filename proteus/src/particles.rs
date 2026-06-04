@@ -150,22 +150,6 @@ impl Particles {
         self.stranded.iter().filter(|&&a| a).count()
     }
 
-    pub fn bounding_box(&self) -> (f32, f32, f32, f32) {
-        let mut xmin = f32::MAX;
-        let mut xmax = f32::MIN;
-        let mut ymin = f32::MAX;
-        let mut ymax = f32::MIN;
-        
-        for i in 0..self.len {
-            xmin = xmin.min(self.x[i]);
-            xmax = xmax.max(self.x[i]);
-            ymin = ymin.min(self.y[i]);
-            ymax = ymax.max(self.y[i]);
-        }
-        
-        (xmin, xmax, ymin, ymax)
-    }
-
     pub fn bounding_box_array(&self) -> Vec<f32> {
         let mut xmin = f32::MAX;
         let mut xmax = f32::MIN;

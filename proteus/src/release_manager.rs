@@ -1,7 +1,6 @@
 // release_manager.rs
 
 use rand::prelude::*;
-use rand::distributions::Standard;
 use rand_distr::{Normal, Distribution};
 
 /// Release schedule type
