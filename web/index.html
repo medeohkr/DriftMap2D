@@ -6,7 +6,7 @@
     <title>DriftMap</title>
     
     <!-- maplibre css -->
-    <link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@^6.1.0/dist/maplibre-gl.css"/>
     <link rel="stylesheet" href="style.css?v=2">
     <link rel="icon" href="images/DriftMap.webp">
     
@@ -32,6 +32,34 @@
                     <input type="checkbox" id="autozoom-checkbox" checked>
                     <span>Auto-zoom</span>
                 </div>
+                <div class="container" id="model-selector-container">
+                    <span class="model-text">Select Model:</span>
+                    <select name="model-menu" class="menu" id="model-menu">
+                    <option value="oil-weathering" selected>OIL WEATHERING</option>
+                    <option value="search-and-rescue">SEARCH AND RESCUE</option>
+                    </select>
+                </div>
+                <div class="container" id="oil-display-container">
+                    <span class="oil-text">Oil Type:</span>
+                    <select name="oil-menu" class="menu" id="oil-menu">
+                    <option value="marine-diesel">MARINE DIESEL (Refined)</option>
+                    <option value="bonny-light">BONNY LIGHT (Light Crude)</option>
+                    <option value="arabian-light" selected>ARABIAN LIGHT (Medium Crude)</option>
+                    <option value="venezuelan-heavy">VENEZUELAN HEAVY (Heavy Crude)</option>
+                    <option value="ifo-380">IFO 380 (Heavy Fuel Oil)</option>
+                    </select>
+                </div>
+                <div class="container" id="object-selector-container">
+                    <span class="object-text">Object Type:</span>
+                    <select name="object-menu" class="menu" id="object-menu">
+                    <option value="person-in-water">Person In Water</option>
+                    <option value="skiff-modified-v">Skiff Modified-V</option>
+                    <option value="life-raft" selected>Life Raft</option>
+                    <option value="fishing-vessel">Fishing Vessel</option>
+                    <option value="sailboat">Sailboat</option>
+                    <option value="bait-wharf-box">Bait/Wharf Box</option>
+                    </select>
+                </div>
                 <div class="release-display-container">
                     <span class="release-text">Release Location:</span>
                     <span class="lat-text">Latitude:</span>
@@ -44,16 +72,6 @@
                     <input type="date" id="start-day-selector">
                     <span class="total-day-text">Total Days:</span>
                     <input type="number" id="total-day-field" value="7.0" step="1.0">
-                </div>
-                <div class="oil-display-container">
-                    <span class="oil-text">Oil Type:</span>
-                    <select name="oil-menu" id="oil-menu">
-                    <option value="marine-diesel">MARINE DIESEL (Refined)</option>
-                    <option value="bonny-light">BONNY LIGHT (Light Crude)</option>
-                    <option value="arabian-light" selected>ARABIAN LIGHT (Medium Crude)</option>
-                    <option value="venezuelan-heavy">VENEZUELAN HEAVY (Heavy Crude)</option>
-                    <option value="ifo-380">IFO 380 (Heavy Fuel Oil)</option>
-                    </select>
                 </div>
                 <div class="release-manager-container">
                     <span class="release-amount-text">Release Amount</span>
