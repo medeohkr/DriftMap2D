@@ -4,6 +4,7 @@ import init, {
   HeatmapGenerator,
 } from "./pkg/proteus.js";
 import { preloader } from "./preloader.js";
+import * as maplibregl from 'https://unpkg.com/maplibre-gl@^6.1.0/dist/maplibre-gl.mjs';
 
 // ========== MAP INITIALIZATION ==========
 let map = new maplibregl.Map({
@@ -110,16 +111,16 @@ const CONCENTRATIONS = [
   0.0002, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2,
 ];
 const COLORS = [
-  "rgb(65, 85, 185)",    // 0.1 rad/hr - below concern
-  "rgb(60, 150, 130)",   // 0.5 rad/hr - very low
-  "rgb(70, 180, 120)",   // 1 rad/hr - low
-  "rgb(150, 200, 90)",   // 5 rad/hr - moderate
-  "rgb(195, 210, 100)",  // 10 rad/hr - elevated
-  "rgb(240, 180, 60)",   // 20 rad/hr - concerning
-  "rgb(240, 140, 40)",   // 50 rad/hr - dangerous
-  "rgb(220, 80, 40)",    // 100 rad/hr - severe
-  "rgb(190, 30, 50)",    // 200 rad/hr - critical
-  "rgb(140, 15, 100)",   // 500 rad/hr - lethal
+  "rgb(65, 85, 185)",
+  "rgb(60, 150, 130)",
+  "rgb(70, 180, 120)",
+  "rgb(150, 200, 90)",
+  "rgb(195, 210, 100)",
+  "rgb(240, 180, 60)",
+  "rgb(240, 140, 40)",
+  "rgb(220, 80, 40)",
+  "rgb(190, 30, 50)", 
+  "rgb(140, 15, 100)",
 ];
 
 // ========== HELPER FUNCTIONS ==========

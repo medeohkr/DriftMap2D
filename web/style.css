@@ -89,6 +89,18 @@ body {
 #open { display: none; }
 
 /* ===== PANELS ===== */
+.container {
+    width: 180px;
+    display: flex;
+    flex-direction: column;
+    font-family: Montserrat;
+    font-size: 14px;
+    padding: 10px;
+    font-weight: 500;
+    color: rgb(180, 180, 180);
+    row-gap: 10px;
+    background-color: rgb(40, 40, 40);
+}
 .release-display-container {
     display: grid;
     background-color: rgb(40, 40, 40);
@@ -188,19 +200,7 @@ body {
 #reset-simulation:hover { opacity: 0.8; }
 .reset-btn-img { height: 22.5px; }
 
-.oil-display-container {
-    width: 180px;
-    display: flex;
-    flex-direction: column;
-    font-family: Montserrat;
-    font-size: 12px;
-    padding: 10px;
-    font-weight: 500;
-    color: rgb(180, 180, 180);
-    row-gap: 10px;
-    background-color: rgb(40, 40, 40);
-}
-#oil-menu {
+.menu {
     width: 180px;
     padding: 8px;
     background: rgb(255, 255, 255);
