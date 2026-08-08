@@ -1112,6 +1112,7 @@ async function initialize() {
 
 // ========== EVENT LISTENERS ==========
 map.on("click", (e) => {
+  console.log("Map clicked!");
   if (!simulationHistory.length) {
     rawLon = e.lngLat.lng.toFixed(2);
     rawLat = e.lngLat.lat.toFixed(2);
@@ -1191,10 +1192,7 @@ openLegendBtn.addEventListener("click", () => {
   collapseLegendBtn.style.display = "inline-block";
   legendCollapsed = false;
 });
-slideHandle.addEventListener('click', () => {
-    document.querySelector('.sidebar-wrapper').classList.toggle('open');
-});
-
+// 
 // ========== COORDINATE DISPLAY ==========
 const coordDisplay = document.createElement("div");
 coordDisplay.id = "coordinate-display";
