@@ -1,5 +1,5 @@
 
-// === DOM elements ===
+// === DOM ELEMENTS ===
 //tabs and panels
 const basicTab = document.getElementById("tab-basic");
 const advancedTab = document.getElementById("tab-advanced");
@@ -7,31 +7,36 @@ const basicPanel = document.getElementById("panel-basic");
 const advancedPanel = document.getElementById("panel-advanced")
 
 //model and tracer selectors
-const modelSelector = document.getElementById("model-selector");
-const oilSelector = document.getElementById("oil-selector");
-const objectSelector = document.getElementById("object-selector");
-const plasticSelector = document.getElementById("plastic-selector");
+const modelMenu = document.getElementById("model-selector");
+const oilMenu = document.getElementById("oil-selector");
+const objectMenu = document.getElementById("object-selector");
+const plasticMenu = document.getElementById("plastic-selector");
 
-const modelSelectorContainer = document.getElementById("model-selector-container");
-const oilSelectorContainer = document.getElementById("oil-selector-container");
-const objectSelectorContainer = document.getElementById("object-selector-container");
-const plasticSelectorContainer = document.getElementById("plastic-selector-container");
+const modelMenuContainer = document.getElementById("model-selector-container");
+const oilMenuContainer = document.getElementById("oil-selector-container");
+const objectMenuContainer = document.getElementById("object-selector-container");
+const plasticMenuContainer = document.getElementById("plastic-selector-container");
 
-//temporary for development
-basicTab.classList.remove("active");
-advancedTab.classList.add("active");
-basicPanel.hidden = true;
-advancedPanel.hidden = false;
+const basicModelMenu = document.getElementById("model-selector-basic");
+const basicOilMenu = document.getElementById("oil-selector-basic");
+const basicObjectMenu = document.getElementById("object-selector-basic");
+const basicPlasticMenu = document.getElementById("plastic-selector-basic");
 
-// === event listeners ===
+const basicModelMenuContainer = document.getElementById("model-selector-container-basic");
+const basicOilMenuContainer = document.getElementById("oil-selector-container-basic");
+const basicObjectMenuContainer = document.getElementById("object-selector-container-basic");
+const basicPlasticMenuContainer = document.getElementById("plastic-selector-container-basic");
+
+// === EVENT LISTENERS ===
 //tabs
 basicTab.addEventListener("click", () => setActiveTab(basicTab));
 advancedTab.addEventListener("click", () => setActiveTab(advancedTab));
 
 //model selector
-modelSelector.addEventListener("change", updateTracerSelector);
+modelMenu.addEventListener("change", updateTracerMenu);
+basicModelMenu.addEventListener("change", updateBasicTracerMenu);
 
-// === UI change functions ===
+// === UI CHANGE FUNCTIONS ===
 function setActiveTab(tab) {
     const isBasic = tab === basicTab;
     
@@ -42,19 +47,33 @@ function setActiveTab(tab) {
     advancedPanel.hidden = isBasic;
 }
 
-function updateTracerSelector() {
-    oilSelectorContainer.classList.add("hidden");
-    objectSelectorContainer.classList.add("hidden");
-    plasticSelectorContainer.classList.add("hidden");
+function updateTracerMenu() {
+    oilMenuContainer.classList.add("hidden");
+    objectMenuContainer.classList.add("hidden");
+    plasticMenuContainer.classList.add("hidden");
     
-    if (modelSelector.value === "oil-weathering") {
-        oilSelectorContainer.classList.remove("hidden");
-    } else if (modelSelector.value === "search-and-rescue") {
-        objectSelectorContainer.classList.remove("hidden");
-    } else if (modelSelector.value === "plastic-drift") {
-        plasticSelectorContainer.classList.remove("hidden");
+    if (modelMenu.value === "oil-weathering") {
+        oilMenuContainer.classList.remove("hidden");
+    } else if (modelMenu.value === "search-and-rescue") {
+        objectMenuContainer.classList.remove("hidden");
+    } else if (modelMenu.value === "plastic-drift") {
+        plasticMenuContainer.classList.remove("hidden");
     }
 }
 
-// === initialize ===
-updateTracerSelector();
+function updateBasicTracerMenu() {
+    basicOilMenuContainer.classList.add("hidden");
+    basicObjectMenuContainer.classList.add("hidden");
+    basicPlasticMenuContainer.classList.add("hidden");
+    
+    if (basicModelMenu.value === "oil-weathering") {
+        basicOilMenuContainer.classList.remove("hidden");
+    } else if (basicModelMenu.value === "search-and-rescue") {
+        basicObjectMenuContainer.classList.remove("hidden");
+    } else if (basicModelMenu.value === "plastic-drift") {
+        basicPlasticMenuContainer.classList.remove("hidden");
+    }
+}
+// === INITIALIZATION ===
+updateTracerMenu();
+updateBasicTracerMenu();
