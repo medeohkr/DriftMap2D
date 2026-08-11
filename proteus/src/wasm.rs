@@ -96,7 +96,7 @@ impl Proteus {
         }
     }
     
-    fn get_current_date_int(&self) -> u32 {
+    pub fn get_current_date_int(&self) -> u32 {
         let current_date = self.start_date + Days::new(self.days_since_start as u64);
         let year = current_date.year();
         let month = current_date.month();
@@ -212,10 +212,6 @@ impl Proteus {
     
     pub fn current_day(&self) -> f32 {
         self.days_since_start
-    }
-    pub fn current_date_int(&self) -> u32 {
-        let date = self.start_date + Days::new(((self.step_count - 1 )/ self.steps_per_day) as u64);
-        date.year() as u32 * 10000 + date.month() * 100 + date.day()
     }
     
     pub fn current_time_str(&self) -> String {

@@ -25,8 +25,8 @@ let map = new maplibregl.Map({
   center: [0, 40],
   zoom: 1.5,
   maxBounds: [
-    [-Infinity, -80.0],
-    [Infinity, 85.05],
+    [-Infinity, -75.0],
+    [Infinity, 85.0],
   ],
 });
 
@@ -36,14 +36,14 @@ map.addControl(
 );
 
 // ========== DOM ELEMENTS ==========
-const latField = document.querySelector(".lat-field");
-const lonField = document.querySelector(".lon-field");
+const latField = document.getElementById("lat-field");
+const lonField = document.getElementById("lon-field");
 const startBtn = document.getElementById("start-simulation");
 const dayDisplay = document.getElementById("current-day");
 const stopBtn = document.getElementById("stop-simulation");
 const resumeBtn = document.getElementById("resume-simulation");
 const resetBtn = document.getElementById("reset-simulation");
-const oilMenu = document.getElementById("oil-menu");
+const oilMenu = document.getElementById("oil-selector-basic");
 const startDate = document.getElementById("start-day-selector");
 const totalDaysField = document.getElementById("total-day-field");
 const heatmapToggle = document.getElementById("heatmap-toggle");
@@ -104,7 +104,7 @@ let releaseDuration = releaseDurationField.value;
 let legendCollapsed = false;
 let landmaskPromise = null;
 
-const GRID_UPDATE_INTERVAL = 150;
+const GRID_UPDATE_INTERVAL = 100;
 const GRID_SIZE = 0.025;
 const PADDING = GRID_SIZE * 2;
 const CONCENTRATIONS = [
@@ -583,7 +583,7 @@ async function simulationStep(version) {
   if (!simulationRunning || version !== simulationVersion) return;
 
   try {
-    const todayDateInt = proteus.current_date_int();
+    const todayDateInt = proteus.get_current_date_int();
 
     await proteus.step(stepCount);
 
