@@ -1,7 +1,6 @@
 use rand::prelude::*;
 use rand_distr::{Normal, Distribution};
-use crate::data_loader::DataLoader;
-use crate::landmask_loader::LandMaskLoader;
+use crate::basemodel::{DataLoader, LandMaskLoader};
 macro_rules! log {
     ( $( $t:tt )* ) => {
         web_sys::console::log_1(&format!( $( $t )* ).into());

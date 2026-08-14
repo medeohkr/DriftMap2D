@@ -1,12 +1,13 @@
 // simulation.rs
-use crate::release_manager::{ReleaseManager, ReleaseConfig, Schedule};
-use crate::particles::Particles;
-use crate::integrators;
-use crate::diffusion::Diffusion;
-use crate::data_loader::DataLoader;
-use crate::landmask_loader::LandMaskLoader;
-use crate::oil_weathering;
-use crate::oil_library::{OilType, OilProperties};
+use crate::basemodel::{
+    ReleaseManager,
+    ReleaseConfig,
+    Particles,
+    integrators,
+    Diffusion,
+    DataLoader,
+    LandMaskLoader};
+use crate::tracers::{TracerKind};
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
@@ -18,7 +19,7 @@ pub struct Simulation {
     pub particles: Particles,
     release_manager: ReleaseManager,
     diffusion: Diffusion,
-    pub oil_type: OilType,
+    tracer: TracerKind,
     pub initial_mass_per_particle: f32,
 }
 
@@ -26,13 +27,11 @@ pub struct SimulationConfig {
     pub release_config: ReleaseConfig,
     pub max_particles: usize,
     pub cs: f32,
-    pub oil_type: OilType,
 }
 
 impl Simulation {
-    pub fn new(config: SimulationConfig) -> Self {
+    pub fn new(config: SimulationConfig, tracer: TracerKind) -> Self {
         let release_config = config.release_config.clone();
-        let oil_type = config.oil_type;
         let max_particles = config.max_particles;
         let cs = config.cs;
 
@@ -46,7 +45,7 @@ impl Simulation {
             particles,
             release_manager,
             diffusion,
-            oil_type,
+            tracer,
             initial_mass_per_particle,
         }
     }

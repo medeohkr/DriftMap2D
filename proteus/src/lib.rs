@@ -1,12 +1,2 @@
-pub mod particles;
-pub mod diffusion;
-pub mod integrators;
-pub mod interpolation;
-pub mod data_loader;
-pub mod release_manager;
-pub mod simulation;
-pub mod wasm;
-pub mod heatmap;
-pub mod landmask_loader;
-pub mod oil_library;
-pub mod oil_weathering;
+pub mod basemodel;
+pub mod tracers;
