@@ -3,6 +3,7 @@ mod oil;
 // mod leeway;
 // mod generic;
 
+use serde::{Deserialize};
 // pub use generic::GenericTracer;
 pub use oil::{OilTracer, OilConfig, OilData};
 // pub use plastic::PlasticTracer;
@@ -15,6 +16,7 @@ pub enum TracerKind {
     // Leeway(LeewayTracer)
 }
 
+#[derive(Debug, Clone, Deserialize)]  
 pub enum TracerConfig {
     // Generic(GenericConfig),
     Oil(OilConfig),
@@ -29,10 +31,9 @@ pub enum TracerData {
     // Leeway(LeewayData)
 }
 pub trait Tracer {
-    type Config;
     type Data;
 
-    fn seed(&self, config: &Self::Config) -> Self::Data;
+    fn seed(&self) -> Self::Data;
     fn step(
         &mut self,
         data: &mut Self::Data,
@@ -40,17 +41,16 @@ pub trait Tracer {
         sst_celsius: f32,
         dt: f32,
     );
+    fn wind_f(&self) -> f32;
+    fn wind_deg(&self) -> Option<f32>;
 }
 
 impl Tracer for TracerKind {
-    type Config = TracerConfig;
     type Data = TracerData;
 
-    fn seed(&self, config: &Self::Config) -> Self::Data {
-        match (self, config) {
-            (TracerKind::Oil(t), TracerConfig::Oil(c)) => {
-                TracerData::Oil(t.seed(c))
-            }
+    fn seed(&self) -> Self::Data {
+        match self {
+            TracerKind::Oil(t) => { TracerData::Oil(t.seed()) }
         }
     }
 
@@ -65,6 +65,18 @@ impl Tracer for TracerKind {
             (TracerKind::Oil(t), TracerData::Oil(d)) => {
                 t.step(d, wind_speed, sst_celsius, dt)
             }
+        }
+    }
+
+    fn wind_f(&self) -> f32 {
+        match self {
+            TracerKind::Oil(t) => { t.wind_factor }
+        }
+    }
+
+    fn wind_deg(&self) -> Option<f32> {
+        match self {
+            TracerKind::Oil(t) => { t.wind_deflection }
         }
     }
 }

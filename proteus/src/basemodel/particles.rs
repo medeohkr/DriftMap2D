@@ -1,21 +1,12 @@
 use crate::tracers::{TracerData};
 
 pub struct Particles {
-    // positions
     pub x: Vec<f32>,
     pub y: Vec<f32>,
     pub depth: Vec<f32>,
-    
-    // tracer-specific 
-    pub tracer_data: Vec<TracerData>,
-    pub concentration: Vec<f32>,
-
-    // state
+    pub data: Vec<TracerData>,
     pub stranded: Vec<bool>,
-    
-    // metadata
     pub len: usize,
-    pub capacity: usize,
 }
 
 impl Particles {
@@ -25,12 +16,25 @@ impl Particles {
             x: Vec::with_capacity(capacity),
             y: Vec::with_capacity(capacity),
             depth: Vec::with_capacity(capacity),
-            tracer_data: Vec::with_capacity(capacity),
-            concentration: Vec::with_capacity(capacity),
+            data: Vec::with_capacity(capacity),
             stranded: Vec::with_capacity(capacity),
             len: 0,
-            capacity,
         }
+    }
+
+    pub fn add_particle(
+        &mut self,
+        x: f32,
+        y: f32,
+        depth: f32,
+        data: TracerData,
+    ) {
+        self.x.push(x);
+        self.y.push(y);
+        self.depth.push(depth);
+        self.data.push(data);
+        self.stranded.push(false);
+        self.len += 1;
     }
     
     pub fn stranded_count(&self) -> usize {
