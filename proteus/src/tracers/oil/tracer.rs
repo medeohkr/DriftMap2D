@@ -5,6 +5,9 @@ use super::OilData;
 use super::AdiosOil;
 
 pub struct OilTracer {
+    pub config: OilConfig,
+    pub wind_factor: f32,
+    pub wind_deflection: Option<f32>,
     pub product_type: String,
     pub api: f32,
     pub density_kgm3: Vec<(f32, f32)>,
@@ -17,13 +20,12 @@ pub struct OilTracer {
 }
 
 impl Tracer for OilTracer {
-    type Config = OilConfig;
     type Data = OilData;
 
-    fn seed(&self, config: &Self::Config) -> Self::Data {
+    fn seed(&self) -> Self::Data {
         OilData {
             age: 0.0,
-            total_mass: config.total_mass_per_particle,
+            total_mass: self.config.total_mass_per_particle,
             mass_components: self.initial_mass_components.clone(),
             f_evap: 0.0,
             y_w: 0.0,
@@ -48,13 +50,24 @@ impl Tracer for OilTracer {
         );
 
     }
+
+    fn wind_f(&self) -> f32 {
+        self.wind_factor
+    }
+
+    fn wind_deg(&self) -> Option<f32> {
+        self.wind_deflection
+    }
 }
 
 impl OilTracer {
-    fn new(config: OilConfig) -> Self {
+    pub fn new(config: OilConfig) -> Self {
         let adios: AdiosOil = serde_json::from_str(&config.adios_json)
             .expect("Failed to parse ADIOS JSON");
         Self {
+            config: config.clone(),
+            wind_factor: config.overrides.wind_factor.unwrap_or(0.03),
+            wind_deflection: config.overrides.wind_factor,
             product_type: adios.metadata.product_type.clone(),
             api: config.overrides.api.unwrap_or(adios.metadata.api),
             density_kgm3: config.overrides.density_kgm3.unwrap_or(adios.densities()),

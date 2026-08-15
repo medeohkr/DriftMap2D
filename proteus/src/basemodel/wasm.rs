@@ -1,10 +1,11 @@
 // wasm.rs
 use wasm_bindgen::prelude::*;
 use chrono::{NaiveDate, Days, Datelike};
-use crate::simulation::{Simulation, SimulationConfig};
-use crate::release_manager::{ReleaseConfig, Schedule};
-use crate::data_loader::DataLoader;
-use crate::landmask_loader::LandMaskLoader;
+use crate::basemodel::simulation::{Simulation, SimulationConfig};
+use crate::basemodel::release_manager::{ReleaseConfig, Schedule};
+use crate::basemodel::DataLoader;
+use crate::basemodel::LandMaskLoader;
+use crate::tracers::{TracerKind, TracerConfig, OilTracer, TracerData};
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
@@ -32,7 +33,8 @@ pub fn setup_panic_hook() {
 #[wasm_bindgen]
 impl Proteus {
     #[wasm_bindgen(constructor)]
-    pub fn new(lon: f32, 
+    pub fn new(
+        lon: f32, 
         lat: f32,
         cs_value: f32,
         particle_count: usize,
@@ -43,19 +45,17 @@ impl Proteus {
         steps_per_day: u32,
         release_amount: f64,
         release_duration: f32,
-        oil_type: String) -> Self {
+        tracer_config: &str) -> Self {
 
         let start_date = NaiveDate::from_ymd_opt(start_year, start_month, start_day).unwrap();
         let release_type =
             if release_duration == 0.0 { Schedule::Instant }
             else { Schedule::Continuous{total_days: release_duration} };
-        let oil_type = match oil_type.as_str() {
-            "marine-diesel" => crate::oil_library::OilType::MarineDiesel,
-            "bonny-light" => crate::oil_library::OilType::BonnyLight,
-            "arabian-light" => crate::oil_library::OilType::ArabianLight,
-            "venezuelan-heavy" => crate::oil_library::OilType::VenezuelanHeavy,
-            "ifo-380" => crate::oil_library::OilType::IFO380,
-            _ => crate::oil_library::OilType::MarineDiesel,
+        let tracer_config: TracerConfig = serde_json::from_str(tracer_config)
+            .expect("Failed to parse tracer config");
+
+        let tracer = match tracer_config {
+            TracerConfig::Oil(config) => TracerKind::Oil(OilTracer::new(config)),
         };
         let release_config = ReleaseConfig {
             lon: lon,
@@ -71,10 +71,9 @@ impl Proteus {
             release_config,
             max_particles: 50000,
             cs: cs_value,
-            oil_type: oil_type
         };
         
-        let simulation = Simulation::new(sim_config);
+        let simulation = Simulation::new(sim_config, tracer);
         let loader = DataLoader::new(
             "https://tiles.driftmap2d.com/tiles",
             -180.0, -80.0
@@ -145,7 +144,7 @@ impl Proteus {
         let particles = self.simulation.get_particles();
         let mut landmask_tiles = std::collections::HashSet::new();
         for i in 0..particles.len {
-            if particles.active[i] && !particles.stranded[i] {
+            if !particles.stranded[i] {
                 let lon_idx = ((particles.x[i] + 180.0) / 10.0).floor() as i32;
                 let lat_idx = ((particles.y[i] + 90.0) / 10.0).floor() as i32;
                 if lon_idx >= 0 && lon_idx < 36 && lat_idx >= 0 && lat_idx < 18 {
@@ -206,10 +205,6 @@ impl Proteus {
         self.simulation.get_particles().stranded_count()
     }
 
-    pub fn inactive_particle_count(&self) -> usize {
-        self.simulation.get_particles().inactive_count()
-    }
-    
     pub fn current_day(&self) -> f32 {
         self.days_since_start
     }
@@ -235,46 +230,62 @@ impl Proteus {
 
     pub fn mass_weighted_evaporation(&self) -> f32 {
         let particles = self.simulation.get_particles();
-        let mut total_initial = 0.0_f32;
-        let mut total_evaporated = 0.0_f32;
+        let mut total_initial = 0.0;
+        let mut total_evaporated = 0.0;
+        
         for i in 0..particles.len {
-            total_initial += self.simulation.initial_mass_per_particle;
-            total_evaporated += self.simulation.initial_mass_per_particle * particles.f_evap[i];
+            if let TracerData::Oil(data) = &particles.data[i] {
+                if !particles.stranded[i] {
+                    let initial_mass = self.simulation.initial_mass_per_particle;
+                    total_initial += initial_mass;
+                    total_evaporated += initial_mass * data.f_evap;
+                }
+            }
         }
         if total_initial > 0.0 { total_evaporated / total_initial * 100.0 } else { 0.0 }
     }
 
     pub fn mass_weighted_emulsification(&self) -> f32 {
         let particles = self.simulation.get_particles();
-        let mut total_mass = 0.0_f32;
-        let mut weighted_y_w = 0.0_f32;
+        let mut total_initial = 0.0;
+        let mut total_emulsified = 0.0;
+        
         for i in 0..particles.len {
-            if particles.active[i] && !particles.stranded[i] {
-                total_mass += particles.mass[i];
-                weighted_y_w += particles.y_w[i] * particles.mass[i];
+            if let TracerData::Oil(data) = &particles.data[i] {
+                if !particles.stranded[i] {
+                    let initial_mass = self.simulation.initial_mass_per_particle;
+                    total_initial += initial_mass;
+                    total_emulsified += initial_mass * data.y_w;
+                }
             }
         }
-        if total_mass > 0.0 { weighted_y_w / total_mass * 100.0 } else { 0.0 }
+        if total_initial > 0.0 { total_emulsified / total_initial * 100.0 } else { 0.0 }
     }
 
     pub fn total_floating_mass_tons(&self) -> f32 {
         let particles = self.simulation.get_particles();
-        let mut total = 0.0_f32;
+        let mut total_mass = 0.0;
+        
         for i in 0..particles.len {
-            if particles.active[i] && !particles.stranded[i] {
-                total += particles.mass[i];
+            if let TracerData::Oil(data) = &particles.data[i] {
+                if !particles.stranded[i] {
+                    total_mass += data.total_mass
+                }
             }
         }
-        total / 1000.0
+        total_mass
     }
     pub fn get_unstranded_positions_with_mass(&self) -> Vec<f32> {
         let particles = self.simulation.get_particles();
         let mut data = Vec::with_capacity(particles.len * 3);
+        
         for i in 0..particles.len {
-            if particles.active[i] && !particles.stranded[i] {
-                data.push(particles.x[i]);
-                data.push(particles.y[i]);
-                data.push(particles.mass[i] / 1000.0); // current mass in tons
+            if !particles.stranded[i] {
+                if let TracerData::Oil(oil_data) = &particles.data[i] {
+                    data.push(particles.x[i]);
+                    data.push(particles.y[i]);
+                    data.push(oil_data.total_mass / 1000.0);
+                }
             }
         }
         data

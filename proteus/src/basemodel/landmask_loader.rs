@@ -9,12 +9,6 @@ extern "C" {
     fn get_preloaded_tile(url: &str) -> Option<Vec<u8>>;
 }
 
-macro_rules! log {
-    ( $( $t:tt )* ) => {
-        web_sys::console::log_1(&format!( $( $t )* ).into());
-    }
-}
-
 pub struct LandMaskLoader {
     min_lon: f32,
     min_lat: f32,

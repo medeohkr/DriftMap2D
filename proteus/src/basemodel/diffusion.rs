@@ -32,7 +32,6 @@ impl Diffusion {
         day: u32,
         dt_days: f32,
         hour: u32,
-        diffusion_damping: f32
     ) -> (f32, f32) {
         let dx = 0.01;
         let dy = 0.01;
@@ -65,7 +64,7 @@ impl Diffusion {
         let cell_area_m2 = CELL_AREA_DEG2 * deg2_to_m2;
 
         let strain = (dudx.powi(2) + 0.5 * (dudy + dvdx).powi(2) + dvdy.powi(2)).sqrt();
-        let k = self.cs * cell_area_m2 * strain * diffusion_damping;
+        let k = self.cs * cell_area_m2 * strain;
         let dt_seconds = dt_days * 86400.0;
         let sigma = (2.0 * k * dt_seconds).sqrt();
 

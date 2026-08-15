@@ -1,12 +1,6 @@
 use serde::{Serialize, Deserialize};
 use wasm_bindgen::prelude::*;
 
-macro_rules! log {
-    ( $( $t:tt )* ) => {
-        web_sys::console::log_1(&format!( $( $t )* ).into())
-    }
-}
-
 // ============================================================================
 // POINT STRUCT
 // ============================================================================

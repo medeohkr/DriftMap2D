@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use crate::basemodel::{Particles, find_depth_indices, lerp};
-use crate::tracers::Tracer;
 use half::f16;
 use thiserror::Error;
 use gloo_net::http::Request;
@@ -84,7 +83,7 @@ impl DataLoader {
         }
     }
     
-    pub fn update_tiles<T: Tracer>(&mut self, particles: &Particles<T>) -> HashSet<TileKey> {
+    pub fn update_tiles(&mut self, particles: &Particles) -> HashSet<TileKey> {
         let needed = self.fetch_tiles(particles);
         self.cache.retain(|k, _| needed.contains(k));
         needed
@@ -260,11 +259,11 @@ impl DataLoader {
             .map(|((cu, cv), _, _)| (cu, cv))
             .collect()
     }
-    fn fetch_tiles<T: Tracer>(&self, particles: &Particles<T>) -> HashSet<TileKey> {
+    fn fetch_tiles(&self, particles: &Particles) -> HashSet<TileKey> {
         let mut tiles = HashSet::new();
         
         for i in 0..particles.len {
-            if !particles.active[i] || particles.stranded[i] {
+            if particles.stranded[i] {
                 continue;
             }
             

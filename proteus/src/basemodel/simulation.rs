@@ -7,7 +7,7 @@ use crate::basemodel::{
     Diffusion,
     DataLoader,
     LandMaskLoader};
-use crate::tracers::{TracerKind};
+use crate::tracers::{Tracer, TracerKind};
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
@@ -50,7 +50,6 @@ impl Simulation {
         }
     }
     pub fn release_particles(&mut self, dt_days: f32) {
-        let props = self.oil_type.properties();
         
         if let Some(seeds) = self.release_manager.update(dt_days) {
             for seed in seeds {
@@ -58,15 +57,7 @@ impl Simulation {
                     seed.lon,
                     seed.lat,
                     seed.depth,
-                    0.0,
-                    seed.mass as f32 * 1000.0,
-                    0.0,
-                    true,
-                    false,
-                    0.0,
-                    0.0,
-                    props.dynamic_viscosity_cp,
-                    props.density_kgm3,
+                    self.tracer.seed(),
                 );
             }
         }
@@ -79,20 +70,16 @@ impl Simulation {
         hour: u32,
         landmask: &LandMaskLoader,
     ) {
-        for i in 0..self.particles.len {
-            if self.particles.active[i] {
-                while self.particles.x[i] < -180.0 { self.particles.x[i] += 360.0; }
-                while self.particles.x[i] >= 180.0 { self.particles.x[i] -= 360.0; }
-            }
-        }
-        let dt: f32 = dt_days * 86400.0;
-        let props = self.oil_type.properties();
-        let y_w_final_ref = props.y_w_final_max;
+        let dt = dt_days * 86400.0;
 
+        for i in 0..self.particles.len {
+            while self.particles.x[i] < -180.0 { self.particles.x[i] += 360.0; }
+            while self.particles.x[i] >= 180.0 { self.particles.x[i] -= 360.0; }
+        }
 
         // ---- Collect active, unstranded particles ----
         let unstranded_data: Vec<(usize, f32, f32, f32)> = (0..self.particles.len)
-            .filter(|&i| self.particles.active[i] && !self.particles.stranded[i])
+            .filter(|&i| !self.particles.stranded[i])
             .map(|i| (i, self.particles.x[i], self.particles.y[i], self.particles.depth[i]))
             .collect();
 
@@ -114,26 +101,9 @@ impl Simulation {
             let ((_cu, _cv), (wu_raw, wv_raw), sst) = env_data[i];
             let wind_speed = (wu_raw * wu_raw + wv_raw * wv_raw).sqrt();
             let sst_celsius = sst - 273.15;
-            oil_weathering::step_particle_weathering(
-                &mut self.particles,
-                idx,
-                wind_speed,
-                sst_celsius,
-                self.initial_mass_per_particle,
-                dt,
-                self.oil_type,
-            );
+            let data = &mut self.particles.data[idx];
+            self.tracer.step(data, wind_speed, sst_celsius, dt)
         }
-
-        // ---- Precompute damped wind factors ----
-        let w_factors: Vec<f32> = unstranded_data.iter()
-            .map(|&(idx, _, _, _)| {
-                oil_weathering::wind_drift_factor(
-                    self.particles.y_w[idx],
-                    y_w_final_ref,
-                )
-            })
-            .collect();
 
         // ---- Build combined velocity closure ----
         let get_combined_velocities = |pos: &[(f32, f32, f32)]| -> Vec<(f32, f32)> {
@@ -141,12 +111,12 @@ impl Simulation {
 
             pos.iter()
                 .enumerate()
-                .map(|(i, &(lon, lat, _depth))| {
+                .map(|(i, &(_, lat, _depth))| {
                     let ((cu, cv), (wu_raw, wv_raw), _sst) = env[i];
-                    let w_factor = w_factors[i];
+                    let w_factor = self.tracer.wind_f();
 
                     let wind_speed = (wu_raw * wu_raw + wv_raw * wv_raw).sqrt().max(0.1);
-                    let theta_deg = 25.0 * (-wind_speed.powi(3) / 1184.75).exp();
+                    let theta_deg = self.tracer.wind_deg().unwrap_or_else(|| 25.0 * (-wind_speed.powi(3) / 1184.75).exp());
                     let theta = if lat >= 0.0 {
                         theta_deg.to_radians()
                     } else {
@@ -174,22 +144,18 @@ impl Simulation {
         integrators::rk4_step_batch(&positions, dt, &get_combined_velocities);
 
         // ---- Apply positions, diffusion, and stranding ----
-        for (i, &(idx, lon, lat, depth)) in unstranded_data.iter().enumerate() {
+        for (i, &(idx, _, _, depth)) in unstranded_data.iter().enumerate() {
             let (mut new_lon, mut new_lat) = new_positions[i];
             
             // NORMALIZE FIRST - before any data queries
             while new_lon < -180.0 { new_lon += 360.0; }
             while new_lon >= 180.0 { new_lon -= 360.0; }
             new_lat = new_lat.clamp(-80.0, 90.0);
-            
-            let diff_damp = oil_weathering::diffusion_damping(
-                self.particles.y_w[idx],
-                y_w_final_ref,
-            );
+
 
             // Now use the normalized position for diffusion
             let (dx, dy) = self.diffusion.smagorinsky_step(
-                loader, landmask, new_lon, new_lat, depth, loader.current_day, dt_days, hour, diff_damp,
+                loader, landmask, new_lon, new_lat, depth, loader.current_day, dt_days, hour,
             );
 
             let final_lon = new_lon + dx;
@@ -207,7 +173,6 @@ impl Simulation {
 
             self.particles.x[idx] = final_lon;
             self.particles.y[idx] = final_lat;
-            self.particles.age[idx] += dt_days;
         }
     }
     pub fn get_particles(&self) -> &Particles {

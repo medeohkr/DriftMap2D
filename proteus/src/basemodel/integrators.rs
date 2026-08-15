@@ -3,7 +3,6 @@ pub fn rk4_step_batch(
     dt: f32,
     get_velocities: impl Fn(&[(f32, f32, f32)]) -> Vec<(f32, f32)>,
 ) -> Vec<(f32, f32)> {
-    let n = positions.len();
     
     // k1: Velocities at initial positions
     let k1 = get_velocities(positions);
