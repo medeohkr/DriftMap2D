@@ -3,9 +3,14 @@ use super::super::Tracer;
 use super::OilConfig;
 use super::OilData;
 use super::AdiosOil;
-
+macro_rules! log {
+    ( $( $t:tt )* ) => {
+        web_sys::console::log_1(&format!( $( $t )* ).into());
+    }
+}
 pub struct OilTracer {
     pub config: OilConfig,
+    pub total_mass_per_particle: f32,
     pub wind_factor: f32,
     pub wind_deflection: Option<f32>,
     pub product_type: String,
@@ -25,7 +30,8 @@ impl Tracer for OilTracer {
     fn seed(&self) -> Self::Data {
         OilData {
             age: 0.0,
-            total_mass: self.config.total_mass_per_particle,
+            total_initial_mass: self.total_mass_per_particle,
+            total_mass: self.total_mass_per_particle,
             mass_components: self.initial_mass_components.clone(),
             f_evap: 0.0,
             y_w: 0.0,
@@ -48,7 +54,6 @@ impl Tracer for OilTracer {
             sst_celsius,
             dt,
         );
-
     }
 
     fn wind_f(&self) -> f32 {
@@ -61,11 +66,12 @@ impl Tracer for OilTracer {
 }
 
 impl OilTracer {
-    pub fn new(config: OilConfig) -> Self {
+    pub fn new(config: OilConfig, total_mass_per_particle: f32) -> Self {
         let adios: AdiosOil = serde_json::from_str(&config.adios_json)
             .expect("Failed to parse ADIOS JSON");
         Self {
             config: config.clone(),
+            total_mass_per_particle,
             wind_factor: config.overrides.wind_factor.unwrap_or(0.03),
             wind_deflection: config.overrides.wind_factor,
             product_type: adios.metadata.product_type.clone(),
@@ -73,7 +79,7 @@ impl OilTracer {
             density_kgm3: config.overrides.density_kgm3.unwrap_or(adios.densities()),
             dynamic_viscosity_cp: config.overrides.dynamic_viscosity_cp.unwrap_or(adios.viscosities()),
             distillation_cuts: adios.distillation_cuts().unwrap_or(adios.distillation_cuts_from_api(10)),
-            initial_mass_components: adios.initial_mass_components(config.total_mass_per_particle),
+            initial_mass_components: adios.initial_mass_components(total_mass_per_particle),
             molecular_weights: adios.molecular_weights(),
             bullwinkle_fraction: config.overrides.bullwinkle_fraction.unwrap_or(adios.bullwinkle_fraction()),
             interfacial_tension: adios.interfacial_tension()

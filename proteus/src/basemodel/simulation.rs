@@ -155,7 +155,7 @@ impl Simulation {
 
             // Now use the normalized position for diffusion
             let (dx, dy) = self.diffusion.smagorinsky_step(
-                loader, landmask, new_lon, new_lat, depth, loader.current_day, dt_days, hour,
+                loader, landmask, lon, lat, new_lon, new_lat, depth, loader.current_day, dt_days, hour,
             );
 
             let final_lon = new_lon + dx;
