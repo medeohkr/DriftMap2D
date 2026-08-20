@@ -1,0 +1,81 @@
+:root {
+    /* widths */
+    --width-sidebar: 280px;
+    --width-summary: 240px;
+    --width-summary-text: 188px;
+
+    --width-container-margin: 240px;
+    --width-container: 218px;
+    --width-selector: 126px;
+    --width-calendar: 106px;
+    --width-number: 70px;
+    --width-units: 28px;
+
+    --width-logo: 48px;
+    --width-border: 5px;
+    
+    --width-reset-btn: 22.5px;
+
+    --width-timeline-btn: 50px;
+    --height-timeline-btn: 30px;
+
+    --width-stats-units: 50px;
+
+    --legend-offset: 100px;
+    /* colors */
+    --bg-header: rgb(20, 20, 20);
+    --bg-primary: rgb(27, 27, 27);
+    --bg-secondary: rgb(40, 40, 40);
+    --bg-summary: rgb(20, 20, 23);
+    --bg-selector: rgb(235, 235, 235);
+
+    --text-primary: rgb(255, 255, 255);
+    --text-secondary: rgb(220, 220, 220);
+    --text-muted: rgb(180, 180, 180);
+
+    --shadow-primary: rgb(0, 0, 0);
+    --shadow-secondary: rgb(12, 12, 12);
+    
+    --button-primary: rgb(36, 72, 134);
+    --button-secondary: rgb(206, 61, 61);
+
+    --import-border: rgb(120, 120, 120);
+
+    --timeline-slider: rgb(60, 60, 60);
+
+    --scrollbar: rgba(255,255,255,0.2) transparent;
+    
+    /* spacing */
+    --spacing-xxxs: 2px;
+    --spacing-xxs: 4px;
+    --spacing-xs: 8px;
+    --spacing-sm: 12px;
+    --spacing-md: 16px;
+    --spacing-lg: 20px;
+    
+    /* typography */
+    --font-family: Montserrat;
+    --font-size-xs: 12px;
+    --font-size-sm: 14px;
+    --font-size-md: 16px;
+    --font-size-lg: 20px;
+    --font-size-title: 36px;
+
+    --weight-bold: 600;
+    --weight-primary: 500;
+    --weight-secondary: 400;
+
+    /* border-size */
+    --border-lg: 4px;
+    --border-md: 2px;
+    --border-sm: 1px;
+
+    /* shadow-size */
+    --shadow-size-sidebar: 0px 0px 5px;
+    --shadow-size-secondary: 1px 1px 2px;
+
+    /* transitions */
+    --transition-fast: 0.15s ease;
+    --transition-medium: 0.2s ease;
+    --transition-slow: 0.3s ease;
+}
