@@ -10,3 +10,4 @@ roaring_landmask/
 web/images/
 scripts/archive/
 .continue/
+web/node_modules/

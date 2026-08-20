@@ -55,7 +55,7 @@ impl Proteus {
             .expect("Failed to parse tracer config");
 
         let tracer = match tracer_config {
-            TracerConfig::Oil(config) => TracerKind::Oil(OilTracer::new(config)),
+            TracerConfig::Oil(config) => TracerKind::Oil(OilTracer::new(config, release_amount as f32 / particle_count as f32)),
         };
         let release_config = ReleaseConfig {
             lon: lon,
@@ -137,8 +137,8 @@ impl Proteus {
             web_sys::console::error_1(&format!("Failed to load ocean tiles: {:?}", e).into());
             return Err(JsValue::from_str(&format!("{:?}", e)));
         }
-        log!("step: {} hour: {}, days_since_start {}", self.step_count, hour, self.days_since_start);
-        log!("Needed tiles for date {}: {:?}", current_date_int, needed_ocean_tiles.iter().map(|t| (t.lon_idx, t.lat_idx)).collect::<Vec<_>>());
+        // log!("step: {} hour: {}, days_since_start {}", self.step_count, hour, self.days_since_start);
+        // log!("Needed tiles for date {}: {:?}", current_date_int, needed_ocean_tiles.iter().map(|t| (t.lon_idx, t.lat_idx)).collect::<Vec<_>>());
 
         // Load landmask tiles
         let particles = self.simulation.get_particles();

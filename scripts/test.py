@@ -1,14 +1,16 @@
-import copernicusmarine
+import numpy as np
 
-copernicusmarine.subset(
-  dataset_id="cmems_mod_glo_phy-cur_anfc_0.083deg_PT6H-i",
-  variables=["uo", "vo"],
-  minimum_longitude=-180,
-  maximum_longitude=179.91668701171875,
-  minimum_latitude=-80,
-  maximum_latitude=90,
-  start_datetime="2026-06-15T00:00:00",
-  end_datetime="2026-06-15T00:00:00",
-  minimum_depth= "",
-  maximum_depth= ""
-)
+def step(x):
+    if x < 0:  # Low noise
+        return np.random.normal(0, 1)  # Small steps (σ=1)
+    else:      # High noise
+        return np.random.normal(0, 5)  # Large steps (σ=5)
+
+# Run 100,000 particles for 1000 steps
+positions = np.zeros(10000)
+for _ in range(1000):
+    positions += [step(x) for x in positions]
+
+# What's the average position?
+print(f"Mean position: {np.mean(positions)}")  
+# Output: Mean position: ~??? (positive!)

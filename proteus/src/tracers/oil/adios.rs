@@ -12,7 +12,6 @@ pub struct AdiosOil {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AdiosMetadata {
-    pub name: String,
     pub product_type: String,
     #[serde(rename = "API")]
     pub api: f32
@@ -25,26 +24,23 @@ pub struct AdiosSubSample {
     pub metadata: AdiosSampleMetadata,
     #[serde(default)]
     pub physical_properties: Option<AdiosPhysicalProperties>,
-    #[serde(default)]
+    #[serde(default, rename = "SARA")]
     pub sara: Option<AdiosSara>,
     #[serde(default)]
     pub distillation_data: Option<AdiosDistillationData>,
-    // #[serde(default)]
-    // pub bulk_composition: Vec<AdiosBulkComposition>,
 }
 
 // === SAMPLE METADATA ===
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AdiosSampleMetadata {
-    pub fraction_evaporated: AdiosFraction, // only need fraction_evaporated for now
+    pub fraction_evaporated: AdiosFraction,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AdiosFraction {
+    #[serde(default)]
     pub value: f32,
-    pub unit: String,
-    pub unit_type: String,
 }
 
 // === PHYSICAL PROPERTIES ===
@@ -61,8 +57,6 @@ pub struct AdiosPhysicalProperties {
     pub interfacial_tension_water: Vec<AdiosTensionMeasurement>,
     #[serde(default)]
     pub interfacial_tension_seawater: Vec<AdiosTensionMeasurement>,
-    pub pour_point: Option<AdiosMeasurement>, // not used but kept for now
-    pub flash_point: Option<AdiosMeasurement>, // not used but kept for now
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -73,9 +67,8 @@ pub struct AdiosDensityMeasurement {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AdiosDensityValue {
+    #[serde(default)]
     pub value: f32,
-    pub unit: String,
-    pub unit_type: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -86,9 +79,8 @@ pub struct AdiosViscosityMeasurement {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AdiosViscosityValue {
+    #[serde(default)]
     pub value: f32,
-    pub unit: String,
-    pub unit_type: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -99,51 +91,34 @@ pub struct AdiosTensionMeasurement {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AdiosTensionValue {
+    #[serde(default)]
     pub value: f32,
-    pub unit: String,
-    pub unit_type: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct AdiosMeasurement {
-    pub measurement: AdiosMeasuredValue,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct AdiosMeasuredValue {
-    pub value: f32,
-    pub unit: String,
-    pub unit_type: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AdiosTemperature {
+    #[serde(default)]
     pub value: f32,
-    pub unit: String,
-    pub unit_type: String,
 }
 
 // === SARA ===
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AdiosSara {
-    pub saturates: AdiosSaraComponent,
-    pub aromatics: AdiosSaraComponent,
-    pub resins: AdiosSaraComponent,
-    pub asphaltenes: AdiosSaraComponent,
+    pub saturates: Option<AdiosSaraComponent>,
+    pub aromatics: Option<AdiosSaraComponent>,
+    pub resins: Option<AdiosSaraComponent>,
+    pub asphaltenes: Option<AdiosSaraComponent>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AdiosSaraComponent {
+    #[serde(default)]
     pub value: f32,
-    pub unit: String,
-    pub unit_type: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AdiosDistillationData {
-    #[serde(rename = "type")]
-    pub data_type: String,
     #[serde(default)]
     pub cuts: Vec<AdiosDistillationCut>,
 }
@@ -224,24 +199,24 @@ impl AdiosOil {
     pub fn saturate_fraction(&self) -> Option<f32> {
         let sample = self.fresh_sample();
         let sara = sample.sara.as_ref()?;
-        Some(sara.saturates.value / 100.0)
+        Some(sara.saturates.as_ref().map(|s| s.value / 100.0).unwrap_or(0.0))
     }
 
     pub fn aromatic_fraction(&self) -> Option<f32> {
         let sample = self.fresh_sample();
         let sara = sample.sara.as_ref()?;
-        Some(sara.aromatics.value / 100.0)
+        Some(sara.aromatics.as_ref().map(|a| a.value / 100.0).unwrap_or(0.0))
     }
     pub fn asphaltene_fraction(&self) -> Option<f32> {
         let sample = self.fresh_sample();
         let sara = sample.sara.as_ref()?;
-        Some(sara.asphaltenes.value / 100.0)
+        Some(sara.asphaltenes.as_ref().map(|a| a.value / 100.0).unwrap_or(0.0))
     }
 
     pub fn resin_fraction(&self) -> Option<f32> {
         let sample = self.fresh_sample();
         let sara = sample.sara.as_ref()?;
-        Some(sara.resins.value / 100.0)
+        Some(sara.resins.as_ref().map(|r| r.value / 100.0).unwrap_or(0.0))
     }
 
     fn estimate_resin_fraction(&self) -> f32 {

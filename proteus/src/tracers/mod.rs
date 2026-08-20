@@ -17,8 +17,10 @@ pub enum TracerKind {
 }
 
 #[derive(Debug, Clone, Deserialize)]  
+#[serde(tag = "type")]
 pub enum TracerConfig {
     // Generic(GenericConfig),
+    #[serde(rename = "oil")]
     Oil(OilConfig),
     // Plastic(PlasticConfig),
     // Leeway(LeewayConfig)

@@ -5,7 +5,6 @@ pub struct OilConfig {
     pub adios_json: String,
     #[serde(default)]
     pub overrides: OilOverrides,
-    pub total_mass_per_particle: f32
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
