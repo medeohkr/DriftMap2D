@@ -43,12 +43,17 @@ impl Diffusion {
             (lon, (lat - dy).clamp(-80.0, 90.0)),
         ];
 
-        // If any probe is on land, skip diffusion
-        if probes.iter().any(|&(plon, plat)| landmask.is_on_land(plon, plat)) {
-            return (0.0, 0.0);
-        }
+        // if any probe is on land, skip diffusion
+        // if probes.iter().any(|&(plon, plat)| landmask.is_on_land(plon, plat)) {
+        //     return (0.0, 0.0);
+        // }
 
         let velocities = loader.get_velocities_batch(&probes, depth, day, hour);
+        
+        // use actual velocities instead
+        if velocities.iter().any(|&(u, v)| u == 0.0|| v == 0.0) {
+            return (0.0, 0.0);
+        }
 
         let (updx, vpdx) = velocities[0];
         let (umdx, vmdx) = velocities[1];

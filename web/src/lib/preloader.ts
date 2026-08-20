@@ -1,6 +1,10 @@
-if (!window.__tileCache) {
-    window.__tileCache = new Map();
+// At the top
+if (!(window as any).__tileCache) {
+    (window as any).__tileCache = new Map();
 }
+
+// Anywhere you use it
+let cache = (window as any).__tileCache;
 
 export class TilePreloader {
     constructor() {
@@ -23,8 +27,8 @@ export class TilePreloader {
                 return response.arrayBuffer();
             })
             .then(buffer => {
-                if (!window.__tileCache) window.__tileCache = new Map();
-                window.__tileCache.set(url, new Uint8Array(buffer));
+                if (!cache) cache = new Map();
+                cache.set(url, new Uint8Array(buffer));
                 this.completed.add(url);
                 this.pending.delete(url);
             })
@@ -92,8 +96,8 @@ export class TilePreloader {
             })
             .then(buffer => {
                 const uint8 = new Uint8Array(buffer);
-                if (!window.__tileCache) window.__tileCache = new Map();
-                window.__tileCache.set(url, uint8);
+                if (!cache) cache = new Map();
+                cache.set(url, uint8);
                 this.completed.add(url);
                 this.pending.delete(url);
                 return uint8;
