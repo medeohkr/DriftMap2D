@@ -1,6 +1,6 @@
-import { Proteus } from "../../pkg/proteus";
+import { Proteus } from "../pkg/proteus";
 import { preloader } from "./preloader";
-import { state } from './state';
+import { state } from './stores';
 import { dom } from './ui'
 import { normalizeLongitude, getTileIndices, updateBoundingBox, get} from './utils'
 import { updateStatsDisplay, getStatsDisplay } from './ui'

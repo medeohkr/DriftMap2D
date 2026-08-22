@@ -1,4 +1,4 @@
-import { state } from "./state";
+import { state } from "./stores";
 import { dom } from "./ui";
 import { map } from "./map";
 export function showTimeline() {

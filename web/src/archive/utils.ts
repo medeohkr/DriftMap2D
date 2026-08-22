@@ -1,4 +1,4 @@
-import { state } from "./state";
+import { state } from "./stores";
 
 export function normalizeLongitude(lon) {
   lon = parseFloat(lon);
