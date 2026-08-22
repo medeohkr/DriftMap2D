@@ -1,4 +1,4 @@
-import { state } from './state'
+import { state } from './stores'
 import { dom } from './ui';
 import { map, updatePositionFromFields, zoom } from './map';
 import { updateSimulationDate, updateTotalDays, updateReleaseAmount, updateReleaseDuration, updateReleaseRadius } from './simulation';

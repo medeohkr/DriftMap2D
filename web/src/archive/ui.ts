@@ -1,4 +1,4 @@
-import { state } from './state.js'
+import { state } from './stores.js'
 import { get } from './utils.js'
 
 // === DOM EXPORT ===

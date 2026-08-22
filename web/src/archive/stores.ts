@@ -1,5 +1,5 @@
 import { dom } from './ui'
-import type { Proteus } from '../../pkg/proteus'
+import type { Proteus } from '../pkg/proteus'
 import * as maplibregl from 'maplibre-gl';
 
 export interface State {
