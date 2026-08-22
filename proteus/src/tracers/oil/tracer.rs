@@ -26,17 +26,25 @@ pub struct OilTracer {
 
 impl Tracer for OilTracer {
     type Data = OilData;
+    fn seed(&self, capacity: usize) -> Self::Data {
 
-    fn seed(&self) -> Self::Data {
+        let n_components = self.initial_mass_components.len();
+        let mut mass_components_flatten = Vec::with_capacity(capacity * n_components);
+        for _ in 0..capacity {
+            mass_components_flatten.extend_from_slice(&self.initial_mass_components);
+        }
+
+
         OilData {
-            age: 0.0,
-            total_initial_mass: self.total_mass_per_particle,
-            total_mass: self.total_mass_per_particle,
-            mass_components: self.initial_mass_components.clone(),
-            f_evap: 0.0,
-            y_w: 0.0,
-            interfacial_area: 0.0,
-            emulsification_start_age: -1.0
+            age: vec![0.0; capacity],
+            total_initial_mass: vec![self.total_mass_per_particle; capacity],
+            total_mass: vec![self.total_mass_per_particle; capacity],
+            mass_components: mass_components_flatten,
+            n_components: n_components,
+            f_evap: vec![0.0; capacity],
+            y_w: vec![0.0; capacity],
+            interfacial_area: vec![0.0; capacity],
+            emulsification_start_age: vec![-1.0; capacity]
         }
     }
 

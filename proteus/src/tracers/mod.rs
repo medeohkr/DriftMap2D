@@ -35,7 +35,7 @@ pub enum TracerData {
 pub trait Tracer {
     type Data;
 
-    fn seed(&self) -> Self::Data;
+    fn seed(&self, capacity: usize) -> Self::Data;
     fn step(
         &mut self,
         data: &mut Self::Data,
@@ -50,9 +50,9 @@ pub trait Tracer {
 impl Tracer for TracerKind {
     type Data = TracerData;
 
-    fn seed(&self) -> Self::Data {
+    fn seed(&self, capacity: usize) -> Self::Data {
         match self {
-            TracerKind::Oil(t) => { TracerData::Oil(t.seed()) }
+            TracerKind::Oil(t) => { TracerData::Oil(t.seed(capacity)) }
         }
     }
 
