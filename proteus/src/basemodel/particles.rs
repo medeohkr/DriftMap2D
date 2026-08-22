@@ -41,7 +41,7 @@ impl Particles {
         self.stranded.iter().filter(|&&a| a).count()
     }
 
-    //needed in array for wasm
+    // needed in array for wasm
     pub fn bounding_box_array(&self) -> Vec<f32> {
         let mut xmin = f32::MAX;
         let mut xmax = f32::MIN;
@@ -59,4 +59,11 @@ impl Particles {
         
         vec![xmin, xmax, ymin, ymax]
     }
+}
+
+pub struct ParticleView<'a> {
+    x: &'a [f32],
+    y: &'a [f32],
+    depth: &'a [f32],
+    indices: &'a [usize],
 }
