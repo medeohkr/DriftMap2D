@@ -1,4 +1,4 @@
-use super::OilTracer;
+use super::OilProperties;
 use super::OilData;
 use super::adios::{lerp}
 ;
@@ -40,41 +40,38 @@ fn water_uptake_coefficient(wind_speed: f32) -> f32 {
     6.0 * K0Y * wind_speed * wind_speed / DROP_MAX
 }
 
-fn evap_decay_constant(
-    wind_speed: f32,
-    sea_water_temperature_k: f32,
-    area: f32,
+fn evap_decay_constants(
+    wind_speeds: &[f32],
+    sst_k: &[f32],
+    areas: &[f32],
     mass_components: &[f32],
-    vapor_pressures: &[f32],
+    n_components: usize,
     molecular_weights: &[f32],
+    boiling_points: &[f32],
+    indices: &[usize],
 ) -> Vec<f32> {
-    // mass transfer coefficient (m/s)
-    let k = mass_transport_coeff(wind_speed);
-    
-    // convert molecular weight from g/mol to kg/mol
-    let mw_kg: Vec<f32> = molecular_weights.iter()
-        .map(|&mw| mw / 1000.0)
-        .collect();
-    
-    // sum of mass components / molecular weight (total moles)
-    // sum_mi_mw = Σ(m_i / M_i)
-    let sum_mi_mw: f32 = mass_components.iter()
-        .zip(&mw_kg)
-        .map(|(&mass, &mw)| mass / mw)
-        .sum();
-    
-    // decay constant for each component
-    // decay = -(area * K) / (R * T * Σ(m_i / M_i)) * vp_i
-    let factor = -(area * k) / (GAS_CONSTANT * sea_water_temperature_k * sum_mi_mw);
-    
-    vapor_pressures.iter()
-        .map(|&vp| factor * vp)
-        .collect()
+    let mut decay = Vec::with_capacity(indices.len() * n_components);
+
+    for &idx in indices {
+        let k = mass_transport_coeff(wind_speeds[idx]);
+        let sum_moles: f32 = mass_components[idx * n_components..(idx + 1) * n_components]
+            .iter()
+            .zip(molecular_weights)
+            .map(|(&mass, &mw)| mass * mw)
+            .sum();
+        let factor = -(areas[idx] * k) / (GAS_CONSTANT * sst_k[idx] * sum_moles);
+        let vp = vapor_pressure(boiling_points, sst_k[idx]);
+        for &vp_val in &vp {
+            decay.push(factor * vp_val);
+        }
+    }
+
+    decay
 }
 
 fn mass_transport_coeff(wind_speed: f32) -> f32 {
     if wind_speed > 10.0 {
-        return 0.06 * C_EVAP * wind_speed.powi(2)
+        0.06 * C_EVAP * wind_speed.powi(2)
     } else {
         C_EVAP * wind_speed.powf(0.78)
     }
@@ -128,53 +125,37 @@ pub fn sea_water_density(sst_celsius: f32) -> f32 {
 
 pub fn update_evaporation(
     mass_components: &mut [f32],
-    total_initial_mass: &f32,
-    total_mass: &mut f32,
-    f_evap: &mut f32,
-    area: f32,
-    wind_speed: f32,
-    sst_k: f32,
+    n_components: usize,
+    total_initial_mass: f32,
+    total_mass: &mut [f32],
+    f_evap: &mut [f32],
+    area: &[f32],
+    wind_speeds: &[f32],
+    sst_k: &[f32],
     molecular_weights: &[f32],
-    distillation_cuts: &[(f32, f32)],  // (fraction, boiling_point_celsius)
+    boiling_points: &[f32],
+    evaporating_indices: &[usize],
     dt: f32,
-) -> f32 {
-    if *total_mass <= 0.0 || area <= 0.0 || mass_components.is_empty() {
-        return 0.0;
-    }
-    
-    // compute vapor pressures for each cut on the fly
-    let boiling_points_k: Vec<f32> = distillation_cuts.iter()
-        .flat_map(|(_, bp_c)| std::iter::repeat(*bp_c + 273.15).take(4))//repeat each boiling point 4 times for the 4 components
-        .collect();
-    
-    let vapor_pressures = vapor_pressure(&boiling_points_k, sst_k);
-    
-    // calculate decay constants for each component
-    let mut decay = evap_decay_constant(
-        wind_speed,
+) {
+    let decay = evap_decay_constants(
+        wind_speeds,
         sst_k,
         area,
         mass_components,
-        &vapor_pressures,
+        n_components,
+        boiling_points,
         molecular_weights,
+        evaporating_indices,
     );
-    decay.extend(std::iter::repeat(0.0).take(4)); // extend decay vector for 4 residue components with zero decay
-    
-    let mut total_evaporated = 0.0;
-    let mut new_total_mass = 0.0;
-    
+
     for i in 0..mass_components.len() {
-        let old_mass = mass_components[i];
-        let new_mass = old_mass * (decay[i] * dt).exp();
-        mass_components[i] = new_mass;
-        new_total_mass += new_mass;
-        total_evaporated += old_mass - new_mass;
+        mass_components[i] = mass_components[i] * (decay[i] * dt).exp()
     }
-    
-    *total_mass = new_total_mass;
-    *f_evap = 1.0 - ( new_total_mass / total_initial_mass );
-    
-    total_evaporated
+
+    for i in 0..wind_speeds.len() {
+        total_mass[i] = mass_components[i * n_components..(i + 1) * n_components].iter().sum();
+        f_evap[i] = 1.0 - (total_mass[i] / total_initial_mass)
+    }
 }
 
 pub fn update_emulsification(
@@ -201,76 +182,89 @@ pub fn update_emulsification(
     
     // water uptake coefficient
     let k_emul = water_uptake_coefficient(wind_speed);
+
     // update interfacial area
-    // A(t+dt) = A(t) + k * dt * exp(-k / S_max * (age - start_time))
     let area_increment = k_emul * dt * (-k_emul / s_max * age_since_start).exp();
     *interfacial_area += area_increment;
     *interfacial_area = interfacial_area.min(s_max);
     
     // update water fraction from interfacial area
-    // y_w = (A * d_max) / (6.0 + A * d_max)
     *y_w = (*interfacial_area * DROP_MAX) / (6.0 + *interfacial_area * DROP_MAX);
     *y_w = y_w.min(y_max);
+
     true
 }
 
 pub fn step_particle_weathering(
-    particle: &mut OilData,
-    oil: &OilTracer,
-    wind_speed: f32,
-    sst_celsius: f32,
+    particles: &mut OilData,
+    oil: &OilProperties,
+    wind_speeds: &[f32],
+    sst_celsius: &[f32],
     dt: f32,
-) {  // Returns (mu_bulk_cp, rho_bulk)
-    // 1. Temperature-dependent oil properties
-    let initial_density = lerp(oil.density_kgm3.clone(),sst_celsius);
-    let initial_viscosity = lerp(oil.dynamic_viscosity_cp.clone(),sst_celsius);
+) {
+    let n = wind_speeds.len();
+    let initial_densities: Vec<f32> = (0..n).map(
+        |i| lerp(&oil.density_kgm3,sst_celsius[i])
+    ).collect();
 
-    let (oil_density, oil_viscosity) = update_density_viscosity(
-        particle.y_w,
-        particle.f_evap,
-        initial_density,
-        initial_viscosity,
-        sea_water_density(sst_celsius)
-    );
+    let initial_viscosities: Vec<f32> = (0..n).map(
+        |i| lerp(&oil.dynamic_viscosity_cp,sst_celsius[i])
+    ).collect();
 
-    let area = particle.total_mass / oil_density / 1e-3;
-    // 2. Evaporation
-    if particle.age < 24.0 * 3600.0 {
+    let (oil_densities, oil_viscosities): (Vec<f32>, Vec<f32>) = (0..n).map(
+        |i| update_density_viscosity(
+        particles.y_w[i],
+        particles.f_evap[i],
+        initial_densities[i],
+        initial_viscosities[i],
+        sea_water_density(sst_celsius[i])
+    )).collect();
+
+    let areas: Vec<f32> = (0..n).map(
+        |i| particles.total_mass[i] / oil_densities[i] / 1e-3
+    ).collect();
+
+    let evaporating_indices: Vec<usize> = (0..particles.age.len())
+        .filter(|&i| particles.age[i] < 24.0 * 3600.0)
+        .collect();
+
+    if evaporating_indices.len() > 0 {
         update_evaporation(
-            &mut particle.mass_components,
-            &particle.total_initial_mass,
-            &mut particle.total_mass,
-            &mut particle.f_evap,
-            area,
-            wind_speed,
-            sst_celsius + 273.15,
+            &mut particles.mass_components,
+            particles.n_components,
+            particles.total_initial_mass,
+            &mut particles.total_mass,
+            &mut particles.f_evap,
+            &areas,
+            wind_speeds,
+            sst_celsius,
             &oil.molecular_weights,
-            &oil.distillation_cuts,
+            &oil.boiling_points,
+            &evaporating_indices,
             dt,
         );
     }
-
-    
-    // 3. Emulsification
-    let mut emulsifying = false;
-    if particle.f_evap >= oil.bullwinkle_fraction {
-        if particle.emulsification_start_age == -1.0 {
-            particle.emulsification_start_age = particle.age;
+    for i in 0..n {
+        let mut emulsifying = false;
+        if particles.f_evap[i] >= oil.bullwinkle_fraction {
+            if particles.emulsification_start_age[i] == -1.0 {
+                particles.emulsification_start_age[i] = particles.age[i];
+            }
+            emulsifying = true;
         }
-        emulsifying = true;
+
+        if emulsifying {
+            let age_since_start = particles.age[i] - particles.emulsification_start_age[i];
+            update_emulsification(
+                &mut particles.y_w[i],
+                &mut particles.interfacial_area[i],
+                oil_viscosities[i],
+                age_since_start,
+                wind_speeds[i],
+                dt,
+            );
+        }
+        // 4. Age
+        particles.age[i] += dt;
     }
-    log!("bullwinkle_fraction: {}, f_evap: {}, emulsifying: {}", oil.bullwinkle_fraction, particle.f_evap, emulsifying);
-    if emulsifying {
-        let age_since_start = particle.age - particle.emulsification_start_age;
-        update_emulsification(
-            &mut particle.y_w,
-            &mut particle.interfacial_area,
-            oil_viscosity,
-            age_since_start,
-            wind_speed,
-            dt,
-        );
-    }
-    // 4. Age
-    particle.age += dt;
 }

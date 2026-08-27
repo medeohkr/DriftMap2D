@@ -5,7 +5,7 @@ use crate::basemodel::simulation::{Simulation, SimulationConfig};
 use crate::basemodel::release_manager::{ReleaseConfig, Schedule};
 use crate::basemodel::DataLoader;
 use crate::basemodel::LandMaskLoader;
-use crate::tracers::{TracerKind, TracerConfig, OilTracer, TracerData};
+use crate::tracers::{TracerKind, TracerConfig, OilTracer};
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
@@ -55,7 +55,7 @@ impl Proteus {
             .expect("Failed to parse tracer config");
 
         let tracer = match tracer_config {
-            TracerConfig::Oil(config) => TracerKind::Oil(OilTracer::new(config, release_amount as f32 / particle_count as f32)),
+            TracerConfig::Oil(config) => TracerKind::Oil(OilTracer::new(config, particle_count, release_amount as f32 / particle_count as f32)),
         };
         let release_config = ReleaseConfig {
             lon: lon,
@@ -69,7 +69,6 @@ impl Proteus {
         
         let sim_config = SimulationConfig {
             release_config,
-            max_particles: 50000,
             cs: cs_value,
         };
         
@@ -95,12 +94,12 @@ impl Proteus {
         }
     }
     
-    pub fn get_current_date_int(&self) -> u32 {
+    pub fn get_current_date_int(&self) -> usize {
         let current_date = self.start_date + Days::new(self.days_since_start as u64);
         let year = current_date.year();
         let month = current_date.month();
         let day = current_date.day();
-        (year as u32 * 10000) + (month * 100) + day
+        (year as usize * 10000) + (month as usize* 100) + day as usize
     }
 
     pub async fn init_landmask(&mut self, lon: f32, lat: f32) -> Result<(), JsValue> {
@@ -126,7 +125,7 @@ impl Proteus {
         }
         let hour = (24 * self.step_count / self.steps_per_day) % 24;
 
-        self.loader.set_current_day(current_date_int, hour as u32);
+        self.loader.set_current_day(current_date_int, hour as usize);
         
         self.simulation.release_particles(dt_days);
         
@@ -145,8 +144,8 @@ impl Proteus {
         let mut landmask_tiles = std::collections::HashSet::new();
         for i in 0..particles.len {
             if !particles.stranded[i] {
-                let lon_idx = ((particles.x[i] + 180.0) / 10.0).floor() as i32;
-                let lat_idx = ((particles.y[i] + 90.0) / 10.0).floor() as i32;
+                let lon_idx = ((particles.lons[i] + 180.0) / 10.0).floor() as i32;
+                let lat_idx = ((particles.lats[i] + 90.0) / 10.0).floor() as i32;
                 if lon_idx >= 0 && lon_idx < 36 && lat_idx >= 0 && lat_idx < 18 {
                     landmask_tiles.insert((lon_idx as usize, lat_idx as usize));
                 }
@@ -158,7 +157,7 @@ impl Proteus {
             }
         }
         
-        self.simulation.update_particles_batch(dt_days, &self.loader, hour as u32, &self.landmask);
+        self.simulation.update_particles_batch(dt_days, &self.loader, hour as usize, &self.landmask);
         
         self.days_since_start = self.step_count as f32 / self.steps_per_day as f32;
         self.hour_count = hour as u32;
@@ -170,8 +169,8 @@ impl Proteus {
         let particles = self.simulation.get_particles();
         let mut positions = Vec::with_capacity(particles.len);
         for i in 0..particles.len {
-            positions.push(particles.x[i]);
-            positions.push(particles.y[i]);
+            positions.push(particles.lons[i]);
+            positions.push(particles.lats[i]);
         }
         positions
     }
@@ -181,8 +180,8 @@ impl Proteus {
         let mut positions = Vec::with_capacity(particles.len);
         for i in 0..particles.len {
             if particles.stranded[i] {
-                positions.push(particles.x[i]);
-                positions.push(particles.y[i]);
+                positions.push(particles.lons[i]);
+                positions.push(particles.lats[i]);
             }
         }
         positions
@@ -193,8 +192,8 @@ impl Proteus {
         let mut positions = Vec::with_capacity(particles.len);
         for i in 0..particles.len {
             if !particles.stranded[i] {
-                positions.push(particles.x[i]);
-                positions.push(particles.y[i]);
+                positions.push(particles.lons[i]);
+                positions.push(particles.lats[i]);
             }
         }
         positions
@@ -232,17 +231,24 @@ impl Proteus {
         let particles = self.simulation.get_particles();
         let mut total_initial = 0.0;
         let mut total_evaporated = 0.0;
-        
-        for i in 0..particles.len {
-            if let TracerData::Oil(data) = &particles.data[i] {
-                if !particles.stranded[i] {
-                    let initial_mass = self.simulation.initial_mass_per_particle;
-                    total_initial += initial_mass;
-                    total_evaporated += initial_mass * data.f_evap;
+
+        match &particles.tracer {
+            TracerKind::Oil(oil) => {
+                for i in 0..particles.len {
+                    if !particles.stranded[i] {
+                        let initial_mass = self.simulation.initial_mass_per_particle;
+                        total_initial += initial_mass;
+                        total_evaporated += initial_mass * oil.data.f_evap[i];
+                    }
                 }
             }
         }
-        if total_initial > 0.0 { total_evaporated / total_initial * 100.0 } else { 0.0 }
+
+        if total_initial > 0.0 {
+            total_evaporated / total_initial * 100.0
+        } else {
+            0.0
+        }
     }
 
     pub fn mass_weighted_emulsification(&self) -> f32 {
@@ -250,15 +256,18 @@ impl Proteus {
         let mut total_initial = 0.0;
         let mut total_emulsified = 0.0;
         
-        for i in 0..particles.len {
-            if let TracerData::Oil(data) = &particles.data[i] {
-                if !particles.stranded[i] {
-                    let initial_mass = self.simulation.initial_mass_per_particle;
-                    total_initial += initial_mass;
-                    total_emulsified += initial_mass * data.y_w;
+        match &particles.tracer {
+            TracerKind::Oil(oil) => {
+                for i in 0..particles.len {
+                    if !particles.stranded[i] {
+                        let initial_mass = self.simulation.initial_mass_per_particle;
+                        total_initial += initial_mass;
+                        total_emulsified += initial_mass * oil.data.y_w[i];
+                    }
                 }
             }
         }
+
         if total_initial > 0.0 { total_emulsified / total_initial * 100.0 } else { 0.0 }
     }
 
@@ -266,30 +275,38 @@ impl Proteus {
         let particles = self.simulation.get_particles();
         let mut total_mass = 0.0;
         
-        for i in 0..particles.len {
-            if let TracerData::Oil(data) = &particles.data[i] {
-                if !particles.stranded[i] {
-                    total_mass += data.total_mass
+        match &particles.tracer {
+            TracerKind::Oil(oil) => {
+                for i in 0..particles.len {
+                    if !particles.stranded[i] {
+                        total_mass += oil.data.total_mass[i];
+                    }
                 }
             }
         }
+
         total_mass
     }
+
     pub fn get_unstranded_positions_with_mass(&self) -> Vec<f32> {
         let particles = self.simulation.get_particles();
         let mut data = Vec::with_capacity(particles.len * 3);
         
-        for i in 0..particles.len {
-            if !particles.stranded[i] {
-                if let TracerData::Oil(oil_data) = &particles.data[i] {
-                    data.push(particles.x[i]);
-                    data.push(particles.y[i]);
-                    data.push(oil_data.total_mass / 1000.0);
+        match &particles.tracer {
+            TracerKind::Oil(oil) => {
+                for i in 0..particles.len {
+                    if !particles.stranded[i] {
+                        data.push(particles.lons[i]);
+                        data.push(particles.lats[i]);
+                        data.push(oil.data.total_mass[i] / 1000.0);
+                    }
                 }
             }
         }
+
         data
     }
+
     pub fn is_on_land(&self, lon: f32, lat: f32) -> bool {
         self.landmask.is_on_land(lon, lat)
     }

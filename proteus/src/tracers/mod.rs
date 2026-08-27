@@ -32,53 +32,41 @@ pub enum TracerData {
     // Plastic(PlasticData),
     // Leeway(LeewayData)
 }
-pub trait Tracer {
-    type Data;
 
-    fn seed(&self, capacity: usize) -> Self::Data;
+pub trait Tracer {
+    fn push(&mut self);
+
     fn step(
         &mut self,
-        data: &mut Self::Data,
-        wind_speed: f32,
-        sst_celsius: f32,
+        wind_speeds: &[f32],
+        sst_celsius: &[f32],
         dt: f32,
     );
+
     fn wind_f(&self) -> f32;
+
     fn wind_deg(&self) -> Option<f32>;
 }
 
 impl Tracer for TracerKind {
-    type Data = TracerData;
-
-    fn seed(&self, capacity: usize) -> Self::Data {
-        match self {
-            TracerKind::Oil(t) => { TracerData::Oil(t.seed(capacity)) }
-        }
-    }
+    fn push(&mut self) { }
 
     fn step(
         &mut self,
-        data: &mut Self::Data,
-        wind_speed: f32,
-        sst_celsius: f32,
-        dt: f32,
-    ) {
-        match (self, data) {
-            (TracerKind::Oil(t), TracerData::Oil(d)) => {
-                t.step(d, wind_speed, sst_celsius, dt)
-            }
-        }
-    }
+        _wind_speed: &[f32],
+        _sst_celsius: &[f32],
+        _dt: f32,
+    ) { }
 
     fn wind_f(&self) -> f32 {
         match self {
-            TracerKind::Oil(t) => { t.wind_factor }
+            TracerKind::Oil(t) => { t.properties.wind_factor }
         }
     }
 
     fn wind_deg(&self) -> Option<f32> {
         match self {
-            TracerKind::Oil(t) => { t.wind_deflection }
+            TracerKind::Oil(t) => { t.properties.wind_deflection }
         }
     }
 }

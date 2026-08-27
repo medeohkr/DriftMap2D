@@ -144,34 +144,37 @@ impl AdiosOil {
         let props = self.fresh_sample().physical_properties.as_ref()
             .expect("Physical properties missing");
 
-        props.densities.iter()
+        let mut data: Vec<(f32, f32)> = props.densities.iter()
             .map(|d| (d.ref_temp.value, d.density.value * 1000.0))
-            .collect()
+            .collect();
+        data.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        data
     }
 
-    // get the raw viscosity measurements now, interpolate later
     pub fn viscosities(&self) -> Vec<(f32, f32)> {
         let props = self.fresh_sample().physical_properties.as_ref()
             .expect("Physical properties missing");
 
         // prioritize dynamic viscosities
         if !props.dynamic_viscosities.is_empty() {
-            return props.dynamic_viscosities.iter()
+            let mut data: Vec<(f32, f32)> = props.dynamic_viscosities.iter()
                 .map(|v| (v.ref_temp.value, v.viscosity.value))
                 .collect();
+            data.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+            return data;
         }
 
         // fall back to kinematic viscosity
-        // convert kinematic (cSt) to dynamic (cP) using density
-        // ν_cSt = μ_cP / ρ_g/mL → μ_cP = ν_cSt * ρ_g/mL
-        props.kinematic_viscosities.iter()
+        let mut data: Vec<(f32, f32)> = props.kinematic_viscosities.iter()
             .map(|v| {
                 let temp = v.ref_temp.value;
                 let kinematic_cst = v.viscosity.value;
-                let density_gml = lerp(self.densities(), temp);
-                (temp, kinematic_cst * density_gml)  // cSt * g/mL = cP
+                let density_gml = lerp(&self.densities(), temp);
+                (temp, kinematic_cst * density_gml)
             })
-            .collect()
+            .collect();
+        data.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        data
     }
 
     pub fn interfacial_tension(&self) -> Vec<(f32, f32)> {
@@ -220,8 +223,8 @@ impl AdiosOil {
     }
 
     fn estimate_resin_fraction(&self) -> f32 {
-        let density = lerp(self.densities(), 15.0);
-        let viscosity = lerp(self.viscosities(), 15.0);
+        let density = lerp(&self.densities(), 15.0);
+        let viscosity = lerp(&self.viscosities(), 15.0);
         let a = 10.0 * (0.001 * density).exp();
         let b = 10.0 * (1000.0 * density * viscosity).ln();
         let f_res = 0.033 * a + 0.00087 * b - 0.74;
@@ -229,8 +232,8 @@ impl AdiosOil {
     }
 
     fn estimate_asphaltene_fraction(&self) -> f32 {
-        let density = lerp(self.densities(), 15.0);
-        let viscosity = lerp(self.viscosities(), 15.0);
+        let density = lerp(&self.densities(), 15.0);
+        let viscosity = lerp(&self.viscosities(), 15.0);
         let a: f32 = 10.0 * (0.001 * density).exp();
         let b: f32 = 10.0 * (1000.0 * density * viscosity).ln();
         let f_asph = 0.000014 * a.powi(3) + 0.000004 * b.powi(2) - 0.18;
@@ -290,13 +293,14 @@ impl AdiosOil {
         
         for (_, bp_c) in &cuts {
             let bp_k = bp_c + 273.15;
-            mw.push(saturate_mol_wt(bp_k));
-            mw.push(aromatic_mol_wt(bp_k));
-            mw.push(resin_mol_wt(bp_k));
-            mw.push(asphaltene_mol_wt(bp_k));
+            mw.push(1000.0 / saturate_mol_wt(bp_k));
+            mw.push(1000.0 / aromatic_mol_wt(bp_k));
+            mw.push(1000.0 / resin_mol_wt(bp_k));
+            mw.push(1000.0 / asphaltene_mol_wt(bp_k));
         }
         mw
     }
+
     pub fn initial_mass_components(&self, total_mass: f32) -> Vec<f32> {
         let cuts = match self.distillation_cuts() {
             Some(c) => c,
@@ -322,17 +326,7 @@ impl AdiosOil {
             components.push(cut_mass * f_res);
             components.push(cut_mass * f_asph);
         }
-        
-        // Residue (fraction that never evaporates)
-        // Distribute residue across SARA fractions (mostly asphaltenes)
-        let residue_fraction = 1.0 - cuts.last().map_or(0.0, |(f, _)| *f);
-        let residue_mass = total_mass * residue_fraction;
-        
-        components.push(residue_mass * 0.25);
-        components.push(residue_mass * 0.25);
-        components.push(residue_mass * 0.25);
-        components.push(residue_mass * 0.25);
-        
+
         components
     }
     
@@ -359,35 +353,8 @@ impl AdiosOil {
     }
 }
 
-// molecular weight for saturates from boiling point (g/mol)
-pub fn saturate_mol_wt(boiling_point_k: f32) -> f32 {
-    let t = boiling_point_k.clamp(0.1, 1069.9);
-    let val = 6.98291 - (1070.0 - t).ln();
-    (49.677 * val).powf(1.5)
-}
-
-// molecular weight for aromatics from boiling point (g/mol)
-pub fn aromatic_mol_wt(boiling_point_k: f32) -> f32 {
-    let t = boiling_point_k.clamp(0.1, 1014.9);
-    let val = 6.911 - (1015.0 - t).ln();
-    (44.504 * val).powf(1.5)
-}
-
-// fixed molecular weight (g/mol) for resins
-pub fn resin_mol_wt(_boiling_point_k: f32) -> f32 {
-    800.0
-}
-
-// foxed molecular weight (g/mol) for asphaltenes
-pub fn asphaltene_mol_wt(_boiling_point_k: f32) -> f32 {
-    1000.0
-}
-
 // interpolation helper
-pub fn lerp(properties: Vec<(f32, f32)>, target: f32) -> f32 {
-    let mut props = properties;
-    props.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
-    
+pub fn lerp(props: &[(f32, f32)], target: f32) -> f32 { 
     if target <= props[0].0 {
         return props[0].1;
     }
@@ -407,4 +374,34 @@ pub fn lerp(properties: Vec<(f32, f32)>, target: f32) -> f32 {
     }
     
     props.last().unwrap().1
+}
+
+// molecular weight for saturates from boiling point (g/mol)
+fn saturate_mol_wt(boiling_point_k: f32) -> f32 {
+    let t = boiling_point_k.clamp(0.1, 1069.9);
+    let val = 6.98291 - (1070.0 - t).ln();
+    (49.677 * val).powf(1.5)
+}
+
+// molecular weight for aromatics from boiling point (g/mol)
+fn aromatic_mol_wt(boiling_point_k: f32) -> f32 {
+    let t = boiling_point_k.clamp(0.1, 1014.9);
+    let val = 6.911 - (1015.0 - t).ln();
+    (44.504 * val).powf(1.5)
+}
+
+// fixed molecular weight (g/mol) for resins
+fn resin_mol_wt(_boiling_point_k: f32) -> f32 {
+    800.0
+}
+
+// foxed molecular weight (g/mol) for asphaltenes
+fn asphaltene_mol_wt(_boiling_point_k: f32) -> f32 {
+    1000.0
+}
+
+pub fn boiling_points(distillation_cuts: Vec<(f32, f32)>) -> Vec<f32> {
+    distillation_cuts.iter().flat_map(
+        |(_, bp_c)| std::iter::repeat(*bp_c + 273.15).take(4)
+    ).collect()
 }

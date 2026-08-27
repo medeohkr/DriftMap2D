@@ -1,22 +1,22 @@
-use crate::tracers::{TracerData};
+use crate::tracers::{Tracer, TracerKind};
 
 pub struct Particles {
-    pub x: Vec<f32>,
-    pub y: Vec<f32>,
-    pub depth: Vec<f32>,
-    pub data: Vec<TracerData>,
+    pub lons: Vec<f32>,
+    pub lats: Vec<f32>,
+    pub depths: Vec<f32>,
+    pub tracer: TracerKind,
     pub stranded: Vec<bool>,
     pub len: usize,
 }
 
 impl Particles {
     // particle vector allocation
-    pub fn new(capacity: usize) -> Self {
+    pub fn new(capacity: usize, tracer: TracerKind) -> Self {
         Self {
-            x: Vec::with_capacity(capacity),
-            y: Vec::with_capacity(capacity),
-            depth: Vec::with_capacity(capacity),
-            data: Vec::with_capacity(capacity),
+            lons: Vec::with_capacity(capacity),
+            lats: Vec::with_capacity(capacity),
+            depths: Vec::with_capacity(capacity),
+            tracer: tracer,
             stranded: Vec::with_capacity(capacity),
             len: 0,
         }
@@ -24,15 +24,14 @@ impl Particles {
 
     pub fn add_particle(
         &mut self,
-        x: f32,
-        y: f32,
+        lon: f32,
+        lat: f32,
         depth: f32,
-        data: TracerData,
     ) {
-        self.x.push(x);
-        self.y.push(y);
-        self.depth.push(depth);
-        self.data.push(data);
+        self.lons.push(lon);
+        self.lats.push(lat);
+        self.depths.push(depth);
+        self.tracer.push();
         self.stranded.push(false);
         self.len += 1;
     }
@@ -43,27 +42,55 @@ impl Particles {
 
     // needed in array for wasm
     pub fn bounding_box_array(&self) -> Vec<f32> {
-        let mut xmin = f32::MAX;
-        let mut xmax = f32::MIN;
-        let mut ymin = f32::MAX;
-        let mut ymax = f32::MIN;
+        let mut lon_min = f32::MAX;
+        let mut lon_max = f32::MIN;
+        let mut lat_min = f32::MAX;
+        let mut lat_max = f32::MIN;
         
         for i in 0..self.len {
             if !self.stranded[i] {
-                xmin = xmin.min(self.x[i]);
-                xmax = xmax.max(self.x[i]);
-                ymin = ymin.min(self.y[i]);
-                ymax = ymax.max(self.y[i]);
+                lon_min = lon_min.min(self.lons[i]);
+                lon_max = lon_max.max(self.lons[i]);
+                lat_min = lat_min.min(self.lats[i]);
+                lat_max = lat_max.max(self.lats[i]);
             }
         }
         
-        vec![xmin, xmax, ymin, ymax]
+        vec![lon_min, lon_max, lat_min, lat_max]
+    }
+    pub fn view(&self) -> ParticleView {
+        let indices: Vec<usize> = (0..self.len).filter(|&i| !self.stranded[i]).collect();
+
+        ParticleView {
+            lons: &self.lons,
+            lats: &self.lats,
+            depths: &self.depths,
+            indices
+        }
     }
 }
 
 pub struct ParticleView<'a> {
-    x: &'a [f32],
-    y: &'a [f32],
-    depth: &'a [f32],
-    indices: &'a [usize],
+    lons: &'a [f32],
+    lats: &'a [f32],
+    depths: &'a [f32],
+    pub indices: Vec<usize>,
+}
+
+impl ParticleView<'_> {
+    pub fn lon(&self, i: usize) -> f32 {
+        self.lons[self.indices[i]]
+    }
+
+    pub fn lat(&self, i: usize) -> f32 {
+        self.lats[self.indices[i]]
+    }
+
+    pub fn depth(&self, i: usize) -> f32 {
+        self.depths[self.indices[i]]
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (usize, f32, f32, f32)> + '_ {
+        self.indices.iter().map(|&i| (i, self.lons[i], self.lats[i], self.depths[i]))
+    }
 }

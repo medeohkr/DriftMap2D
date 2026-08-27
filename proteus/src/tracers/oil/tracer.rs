@@ -2,95 +2,88 @@ use super::weathering;
 use super::super::Tracer;
 use super::OilConfig;
 use super::OilData;
-use super::AdiosOil;
+use super::adios::{AdiosOil, boiling_points};
+use super::OilProperties;
+
 macro_rules! log {
     ( $( $t:tt )* ) => {
         web_sys::console::log_1(&format!( $( $t )* ).into());
     }
 }
+
 pub struct OilTracer {
     pub config: OilConfig,
-    pub total_mass_per_particle: f32,
-    pub wind_factor: f32,
-    pub wind_deflection: Option<f32>,
-    pub product_type: String,
-    pub api: f32,
-    pub density_kgm3: Vec<(f32, f32)>,
-    pub dynamic_viscosity_cp: Vec<(f32, f32)>,
-    pub distillation_cuts: Vec<(f32, f32)>,
-    pub initial_mass_components: Vec<f32>,
-    pub molecular_weights: Vec<f32>,
-    pub bullwinkle_fraction: f32,
-    pub interfacial_tension: Vec<(f32, f32)>,
+    pub properties: OilProperties,
+    pub data: OilData,
 }
 
 impl Tracer for OilTracer {
-    type Data = OilData;
-    fn seed(&self, capacity: usize) -> Self::Data {
-
-        let n_components = self.initial_mass_components.len();
-        let mut mass_components_flatten = Vec::with_capacity(capacity * n_components);
-        for _ in 0..capacity {
-            mass_components_flatten.extend_from_slice(&self.initial_mass_components);
-        }
-
-
-        OilData {
-            age: vec![0.0; capacity],
-            total_initial_mass: vec![self.total_mass_per_particle; capacity],
-            total_mass: vec![self.total_mass_per_particle; capacity],
-            mass_components: mass_components_flatten,
-            n_components: n_components,
-            f_evap: vec![0.0; capacity],
-            y_w: vec![0.0; capacity],
-            interfacial_area: vec![0.0; capacity],
-            emulsification_start_age: vec![-1.0; capacity]
-        }
+    fn push(&mut self) {
+        self.data.age.push(0.0);
+        self.data.total_mass.push(self.properties.total_mass_per_particle);
+        self.data.mass_components.extend_from_slice(&self.properties.initial_mass_components);
+        self.data.emulsification_start_age.push(-1.0);
+        self.data.f_evap.push(0.0);
     }
-
     fn step(
         &mut self,
-        data: &mut Self::Data,
-        wind_speed: f32,
-        sst_celsius: f32,
+        wind_speeds: &[f32],
+        sst_celsius: &[f32],
         dt: f32,
     ) {
         weathering::step_particle_weathering(
-            data,
-            self,
-            wind_speed,
+            &mut self.data,
+            &self.properties,
+            wind_speeds,
             sst_celsius,
             dt,
         );
     }
 
     fn wind_f(&self) -> f32 {
-        self.wind_factor
+        self.properties.wind_factor
     }
 
     fn wind_deg(&self) -> Option<f32> {
-        self.wind_deflection
+        self.properties.wind_deflection
     }
 }
 
 impl OilTracer {
-    pub fn new(config: OilConfig, total_mass_per_particle: f32) -> Self {
+    pub fn new(config: OilConfig, capacity: usize, total_mass_per_particle: f32) -> Self {
         let adios: AdiosOil = serde_json::from_str(&config.adios_json)
             .expect("Failed to parse ADIOS JSON");
+
+        let initial_mass_components = adios.initial_mass_components(total_mass_per_particle);
+        let n_components = initial_mass_components.len();
+
         Self {
             config: config.clone(),
-            total_mass_per_particle,
-            wind_factor: config.overrides.wind_factor.unwrap_or(0.03),
-            wind_deflection: config.overrides.wind_factor,
-            product_type: adios.metadata.product_type.clone(),
-            api: config.overrides.api.unwrap_or(adios.metadata.api),
-            density_kgm3: config.overrides.density_kgm3.unwrap_or(adios.densities()),
-            dynamic_viscosity_cp: config.overrides.dynamic_viscosity_cp.unwrap_or(adios.viscosities()),
-            distillation_cuts: adios.distillation_cuts().unwrap_or(adios.distillation_cuts_from_api(10)),
-            initial_mass_components: adios.initial_mass_components(total_mass_per_particle),
-            molecular_weights: adios.molecular_weights(),
-            bullwinkle_fraction: config.overrides.bullwinkle_fraction.unwrap_or(adios.bullwinkle_fraction()),
-            interfacial_tension: adios.interfacial_tension()
+            properties: OilProperties {
+                total_mass_per_particle,
+                wind_factor: config.overrides.wind_factor.unwrap_or(0.03),
+                wind_deflection: config.overrides.wind_factor,
+                product_type: adios.metadata.product_type.clone(),
+                api: config.overrides.api.unwrap_or(adios.metadata.api),
+                density_kgm3: config.overrides.density_kgm3.unwrap_or(adios.densities()),
+                dynamic_viscosity_cp: config.overrides.dynamic_viscosity_cp.unwrap_or(adios.viscosities()),
+                boiling_points: boiling_points(adios.distillation_cuts().unwrap_or(adios.distillation_cuts_from_api(10))),
+                initial_mass_components,
+                molecular_weights: adios.molecular_weights(),
+                bullwinkle_fraction: config.overrides.bullwinkle_fraction.unwrap_or(adios.bullwinkle_fraction()),
+                interfacial_tension: adios.interfacial_tension(),
+            },
+            data: OilData {
+                age: Vec::with_capacity(capacity),
+                total_initial_mass: total_mass_per_particle,
+                mass_components: Vec::with_capacity(capacity * n_components),
+                total_mass: Vec::with_capacity(capacity),
+                n_components: n_components,
+                f_evap: Vec::with_capacity(capacity),
+                emulsification_start_age: Vec::with_capacity(capacity),
+                y_w: Vec::with_capacity(capacity),
+                interfacial_area: Vec::with_capacity(capacity)
+            }
         }
     }
 }
