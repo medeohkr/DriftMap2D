@@ -12,3 +12,5 @@ scripts/archive/
 .continue/
 web/node_modules/
 web/src/assets/
+scripts/
+web/src/archive/
