@@ -11,3 +11,4 @@ web/images/
 scripts/archive/
 .continue/
 web/node_modules/
+web/src/assets/
