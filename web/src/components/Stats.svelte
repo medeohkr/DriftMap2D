@@ -11,7 +11,7 @@
             </div>
             <div class="container-secondary">
                 <span class="stats-primary-text">Emulsified</span>
-                <span class="unit-text" id="emulsified">${stats.emulsified}%</span>
+                <span class="unit-text" id="emulsified">{stats.emulsified}%</span>
             </div>
             <div class="container-secondary">
                 <span class="stats-primary-text">Evaporated</span>
@@ -27,7 +27,7 @@
 
 <style>
     .stats-container {
-        display: none;
+        display: grid;
         position: absolute;
         right: var(--spacing-md);
         top: var(--spacing-md);

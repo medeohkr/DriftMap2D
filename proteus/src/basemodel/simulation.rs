@@ -88,18 +88,6 @@ impl Simulation {
     ) {
         let dt = dt_days * 86400.0;
 
-        let (wind_speeds, sst_celsius): (Vec<f32>, Vec<f32>) = {
-            let temp_view = self.particles.view();
-            let wind_sst = loader.get_wind_sst(&temp_view, loader.current_day, hour);
-            wind_sst.iter()
-                .map(|(u_wind_m, v_wind_m, sst_k)| {
-                    ((u_wind_m * u_wind_m + v_wind_m * v_wind_m).sqrt(), sst_k - 273.15)
-                })
-                .unzip()
-        };
-
-        self.particles.tracer.step(&wind_speeds, &sst_celsius, dt);
-
         let unstranded_view = self.particles.view();
 
         let get_velocities_view = |view: &ParticleView| -> Vec<(f32, f32)> {
@@ -134,6 +122,18 @@ impl Simulation {
                 self.particles.lats[idx] = lat;
             }
         }
+
+        let (indices, (wind_speeds, sst_celsius)): (Vec<usize>, (Vec<f32>, Vec<f32>)) = {
+            let temp_view = self.particles.view();
+            let wind_sst = loader.get_wind_sst(&temp_view, loader.current_day, hour);
+
+            (temp_view.indices, wind_sst.iter().map(
+                |(u_wind_m, v_wind_m, sst_k)| 
+                ((u_wind_m * u_wind_m + v_wind_m * v_wind_m).sqrt(), sst_k - 273.15)
+                ).unzip())
+        };
+
+        self.particles.tracer.step(&indices, &wind_speeds, &sst_celsius, dt);
     }
     pub fn get_particles(&self) -> &Particles {
         &self.particles

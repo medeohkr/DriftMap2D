@@ -22,17 +22,22 @@ impl Tracer for OilTracer {
         self.data.age.push(0.0);
         self.data.total_mass.push(self.properties.total_mass_per_particle);
         self.data.mass_components.extend_from_slice(&self.properties.initial_mass_components);
-        self.data.emulsification_start_age.push(-1.0);
         self.data.f_evap.push(0.0);
+        self.data.y_w.push(0.0);
+        self.data.interfacial_area.push(0.0);
+        self.data.emulsification_start_age.push(-1.0);
     }
+
     fn step(
         &mut self,
+        indices: &[usize],
         wind_speeds: &[f32],
         sst_celsius: &[f32],
         dt: f32,
     ) {
         weathering::step_particle_weathering(
             &mut self.data,
+            &indices,
             &self.properties,
             wind_speeds,
             sst_celsius,
@@ -56,7 +61,6 @@ impl OilTracer {
 
         let initial_mass_components = adios.initial_mass_components(total_mass_per_particle);
         let n_components = initial_mass_components.len();
-
         Self {
             config: config.clone(),
             properties: OilProperties {

@@ -1,10 +1,11 @@
 import { simulation, config, visualization, timeline, stats } from './stores.svelte'
 import { map, updateMarker, normalizeLongitude, zoom } from './map';
 import { preloader } from './preloader'
-import { updateGridVisualization, updateParticleVisualization, updateBoundingBox, updateConcentrationLayer } from './visualization';
+import { updateGridVisualization, updateParticleVisualization, updateBoundingBox, updateConcentrationLayer, captureSnapshot} from './visualization';
 import { getOilData } from './oils';
 import { Proteus } from '../pkg/proteus';
 import { GeoJSONSource } from 'maplibre-gl';
+import { proteus_current_day } from 'src/pkg/proteus_bg.wasm';
 
 export function validateSimulation() {
   const errors = [];
@@ -76,6 +77,11 @@ export async function simulationStep(version: number) {
     const todayDateInt = simulation.proteus.get_current_date_int();
 
     await simulation.proteus?.step(simulation.stepCount);
+
+    if (simulation.stepCount % (config.stepsPerDay / 24) === 0) {
+      updateStats();
+      captureSnapshot(Math.floor(simulation.proteus.current_day()));
+    }
 
     if (simulation.stepCount % config.stepsPerDay === 0) {
       const oceanTiles = preloader.getTileIndicesForOcean(simulation.proteus.get_positions(), -80);
