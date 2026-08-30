@@ -91,6 +91,8 @@ impl ParticleView<'_> {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (usize, f32, f32, f32)> + '_ {
-        self.indices.iter().map(|&i| (i, self.lons[i], self.lats[i], self.depths[i]))
+        self.indices.iter().enumerate().map(|(pos, &idx)| {
+            (pos, self.lons[idx], self.lats[idx], self.depths[idx])
+        })
     }
 }

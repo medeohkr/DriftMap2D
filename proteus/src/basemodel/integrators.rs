@@ -13,8 +13,8 @@ pub fn rk4_step(
 
     view.iter().map(
         |(i, lon, lat, depth)|
-        (lon + (k1[i].0 + 2.0 * k2[i].0 + 2.0 * k3[i].0 + k4[i].0) / 6.0,
-        lat + (k1[i].1 + 2.0 * k2[i].1 + 2.0 * k3[i].1 + k4[i].1) / 6.0,
+        (lon + dt * (k1[i].0 + 2.0 * k2[i].0 + 2.0 * k3[i].0 + k4[i].0) / 6.0,
+        lat + dt * (k1[i].1 + 2.0 * k2[i].1 + 2.0 * k3[i].1 + k4[i].1) / 6.0,
         depth
     )).collect()
 }

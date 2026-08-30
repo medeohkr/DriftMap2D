@@ -300,7 +300,6 @@ impl DataLoader {
         }
 
         let mut results = vec![(0.0, 0.0, 0.0); view.indices.len()];
-
         for (key, group) in groups {
             if let Some(tile) = self.cache.get(&key) {
                 let wind_step = hour / 6;

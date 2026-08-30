@@ -177,7 +177,7 @@ html, body {
 }
 
 .btn-primary {
-    display: flex;
+    display: none;
     flex: 1;
     justify-content: center;
     border: none;
@@ -192,6 +192,10 @@ html, body {
     transition: opacity var(--transition-fast);
 }
 
+.btn-primary.active {
+    display: flex
+}
+
 .btn-primary:hover {
     opacity: 0.8;
 }
@@ -204,9 +208,6 @@ html, body {
     background-color: var(--button-secondary);
 }
 
-#resume-simulation, #stop-simulation, #export-geojson {
-    display: none;
-}
 
 #reset-simulation {
     border: none;

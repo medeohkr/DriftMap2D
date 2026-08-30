@@ -1,4 +1,5 @@
 <script lang="ts">
+    import logo from '$lib/assets/images/DriftMap.webp';
     import BasicPanel from './basic/BasicPanel.svelte';  
     import AdvancedPanel from './advanced/AdvancedPanel.svelte';
     let activeTab: 'basic' | 'advanced' = 'basic';
@@ -8,7 +9,7 @@
     <div class="sidebar" id="sidebar">
         <!-- header -->
         <div class="header-container">
-            <img class="logo" src="src/assets/images/DriftMap.webp" alt="DriftMap Logo">
+            <img class="logo" src={logo} alt="DriftMap Logo">
             <span class="title-text">DriftMap</span>
         </div>
         <!-- tabs -->

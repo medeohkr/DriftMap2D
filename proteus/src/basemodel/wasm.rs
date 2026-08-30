@@ -39,15 +39,13 @@ impl Proteus {
         cs_value: f32,
         particle_count: usize,
         spread_km: f32,
-        start_year: i32,
-        start_month: u32,
-        start_day: u32,
+        start_date_str: &str,
         steps_per_day: u32,
         release_amount: f64,
         release_duration: f32,
         tracer_config: &str) -> Self {
 
-        let start_date = NaiveDate::from_ymd_opt(start_year, start_month, start_day).unwrap();
+        let start_date = NaiveDate::parse_from_str(start_date_str, "%Y-%m-%d").expect("Invalid date format");
         let release_type =
             if release_duration == 0.0 { Schedule::Instant }
             else { Schedule::Continuous{total_days: release_duration} };

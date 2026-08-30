@@ -76,7 +76,6 @@ impl Simulation {
 
         let u_drift = w_factor * (wind_u_m * cos_t - wind_v_m * sin_t);
         let v_drift = w_factor * (wind_u_m * sin_t + wind_v_m * cos_t);
-
         (current_u + meters_per_degree_lon(u_drift, lat), current_v + meters_per_degree_lat(v_drift))
     }
 
