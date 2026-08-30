@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { initialize } from './lib/initialize';
+  import { initialize } from '$lib/initialize';
   import Sidebar from './components/Sidebar.svelte';
   import MapView from './components/MapView.svelte';
   import VisualizationToggles from './components/VisualizationToggles.svelte';
