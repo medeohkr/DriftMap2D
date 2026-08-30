@@ -2,10 +2,10 @@ mod oil;
 // mod plastic;
 // mod leeway;
 // mod generic;
-
 use serde::{Deserialize};
 // pub use generic::GenericTracer;
 pub use oil::{OilTracer, OilConfig, OilData};
+
 // pub use plastic::PlasticTracer;
 // pub use leeway::LeewayTracer;
 
@@ -38,6 +38,7 @@ pub trait Tracer {
 
     fn step(
         &mut self,
+        indices: &[usize],
         wind_speeds: &[f32],
         sst_celsius: &[f32],
         dt: f32,
@@ -49,24 +50,33 @@ pub trait Tracer {
 }
 
 impl Tracer for TracerKind {
-    fn push(&mut self) { }
+    fn push(&mut self) {
+        match self {
+            TracerKind::Oil(t) => t.push(),
+        }
+    }
 
     fn step(
         &mut self,
-        _wind_speed: &[f32],
-        _sst_celsius: &[f32],
-        _dt: f32,
-    ) { }
+        indices: &[usize],
+        wind_speeds: &[f32],
+        sst_celsius: &[f32],
+        dt: f32,
+    ) {
+        match self {
+            TracerKind::Oil(t) => t.step(&indices, wind_speeds, sst_celsius, dt),
+        }
+    }
 
     fn wind_f(&self) -> f32 {
         match self {
-            TracerKind::Oil(t) => { t.properties.wind_factor }
+            TracerKind::Oil(t) => t.properties.wind_factor,
         }
     }
 
     fn wind_deg(&self) -> Option<f32> {
         match self {
-            TracerKind::Oil(t) => { t.properties.wind_deflection }
+            TracerKind::Oil(t) => t.properties.wind_deflection,
         }
     }
 }

@@ -4,6 +4,7 @@
   import Sidebar from './components/Sidebar.svelte';
   import MapView from './components/MapView.svelte';
   import VisualizationToggles from './components/VisualizationToggles.svelte';
+  import Stats from './components/Stats.svelte';
   
   import './app.css';
   
@@ -16,6 +17,7 @@
   <MapView />
   <Sidebar />
   <VisualizationToggles />
+  <Stats />
 </div>
 
 <style>

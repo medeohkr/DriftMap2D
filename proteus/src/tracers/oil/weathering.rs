@@ -1,7 +1,7 @@
 use super::OilProperties;
 use super::OilData;
-use super::adios::{lerp}
-;
+use super::adios::{lerp};
+
 macro_rules! log {
     ( $( $t:tt )* ) => {
         web_sys::console::log_1(&format!( $( $t )* ).into());
@@ -40,35 +40,6 @@ fn water_uptake_coefficient(wind_speed: f32) -> f32 {
     6.0 * K0Y * wind_speed * wind_speed / DROP_MAX
 }
 
-fn evap_decay_constants(
-    wind_speeds: &[f32],
-    sst_k: &[f32],
-    areas: &[f32],
-    mass_components: &[f32],
-    n_components: usize,
-    molecular_weights: &[f32],
-    boiling_points: &[f32],
-    indices: &[usize],
-) -> Vec<f32> {
-    let mut decay = Vec::with_capacity(indices.len() * n_components);
-
-    for &idx in indices {
-        let k = mass_transport_coeff(wind_speeds[idx]);
-        let sum_moles: f32 = mass_components[idx * n_components..(idx + 1) * n_components]
-            .iter()
-            .zip(molecular_weights)
-            .map(|(&mass, &mw)| mass * mw)
-            .sum();
-        let factor = -(areas[idx] * k) / (GAS_CONSTANT * sst_k[idx] * sum_moles);
-        let vp = vapor_pressure(boiling_points, sst_k[idx]);
-        for &vp_val in &vp {
-            decay.push(factor * vp_val);
-        }
-    }
-
-    decay
-}
-
 fn mass_transport_coeff(wind_speed: f32) -> f32 {
     if wind_speed > 10.0 {
         0.06 * C_EVAP * wind_speed.powi(2)
@@ -77,15 +48,14 @@ fn mass_transport_coeff(wind_speed: f32) -> f32 {
     }
 }
 
-fn vapor_pressure(boiling_points: &[f32], temp_k: f32) -> Vec<f32> {
+fn vapor_pressure(boiling_points: &[f32], sst_celsius: f32) -> Vec<f32> {
     boiling_points.iter()
         .map(|&boiling_point| {
             let d_s = 8.75 + 1.987 * boiling_point.ln();
             let c_2i = 0.19 * boiling_point - 18.0;
             
-            let var = 1.0 / (boiling_point - c_2i) - 1.0 / (temp_k - c_2i);
-            let ln_pi_po = d_s * (boiling_point - c_2i).powi(2) /
-                            (D_ZB * R_CAL * boiling_point) * var;
+            let var = 1.0 / (boiling_point - c_2i) - 1.0 / (sst_celsius + 273.15 - c_2i);
+            let ln_pi_po = d_s * (boiling_point - c_2i).powi(2) / (D_ZB * R_CAL * boiling_point) * var;
             ln_pi_po.exp() * ATMOS_PRESSURE
         })
         .collect()
@@ -123,6 +93,34 @@ pub fn sea_water_density(sst_celsius: f32) -> f32 {
     1025.0 - 0.2 * (sst_celsius - 15.0)
 }
 
+fn evap_decay_constants(
+    wind_speeds: &[f32],
+    sst_celsius: &[f32],
+    areas: &[f32],
+    mass_components: &[f32],
+    n_components: usize,
+    molecular_weights: &[f32],
+    boiling_points: &[f32],
+    evaporating_indices: &[(usize, usize)]
+) -> Vec<f32> {
+    let mut decay = Vec::with_capacity(evaporating_indices.len() * n_components);
+
+    for &(pos, idx) in evaporating_indices.iter() {
+        let k = mass_transport_coeff(wind_speeds[pos]);
+        let sum_moles: f32 = mass_components[(idx * n_components)..((idx + 1) * n_components)].iter().zip(molecular_weights).map(
+            |(&mass, &mw)| mass * mw
+        ).sum();
+
+        let factor = -(areas[pos] * k) / (GAS_CONSTANT * sst_celsius[pos] * sum_moles);
+        let vp = vapor_pressure(boiling_points, sst_celsius[pos]);
+        for &vp_val in &vp {
+            decay.push(factor * vp_val);
+        }
+    }
+
+    decay
+}
+
 pub fn update_evaporation(
     mass_components: &mut [f32],
     n_components: usize,
@@ -131,30 +129,33 @@ pub fn update_evaporation(
     f_evap: &mut [f32],
     area: &[f32],
     wind_speeds: &[f32],
-    sst_k: &[f32],
+    sst_celsius: &[f32],
     molecular_weights: &[f32],
     boiling_points: &[f32],
-    evaporating_indices: &[usize],
+    evaporating_indices: &[(usize, usize)],
     dt: f32,
 ) {
+
     let decay = evap_decay_constants(
         wind_speeds,
-        sst_k,
+        sst_celsius,
         area,
         mass_components,
         n_components,
-        boiling_points,
         molecular_weights,
+        boiling_points,
         evaporating_indices,
     );
 
-    for i in 0..mass_components.len() {
-        mass_components[i] = mass_components[i] * (decay[i] * dt).exp()
+    for (i, (_, idx)) in evaporating_indices.iter().enumerate() {
+        for j in 0..n_components {
+            mass_components[idx * n_components + j] *= (decay[i * n_components + j] * dt).exp()
+        }
     }
 
-    for i in 0..wind_speeds.len() {
-        total_mass[i] = mass_components[i * n_components..(i + 1) * n_components].iter().sum();
-        f_evap[i] = 1.0 - (total_mass[i] / total_initial_mass)
+    for &(_, idx) in evaporating_indices.iter() {
+        total_mass[idx] = mass_components[idx * n_components..(idx + 1) * n_components].iter().sum();
+        f_evap[idx] = 1.0 - (total_mass[idx] / total_initial_mass)
     }
 }
 
@@ -197,36 +198,41 @@ pub fn update_emulsification(
 
 pub fn step_particle_weathering(
     particles: &mut OilData,
+    indices: &[usize],
     oil: &OilProperties,
     wind_speeds: &[f32],
     sst_celsius: &[f32],
     dt: f32,
 ) {
-    let n = wind_speeds.len();
+    let n = indices.len();
+
     let initial_densities: Vec<f32> = (0..n).map(
-        |i| lerp(&oil.density_kgm3,sst_celsius[i])
+        |pos| lerp(&oil.density_kgm3,sst_celsius[pos])
     ).collect();
 
     let initial_viscosities: Vec<f32> = (0..n).map(
-        |i| lerp(&oil.dynamic_viscosity_cp,sst_celsius[i])
+        |pos| lerp(&oil.dynamic_viscosity_cp,sst_celsius[pos])
     ).collect();
 
-    let (oil_densities, oil_viscosities): (Vec<f32>, Vec<f32>) = (0..n).map(
-        |i| update_density_viscosity(
-        particles.y_w[i],
-        particles.f_evap[i],
-        initial_densities[i],
-        initial_viscosities[i],
-        sea_water_density(sst_celsius[i])
+    let (oil_densities, oil_viscosities): (Vec<f32>, Vec<f32>) = indices.iter().enumerate().map(
+        |(pos, &idx)| update_density_viscosity(
+        particles.y_w[idx],
+        particles.f_evap[idx],
+        initial_densities[pos],
+        initial_viscosities[pos],
+        sea_water_density(sst_celsius[pos])
     )).collect();
 
-    let areas: Vec<f32> = (0..n).map(
-        |i| particles.total_mass[i] / oil_densities[i] / 1e-3
+    let areas: Vec<f32> = indices.iter().enumerate().map(
+        |(pos, &idx)| particles.total_mass[idx] / oil_densities[pos] / 1e-3
     ).collect();
 
-    let evaporating_indices: Vec<usize> = (0..particles.age.len())
-        .filter(|&i| particles.age[i] < 24.0 * 3600.0)
-        .collect();
+    let evaporating_indices: Vec<(usize, usize)> = indices.iter().enumerate()
+        .filter(
+            |(_, &idx)| particles.age[idx] < 24.0 * 3600.0
+        ).map(
+            |(pos, &idx)| (pos, idx)
+        ).collect();
 
     if evaporating_indices.len() > 0 {
         update_evaporation(
@@ -244,27 +250,28 @@ pub fn step_particle_weathering(
             dt,
         );
     }
-    for i in 0..n {
+
+    for (pos, &idx) in indices.iter().enumerate() {
         let mut emulsifying = false;
-        if particles.f_evap[i] >= oil.bullwinkle_fraction {
-            if particles.emulsification_start_age[i] == -1.0 {
-                particles.emulsification_start_age[i] = particles.age[i];
+        if particles.f_evap[idx] >= oil.bullwinkle_fraction {
+            if particles.emulsification_start_age[idx] == -1.0 {
+                particles.emulsification_start_age[idx] = particles.age[idx];
             }
             emulsifying = true;
         }
 
         if emulsifying {
-            let age_since_start = particles.age[i] - particles.emulsification_start_age[i];
+            let age_since_start = particles.age[idx] - particles.emulsification_start_age[idx];
             update_emulsification(
-                &mut particles.y_w[i],
-                &mut particles.interfacial_area[i],
-                oil_viscosities[i],
+                &mut particles.y_w[idx],
+                &mut particles.interfacial_area[idx],
+                oil_viscosities[pos],
                 age_since_start,
-                wind_speeds[i],
+                wind_speeds[pos],
                 dt,
             );
         }
-        // 4. Age
-        particles.age[i] += dt;
+
+        particles.age[idx] += dt;
     }
 }
