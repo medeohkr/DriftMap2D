@@ -1,4 +1,4 @@
-#[derive(Debug, Clone)]  
+#[derive(Debug, Clone)]
 pub struct OilProperties {
     pub total_mass_per_particle: f32,
     pub wind_factor: f32,

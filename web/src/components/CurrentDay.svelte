@@ -1,8 +1,8 @@
 <script lang="ts">
-    import { simulation } from '$lib/stores.svelte'
+    import { simulation, timeline} from "$lib/stores.svelte";
 </script>
 
-{#if simulation.simulationActive}
+{#if simulation.simulationActive && !timeline.playbackMode}
     <span id="current-day">{simulation.currentTime}</span>
 {/if}
 

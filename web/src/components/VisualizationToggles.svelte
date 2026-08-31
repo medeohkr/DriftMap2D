@@ -1,12 +1,31 @@
 <script lang="ts">
-    import { updateOverlay } from '../lib/visualization';
-    let visualizationMode: 'particles' | 'heatmap' = 'particles';
+    import { visualization } from "$lib/stores.svelte";
+    import {
+        updateOverlay,
+        toggleParticleMode,
+        toggleHeatmapMode,
+    } from "../lib/visualization";
 </script>
+
 <div class="visualization-toggle-container">
-    <button class="visualization-toggle" id="particle-toggle" class:active={visualizationMode === 'particles'} on:click={() => visualizationMode = 'particles'}>Particles</button>
-    <button class="visualization-toggle" id="heatmap-toggle" class:active={visualizationMode === 'heatmap'} on:click={() => visualizationMode = 'heatmap'}>Heatmap</button>
+    <button
+        class="visualization-toggle"
+        id="particle-toggle"
+        class:active={visualization.visualizationMode === "particles"}
+        on:click={toggleParticleMode}>Particles</button
+    >
+    <button
+        class="visualization-toggle"
+        id="heatmap-toggle"
+        class:active={visualization.visualizationMode === "heatmap"}
+        on:click={toggleHeatmapMode}>Heatmap</button
+    >
     <div class="overlay-container">
-        <input type="checkbox" on:change={(e) => updateOverlay(e.currentTarget.checked)} id="overlay-checkbox">
+        <input
+            type="checkbox"
+            on:change={(e) => updateOverlay(e.currentTarget.checked)}
+            id="overlay-checkbox"
+        />
         <span>Show Today's Currents</span>
     </div>
 </div>
@@ -39,6 +58,7 @@
     }
 
     .visualization-toggle.active {
-        background: var(--text-primary); color: var(--shadow-primary);
+        background: var(--text-primary);
+        color: var(--shadow-primary);
     }
 </style>

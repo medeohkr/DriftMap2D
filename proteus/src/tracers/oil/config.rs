@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-#[derive(Debug, Clone, Deserialize)]  
+#[derive(Debug, Clone, Deserialize)]
 pub struct OilConfig {
     pub adios_json: String,
     #[serde(default)]

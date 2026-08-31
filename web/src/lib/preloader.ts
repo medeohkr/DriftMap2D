@@ -37,7 +37,7 @@ export class TilePreloader {
     // ========== LANDMASK METHODS ==========
 
     preloadLandmask(lonIdx: number, latIdx: number): void {
-        const url = `${this.landmaskUrl}/landmask_${String(lonIdx).padStart(3, '0')}_${String(latIdx).padStart(3, '0')}.bin`;
+        const url = `${this.landmaskUrl}/landmask_${String(lonIdx).padStart(3, "0")}_${String(latIdx).padStart(3, "0")}.bin`;
 
         if (this.completed.has(url) || this.pending.has(url)) return;
 
@@ -62,7 +62,10 @@ export class TilePreloader {
         }
     }
 
-    getTileIndicesForLandmask(positions: Float32Array, bufferTiles: number = 0): TileIndex[] {
+    getTileIndicesForLandmask(
+        positions: Float32Array,
+        bufferTiles: number = 0,
+    ): TileIndex[] {
         const tiles = new Set<string>();
 
         for (let i = 0; i < positions.length; i += 2) {
@@ -76,7 +79,12 @@ export class TilePreloader {
                 for (let dy = -bufferTiles; dy <= bufferTiles; dy++) {
                     const lonIdx = centerLonIdx + dx;
                     const latIdx = centerLatIdx + dy;
-                    if (lonIdx >= 0 && lonIdx < 36 && latIdx >= 0 && latIdx < 18) {
+                    if (
+                        lonIdx >= 0 &&
+                        lonIdx < 36 &&
+                        latIdx >= 0 &&
+                        latIdx < 18
+                    ) {
                         tiles.add(`${lonIdx},${latIdx}`);
                     }
                 }
@@ -84,7 +92,7 @@ export class TilePreloader {
         }
 
         return Array.from(tiles).map((key) => {
-            const [lonIdx, latIdx] = key.split(',').map(Number);
+            const [lonIdx, latIdx] = key.split(",").map(Number);
             return { lonIdx, latIdx };
         });
     }
@@ -95,10 +103,10 @@ export class TilePreloader {
         const year = Math.floor(date / 10000);
         const month = Math.floor((date % 10000) / 100);
         const day = date % 100;
-        const monthStr = String(month).padStart(2, '0');
-        const dayStr = String(day).padStart(2, '0');
-        const lonStr = String(lonIdx).padStart(3, '0');
-        const latStr = String(latIdx).padStart(3, '0');
+        const monthStr = String(month).padStart(2, "0");
+        const dayStr = String(day).padStart(2, "0");
+        const lonStr = String(lonIdx).padStart(3, "0");
+        const latStr = String(latIdx).padStart(3, "0");
         return `${this.baseUrl}/${year}/${monthStr}/${dayStr}/${lonStr}_${latStr}.bin`;
     }
 
@@ -128,7 +136,10 @@ export class TilePreloader {
         }
     }
 
-    getTileIndicesForOcean(positions: Float32Array, bufferTiles: number = 0): TileIndex[] {
+    getTileIndicesForOcean(
+        positions: Float32Array,
+        bufferTiles: number = 0,
+    ): TileIndex[] {
         const tiles = new Set<string>();
 
         for (let i = 0; i < positions.length; i += 2) {
@@ -142,7 +153,12 @@ export class TilePreloader {
                 for (let dy = -bufferTiles; dy <= bufferTiles; dy++) {
                     const lonIdx = centerLonIdx + dx;
                     const latIdx = centerLatIdx + dy;
-                    if (lonIdx >= 0 && lonIdx < 36 && latIdx >= 0 && latIdx < 17) {
+                    if (
+                        lonIdx >= 0 &&
+                        lonIdx < 36 &&
+                        latIdx >= 0 &&
+                        latIdx < 17
+                    ) {
                         tiles.add(`${lonIdx},${latIdx}`);
                     }
                 }
@@ -150,7 +166,7 @@ export class TilePreloader {
         }
 
         return Array.from(tiles).map((key) => {
-            const [lonIdx, latIdx] = key.split(',').map(Number);
+            const [lonIdx, latIdx] = key.split(",").map(Number);
             return { lonIdx, latIdx };
         });
     }
@@ -161,21 +177,33 @@ export class TilePreloader {
         currentDate: number,
         currentPositions: Float32Array,
         stepsAhead: number = 3,
-        bufferTiles: number = 1
+        bufferTiles: number = 1,
     ): void {
         for (let step = 1; step <= stepsAhead; step++) {
             const futureDate = this.addDays(currentDate, step);
-            const futurePositions = this.predictPositions(currentPositions, step);
+            const futurePositions = this.predictPositions(
+                currentPositions,
+                step,
+            );
 
-            const futureOceanTiles = this.getTileIndicesForOcean(futurePositions, bufferTiles);
+            const futureOceanTiles = this.getTileIndicesForOcean(
+                futurePositions,
+                bufferTiles,
+            );
             this.preloadTiles(futureDate, futureOceanTiles);
 
-            const futureLandmaskTiles = this.getTileIndicesForLandmask(futurePositions, bufferTiles);
+            const futureLandmaskTiles = this.getTileIndicesForLandmask(
+                futurePositions,
+                bufferTiles,
+            );
             this.preloadLandmaskTiles(futureLandmaskTiles);
         }
     }
 
-    predictPositions(positions: Float32Array, _stepsAhead: number): Float32Array {
+    predictPositions(
+        positions: Float32Array,
+        _stepsAhead: number,
+    ): Float32Array {
         // Simple linear extrapolation based on current velocity
         // For now, just return current positions (conservative — preloads nearby tiles)
         return positions;
@@ -187,7 +215,11 @@ export class TilePreloader {
         const day = dateInt % 100;
         const date = new Date(year, month - 1, day);
         date.setDate(date.getDate() + days);
-        return date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
+        return (
+            date.getFullYear() * 10000 +
+            (date.getMonth() + 1) * 100 +
+            date.getDate()
+        );
     }
 }
 

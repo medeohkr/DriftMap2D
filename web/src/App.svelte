@@ -5,8 +5,13 @@
   import MapView from './components/MapView.svelte';
   import VisualizationToggles from './components/VisualizationToggles.svelte';
   import Stats from './components/Stats.svelte';
+  import Legend from './components/Legend.svelte';
+  import Timeline from './components/Timeline.svelte';
+  import CurrentDay from './components/CurrentDay.svelte';
+  import CoordinateDisplay from './components/CoordinateDisplay.svelte';
   
   import './app.css';
+
   
   onMount(async () => {
     await initialize();
@@ -18,6 +23,10 @@
   <Sidebar />
   <VisualizationToggles />
   <Stats />
+  <Legend />
+  <Timeline />
+  <CurrentDay />
+  <CoordinateDisplay />
 </div>
 
 <style>

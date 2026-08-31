@@ -1,6 +1,7 @@
 // simulation.rs
 use super::{
-    DataLoader, Diffusion, LandMaskLoader, ParticleView, Particles, ReleaseConfig, ReleaseManager, integrators, normalize_lon, meters_per_degree_lat, meters_per_degree_lon
+    integrators, meters_per_degree_lat, meters_per_degree_lon, normalize_lon, DataLoader,
+    Diffusion, LandMaskLoader, ParticleView, Particles, ReleaseConfig, ReleaseManager,
 };
 use crate::tracers::{Tracer, TracerKind};
 
@@ -44,11 +45,7 @@ impl Simulation {
     pub fn release_particles(&mut self, dt_days: f32) {
         if let Some(seeds) = self.release_manager.update(dt_days) {
             for seed in seeds {
-                self.particles.add_particle(
-                    seed.lon,
-                    seed.lat,
-                    seed.depth,
-                );
+                self.particles.add_particle(seed.lon, seed.lat, seed.depth);
             }
         }
     }
@@ -59,12 +56,16 @@ impl Simulation {
         current_u: f32,
         current_v: f32,
         wind_u_m: f32,
-        wind_v_m: f32
+        wind_v_m: f32,
     ) -> (f32, f32) {
         let w_factor = self.particles.tracer.wind_f();
         let wind_speed = (wind_u_m * wind_u_m + wind_v_m * wind_v_m).sqrt().max(0.1);
 
-        let theta_deg = self.particles.tracer.wind_deg().unwrap_or_else(|| 25.0 * (-wind_speed.powi(3) / 1184.75).exp());
+        let theta_deg = self
+            .particles
+            .tracer
+            .wind_deg()
+            .unwrap_or_else(|| 25.0 * (-wind_speed.powi(3) / 1184.75).exp());
         let theta = if lat >= 0.0 {
             theta_deg.to_radians()
         } else {
@@ -76,7 +77,10 @@ impl Simulation {
 
         let u_drift = w_factor * (wind_u_m * cos_t - wind_v_m * sin_t);
         let v_drift = w_factor * (wind_u_m * sin_t + wind_v_m * cos_t);
-        (current_u + meters_per_degree_lon(u_drift, lat), current_v + meters_per_degree_lat(v_drift))
+        (
+            current_u + meters_per_degree_lon(u_drift, lat),
+            current_v + meters_per_degree_lat(v_drift),
+        )
     }
 
     pub fn update_particles_batch(
@@ -93,22 +97,48 @@ impl Simulation {
         let get_velocities_view = |view: &ParticleView| -> Vec<(f32, f32)> {
             let env = loader.get_velocities_wind(view, loader.current_day, hour);
 
-            env.iter().copied().enumerate().map(
-                |(i, (current_u, current_v, wind_u_m, wind_v_m))|
-                self.calculate_total_velocity(view.lat(i), current_u, current_v, wind_u_m, wind_v_m)
-            ).collect()
+            env.iter()
+                .copied()
+                .enumerate()
+                .map(|(i, (current_u, current_v, wind_u_m, wind_v_m))| {
+                    self.calculate_total_velocity(
+                        view.lat(i),
+                        current_u,
+                        current_v,
+                        wind_u_m,
+                        wind_v_m,
+                    )
+                })
+                .collect()
         };
 
         let get_velocities_slice = |slice: &[(f32, f32, f32)]| -> Vec<(f32, f32)> {
             let env = loader.get_velocities_wind_slice(slice, loader.current_day, hour);
-            env.iter().copied().enumerate().map(
-                |(i, (current_u, current_v, wind_u_m, wind_v_m))|
-                self.calculate_total_velocity(slice[i].1, current_u, current_v, wind_u_m, wind_v_m)
-            ).collect()
+            env.iter()
+                .copied()
+                .enumerate()
+                .map(|(i, (current_u, current_v, wind_u_m, wind_v_m))| {
+                    self.calculate_total_velocity(
+                        slice[i].1, current_u, current_v, wind_u_m, wind_v_m,
+                    )
+                })
+                .collect()
         };
-        let advected_positions = integrators::rk4_step(&unstranded_view, dt, &get_velocities_view, &get_velocities_slice);
-        let final_positions = self.diffusion.smagorinsky_step(loader, &unstranded_view, &advected_positions, loader.current_day, dt_days, hour);
-      
+        let advected_positions = integrators::rk4_step(
+            &unstranded_view,
+            dt,
+            &get_velocities_view,
+            &get_velocities_slice,
+        );
+        let final_positions = self.diffusion.smagorinsky_step(
+            loader,
+            &unstranded_view,
+            &advected_positions,
+            loader.current_day,
+            dt_days,
+            hour,
+        );
+
         for (i, &idx) in unstranded_view.indices.iter().enumerate() {
             let (mut lon, mut lat) = final_positions[i];
 
@@ -127,13 +157,23 @@ impl Simulation {
             let temp_view = self.particles.view();
             let wind_sst = loader.get_wind_sst(&temp_view, loader.current_day, hour);
 
-            (temp_view.indices, wind_sst.iter().map(
-                |(u_wind_m, v_wind_m, sst_k)| 
-                ((u_wind_m * u_wind_m + v_wind_m * v_wind_m).sqrt(), sst_k - 273.15)
-                ).unzip())
+            (
+                temp_view.indices,
+                wind_sst
+                    .iter()
+                    .map(|(u_wind_m, v_wind_m, sst_k)| {
+                        (
+                            (u_wind_m * u_wind_m + v_wind_m * v_wind_m).sqrt(),
+                            sst_k - 273.15,
+                        )
+                    })
+                    .unzip(),
+            )
         };
 
-        self.particles.tracer.step(&indices, &wind_speeds, &sst_celsius, dt);
+        self.particles
+            .tracer
+            .step(&indices, &wind_speeds, &sst_celsius, dt);
     }
     pub fn get_particles(&self) -> &Particles {
         &self.particles
