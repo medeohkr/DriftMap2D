@@ -5,7 +5,12 @@ import path from 'path';
 export default defineConfig({
   plugins: [svelte()],
   optimizeDeps: {
-    exclude: ['maplibre-gl'],
+    esbuildOptions: {
+      target: "es2022",
+    },
+  },
+  build: {
+    target: ["es2022", "safari15"],
   },
   resolve: {
       alias: {

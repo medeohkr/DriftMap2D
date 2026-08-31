@@ -1,8 +1,9 @@
-import * as maplibregl from "maplibre-gl";
+// @ts-expect-error
+import * as maplibregl from 'https://unpkg.com/maplibre-gl@^6.6.0/dist/maplibre-gl.mjs';
 import { simulation, config, visualization } from "./stores.svelte";
 import { preloader } from "./preloader";
 
-export let map: maplibregl.Map;
+export let map: any;
 
 export function initMap() {
     map = new maplibregl.Map({
@@ -41,7 +42,7 @@ export function initMap() {
         "bottom-right",
     );
 
-    map.on("click", (e) => {
+    map.on("click", (e: any) => {
         if (!simulation.simulationActive) {
             config.lon = parseFloat(e.lngLat.lng.toFixed(2));
             config.lat = parseFloat(e.lngLat.lat.toFixed(2));
@@ -49,7 +50,7 @@ export function initMap() {
         }
     });
 
-    map.on("mousemove", (e) => {
+    map.on("mousemove", (e: any) => {
         visualization.mapLon = normalizeLongitude(e.lngLat.lng).toFixed(2);
         visualization.mapLat = e.lngLat.lat.toFixed(2);
     });

@@ -1,6 +1,5 @@
 import { map } from "./map";
-import { config, simulation, timeline, visualization, stats} from "./stores.svelte";
-import { GeoJSONSource } from "maplibre-gl";
+import { config, simulation, timeline, visualization, stats, history} from "./stores.svelte";
 import { HeatmapGenerator } from "../pkg/proteus";
 import { getStats } from "./simulation";
 
@@ -224,10 +223,10 @@ export function updateParticleVisualization() {
         }
     }
 
-    (map.getSource("particles-unstranded") as GeoJSONSource).setData(
+    map.getSource("particles-unstranded").setData(
         geojsonUnstranded,
     );
-    (map.getSource("particles-stranded") as GeoJSONSource).setData(
+    map.getSource("particles-stranded").setData(
         geojsonStranded,
     );
 }
@@ -241,7 +240,7 @@ export function updateGridVisualization() {
             getScaledConcentrations().map(tonsPerKm2ToTonsPerCell),
         ),
     );
-    (map.getSource("concentration") as GeoJSONSource).setData(geojson);
+    map.getSource("concentration").setData(geojson);
 }
 
 export function buildHeatmap() {
@@ -275,7 +274,7 @@ export function buildHeatmap() {
 }
 
 export function captureSnapshot(day: Number) {
-    simulation.simulationHistory.push({
+    history.simulationHistory.push({
         day: day,
         dateStr: simulation.proteus?.current_time_str(),
         unstrandedGeojson: getUnstrandedGeojson(),

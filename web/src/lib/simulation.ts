@@ -4,6 +4,7 @@ import {
     visualization,
     timeline,
     stats,
+    history,
 } from "./stores.svelte";
 import { map, updateMarker, normalizeLongitude, zoom } from "./map";
 import { preloader } from "./preloader";
@@ -16,8 +17,6 @@ import {
 } from "./visualization";
 import { getOilData } from "./oils";
 import { Proteus } from "../pkg/proteus";
-import { GeoJSONSource } from "maplibre-gl";
-import { proteus_current_day } from "src/pkg/proteus_bg.wasm";
 
 export function validateSimulation() {
     const errors = [];
@@ -219,7 +218,7 @@ export async function resetSimulation() {
     simulation.simulationRunning = false;
     simulation.simulationVersion++;
     simulation.stepCount = 0;
-    simulation.simulationHistory = [];
+    history.simulationHistory = [];
     timeline.playbackMode = false;
 
     map.setPaintProperty("overlay-layer", "raster-opacity", 0.4);
@@ -240,15 +239,15 @@ export async function resetSimulation() {
     );
 
     if (map) {
-        (map.getSource("concentration") as GeoJSONSource).setData({
+        map.getSource("concentration").setData({
             type: "FeatureCollection",
             features: [],
         });
-        (map.getSource("particles-unstranded") as GeoJSONSource).setData({
+        map.getSource("particles-unstranded").setData({
             type: "FeatureCollection",
             features: [],
         });
-        (map.getSource("particles-stranded") as GeoJSONSource).setData({
+        map.getSource("particles-stranded").setData({
             type: "FeatureCollection",
             features: [],
         });
