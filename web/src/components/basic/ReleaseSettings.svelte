@@ -16,12 +16,12 @@
     <span>Release Settings</span>
     <div class="container-secondary">
         <span class="release-text">Latitude</span>
-        <input onblur={onLonInput} type="text" class="field-primary" id="lat-field" value={normalizeLongitude(config.lon).toFixed(2)}>
+        <input onblur={updateMarker} bind:value={config.lat} type="text" class="field-primary" id="lat-field">
         <span class="unit-text">° N</span>
     </div>
     <div class="container-secondary">
         <span class="release-text">Longitude</span>
-        <input onblur={updateMarker} bind:value={config.lat} type="text" class="field-primary" id="lon-field">
+        <input onblur={onLonInput} type="text" class="field-primary" id="lon-field" value={normalizeLongitude(config.lon).toFixed(2)}>
         <span class="unit-text">° E</span>
     </div>
     <div class="container-secondary">

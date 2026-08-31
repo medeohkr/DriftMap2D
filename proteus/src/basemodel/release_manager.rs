@@ -1,43 +1,44 @@
 // release_manager.rs
 
 use rand::prelude::*;
-use rand_distr::{Normal, Distribution};
+use rand_distr::{Distribution, Normal};
 
 /// Release schedule type
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Schedule {
-    Instant,      // All particles released at start time
-    Continuous {  // Released over a duration
-        total_days: f32
+    Instant, // All particles released at start time
+    Continuous {
+        // Released over a duration
+        total_days: f32,
     },
 }
 
 /// Release configuration
 #[derive(Debug, Clone)]
 pub struct ReleaseConfig {
-    pub lon: f32,                    // Release longitude (degrees)
-    pub lat: f32,                    // Release latitude (degrees)
-    pub schedule: Schedule,          // Instant or continuous
-    pub total_mass_bq: f64,          // Total activity (Bq) or mass (tons)
-    pub particle_count: usize,       // Number of particles
-    pub spread_km: f32,              // Initial spread (standard deviation in km)
-    pub depth_m: f32,                // Initial depth (meters)
+    pub lon: f32,              // Release longitude (degrees)
+    pub lat: f32,              // Release latitude (degrees)
+    pub schedule: Schedule,    // Instant or continuous
+    pub total_mass_bq: f64,    // Total activity (Bq) or mass (tons)
+    pub particle_count: usize, // Number of particles
+    pub spread_km: f32,        // Initial spread (standard deviation in km)
+    pub depth_m: f32,          // Initial depth (meters)
 }
 
 /// Manages particle release over time
 pub struct ReleaseManager {
     config: ReleaseConfig,
     total_released: usize,
-    particles_per_unit: f64,         // Mass per particle (total / count)
+    particles_per_unit: f64, // Mass per particle (total / count)
     rng: ThreadRng,
-    normal: Normal<f32>,             // For Gaussian spread
+    normal: Normal<f32>, // For Gaussian spread
 }
 
 impl ReleaseManager {
     pub fn new(config: ReleaseConfig) -> Self {
         let particles_per_unit = config.total_mass_bq / config.particle_count as f64;
         let normal = Normal::new(0.0, config.spread_km).expect("Invalid normal distribution");
-        
+
         Self {
             config,
             total_released: 0,
@@ -46,7 +47,7 @@ impl ReleaseManager {
             normal,
         }
     }
-    
+
     /// Check if any particles should be released at this timestep
     /// Returns number of particles to release and their starting positions
     pub fn update(&mut self, dt_days: f32) -> Option<Vec<ParticleSeed>> {
@@ -62,7 +63,7 @@ impl ReleaseManager {
             Schedule::Continuous { total_days } => {
                 let rate = self.config.particle_count as f32 / total_days;
                 let to_release = (rate * dt_days).floor() as usize;
-                
+
                 if to_release > 0 {
                     let remaining = self.config.particle_count - self.total_released;
                     let to_release = to_release.min(remaining);
@@ -74,11 +75,11 @@ impl ReleaseManager {
             }
         }
     }
-    
+
     fn generate_particles(&mut self, count: usize) -> Vec<ParticleSeed> {
         let km_to_deg = 1.0 / 111.12;
-        let max_r = self.config.spread_km;  // Hard boundary
-        
+        let max_r = self.config.spread_km; // Hard boundary
+
         (0..count)
             .map(|_| {
                 // Sample from Gaussian, but reject if beyond max_r
@@ -94,7 +95,7 @@ impl ReleaseManager {
                 }
                 let lon = self.config.lon + dx * km_to_deg;
                 let lat = self.config.lat + dy * km_to_deg;
-                
+
                 ParticleSeed {
                     lon,
                     lat,
@@ -104,12 +105,12 @@ impl ReleaseManager {
             })
             .collect()
     }
-    
+
     /// Get total mass/activity released so far
     pub fn total_mass_released(&self) -> f64 {
         self.total_released as f64 * self.particles_per_unit
     }
-    
+
     /// Get fraction of particles released (0.0 to 1.0)
     pub fn fraction_released(&self) -> f32 {
         self.total_released as f32 / self.config.particle_count as f32

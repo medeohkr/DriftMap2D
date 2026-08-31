@@ -4,8 +4,12 @@
 
 <div class="import-autozoom-container">
     <button id="import-geojson">Import Scenario</button>
-    <input type="file" id="import-geojson-file" accept=".json,.geojson">
-    <input bind:checked={config.autoZoom} type="checkbox" id="autozoom-checkbox">
+    <input type="file" id="import-geojson-file" accept=".json,.geojson" />
+    <input
+        bind:checked={config.autoZoom}
+        type="checkbox"
+        id="autozoom-checkbox"
+    />
     <span class="autozoom-text">Auto-zoom</span>
 </div>
 

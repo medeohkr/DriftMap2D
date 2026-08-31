@@ -1,11 +1,11 @@
 // wasm.rs
-use wasm_bindgen::prelude::*;
-use chrono::{NaiveDate, Days, Datelike};
-use crate::basemodel::simulation::{Simulation, SimulationConfig};
 use crate::basemodel::release_manager::{ReleaseConfig, Schedule};
+use crate::basemodel::simulation::{Simulation, SimulationConfig};
 use crate::basemodel::DataLoader;
 use crate::basemodel::LandMaskLoader;
-use crate::tracers::{TracerKind, TracerConfig, OilTracer};
+use crate::tracers::{OilTracer, TracerConfig, TracerKind};
+use chrono::{Datelike, Days, NaiveDate};
+use wasm_bindgen::prelude::*;
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
@@ -22,7 +22,7 @@ pub struct Proteus {
     start_date: NaiveDate,
     hour_count: u32,
     step_count: u32,
-    steps_per_day: u32
+    steps_per_day: u32,
 }
 
 #[wasm_bindgen]
@@ -34,7 +34,7 @@ pub fn setup_panic_hook() {
 impl Proteus {
     #[wasm_bindgen(constructor)]
     pub fn new(
-        lon: f32, 
+        lon: f32,
         lat: f32,
         cs_value: f32,
         particle_count: usize,
@@ -43,17 +43,26 @@ impl Proteus {
         steps_per_day: u32,
         release_amount: f64,
         release_duration: f32,
-        tracer_config: &str) -> Self {
-
-        let start_date = NaiveDate::parse_from_str(start_date_str, "%Y-%m-%d").expect("Invalid date format");
-        let release_type =
-            if release_duration == 0.0 { Schedule::Instant }
-            else { Schedule::Continuous{total_days: release_duration} };
-        let tracer_config: TracerConfig = serde_json::from_str(tracer_config)
-            .expect("Failed to parse tracer config");
+        tracer_config: &str,
+    ) -> Self {
+        let start_date =
+            NaiveDate::parse_from_str(start_date_str, "%Y-%m-%d").expect("Invalid date format");
+        let release_type = if release_duration == 0.0 {
+            Schedule::Instant
+        } else {
+            Schedule::Continuous {
+                total_days: release_duration,
+            }
+        };
+        let tracer_config: TracerConfig =
+            serde_json::from_str(tracer_config).expect("Failed to parse tracer config");
 
         let tracer = match tracer_config {
-            TracerConfig::Oil(config) => TracerKind::Oil(OilTracer::new(config, particle_count, release_amount as f32 / particle_count as f32)),
+            TracerConfig::Oil(config) => TracerKind::Oil(OilTracer::new(
+                config,
+                particle_count,
+                release_amount as f32 / particle_count as f32,
+            )),
         };
         let release_config = ReleaseConfig {
             lon: lon,
@@ -64,22 +73,21 @@ impl Proteus {
             spread_km: spread_km,
             depth_m: 0.0,
         };
-        
+
         let sim_config = SimulationConfig {
             release_config,
             cs: cs_value,
         };
-        
+
         let simulation = Simulation::new(sim_config, tracer);
-        let loader = DataLoader::new(
-            "https://tiles.driftmap2d.com/tiles",
-            -180.0, -80.0
-        );
+        let loader = DataLoader::new("https://tiles.driftmap2d.com/tiles", -180.0, -80.0);
         let landmask = LandMaskLoader::new(
             "https://tiles.driftmap2d.com/roaring_landmask", // Local path for landmask tiles
-            -180.0, -90.0, 90.0
+            -180.0,
+            -90.0,
+            90.0,
         );
-        
+
         Self {
             simulation,
             loader,
@@ -88,16 +96,16 @@ impl Proteus {
             start_date,
             steps_per_day,
             hour_count: 0,
-            step_count: 0
+            step_count: 0,
         }
     }
-    
+
     pub fn get_current_date_int(&self) -> usize {
         let current_date = self.start_date + Days::new(self.days_since_start as u64);
         let year = current_date.year();
         let month = current_date.month();
         let day = current_date.day();
-        (year as usize * 10000) + (month as usize* 100) + day as usize
+        (year as usize * 10000) + (month as usize * 100) + day as usize
     }
 
     pub async fn init_landmask(&mut self, lon: f32, lat: f32) -> Result<(), JsValue> {
@@ -116,7 +124,7 @@ impl Proteus {
         let dt_days = 1.0 / self.steps_per_day as f32;
         self.step_count = step_count;
         let current_date_int = self.get_current_date_int();
-        
+
         if step_count == 0 {
             self.simulation.release_particles(dt_days);
             return Ok(());
@@ -124,13 +132,17 @@ impl Proteus {
         let hour = (24 * self.step_count / self.steps_per_day) % 24;
 
         self.loader.set_current_day(current_date_int, hour as usize);
-        
+
         self.simulation.release_particles(dt_days);
-        
+
         // Load tiles for the released particles
         let needed_ocean_tiles = self.loader.update_tiles(&self.simulation.get_particles());
-        
-        if let Err(e) = self.loader.load_by_date(current_date_int, &needed_ocean_tiles).await {
+
+        if let Err(e) = self
+            .loader
+            .load_by_date(current_date_int, &needed_ocean_tiles)
+            .await
+        {
             web_sys::console::error_1(&format!("Failed to load ocean tiles: {:?}", e).into());
             return Err(JsValue::from_str(&format!("{:?}", e)));
         }
@@ -151,18 +163,25 @@ impl Proteus {
         }
         for (lon_idx, lat_idx) in landmask_tiles {
             if let Err(e) = self.landmask.load_tile(lon_idx, lat_idx).await {
-                web_sys::console::warn_1(&format!("Landmask tile load failed: {}_{}: {}", lon_idx, lat_idx, e).into());
+                web_sys::console::warn_1(
+                    &format!("Landmask tile load failed: {}_{}: {}", lon_idx, lat_idx, e).into(),
+                );
             }
         }
-        
-        self.simulation.update_particles_batch(dt_days, &self.loader, hour as usize, &self.landmask);
-        
+
+        self.simulation.update_particles_batch(
+            dt_days,
+            &self.loader,
+            hour as usize,
+            &self.landmask,
+        );
+
         self.days_since_start = self.step_count as f32 / self.steps_per_day as f32;
         self.hour_count = hour as u32;
         self.step_count += 1;
         Ok(())
     }
-    
+
     pub fn get_positions(&self) -> Vec<f32> {
         let particles = self.simulation.get_particles();
         let mut positions = Vec::with_capacity(particles.len);
@@ -196,7 +215,6 @@ impl Proteus {
         }
         positions
     }
-    
 
     pub fn stranded_particle_count(&self) -> usize {
         self.simulation.get_particles().stranded_count()
@@ -205,13 +223,16 @@ impl Proteus {
     pub fn current_day(&self) -> f32 {
         self.days_since_start
     }
-    
+
     pub fn current_time_str(&self) -> String {
         let current_date = self.start_date + Days::new(self.days_since_start as u64);
         let year = current_date.year();
         let month = current_date.month();
         let day = current_date.day();
-        format!("{:04}-{:02}-{:02} {:02}:00", year, month, day, self.hour_count)
+        format!(
+            "{:04}-{:02}-{:02} {:02}:00",
+            year, month, day, self.hour_count
+        )
     }
 
     pub fn get_particle_bounding_box(&self) -> Vec<f32> {
@@ -220,7 +241,9 @@ impl Proteus {
     pub fn stranded_fraction(&self) -> f32 {
         let particles = self.simulation.get_particles();
         let total: usize = particles.len;
-        if total == 0 { return 0.0; }
+        if total == 0 {
+            return 0.0;
+        }
         let stranded = (0..total).filter(|&i| particles.stranded[i]).count();
         stranded as f32 / total as f32 * 100.0
     }
@@ -253,7 +276,7 @@ impl Proteus {
         let particles = self.simulation.get_particles();
         let mut total_initial = 0.0;
         let mut total_emulsified = 0.0;
-        
+
         match &particles.tracer {
             TracerKind::Oil(oil) => {
                 for i in 0..particles.len {
@@ -266,13 +289,17 @@ impl Proteus {
             }
         }
 
-        if total_initial > 0.0 { total_emulsified / total_initial * 100.0 } else { 0.0 }
+        if total_initial > 0.0 {
+            total_emulsified / total_initial * 100.0
+        } else {
+            0.0
+        }
     }
 
     pub fn total_floating_mass_tons(&self) -> f32 {
         let particles = self.simulation.get_particles();
         let mut total_mass = 0.0;
-        
+
         match &particles.tracer {
             TracerKind::Oil(oil) => {
                 for i in 0..particles.len {
@@ -289,7 +316,7 @@ impl Proteus {
     pub fn get_unstranded_positions_with_mass(&self) -> Vec<f32> {
         let particles = self.simulation.get_particles();
         let mut data = Vec::with_capacity(particles.len * 3);
-        
+
         match &particles.tracer {
             TracerKind::Oil(oil) => {
                 for i in 0..particles.len {

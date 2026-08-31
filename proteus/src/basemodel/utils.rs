@@ -8,8 +8,12 @@ pub fn meters_per_degree_lon(value: f32, lat: f32) -> f32 {
 
 pub fn normalize_lon(lon: f32) -> f32 {
     let mut lon = lon;
-    while lon < -180.0 { lon += 360.0; }
-    while lon >= 180.0 { lon -= 360.0; }
+    while lon < -180.0 {
+        lon += 360.0;
+    }
+    while lon >= 180.0 {
+        lon -= 360.0;
+    }
     lon
 }
 
@@ -30,11 +34,11 @@ pub fn find_depth_indices(depths: &[f32], target_depth: f32) -> (usize, f32) {
     if target_depth <= depths[0] {
         return (0, 0.0);
     }
-    
+
     if target_depth >= depths[depths.len() - 1] {
         return (depths.len() - 1, 0.0);
     }
-    
+
     for i in 0..depths.len() - 1 {
         if target_depth >= depths[i] && target_depth <= depths[i + 1] {
             let t = (target_depth - depths[i]) / (depths[i + 1] - depths[i]);

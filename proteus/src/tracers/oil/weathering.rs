@@ -1,6 +1,6 @@
-use super::OilProperties;
+use super::adios::lerp;
 use super::OilData;
-use super::adios::{lerp};
+use super::OilProperties;
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
@@ -24,10 +24,9 @@ const VISC_CURVFIT_PARAM: f32 = 1.5e3;
 fn y_max(viscosity: f32) -> f32 {
     let viscosity_pas = viscosity * CP_TO_PAS;
     if viscosity_pas > 0.050 {
-        return 0.9 - 0.0952 * (viscosity_pas / 0.050).ln()
-    }
-    else {
-        return 0.9
+        return 0.9 - 0.0952 * (viscosity_pas / 0.050).ln();
+    } else {
+        return 0.9;
     }
 }
 
@@ -49,13 +48,15 @@ fn mass_transport_coeff(wind_speed: f32) -> f32 {
 }
 
 fn vapor_pressure(boiling_points: &[f32], sst_celsius: f32) -> Vec<f32> {
-    boiling_points.iter()
+    boiling_points
+        .iter()
         .map(|&boiling_point| {
             let d_s = 8.75 + 1.987 * boiling_point.ln();
             let c_2i = 0.19 * boiling_point - 18.0;
-            
+
             let var = 1.0 / (boiling_point - c_2i) - 1.0 / (sst_celsius + 273.15 - c_2i);
-            let ln_pi_po = d_s * (boiling_point - c_2i).powi(2) / (D_ZB * R_CAL * boiling_point) * var;
+            let ln_pi_po =
+                d_s * (boiling_point - c_2i).powi(2) / (D_ZB * R_CAL * boiling_point) * var;
             ln_pi_po.exp() * ATMOS_PRESSURE
         })
         .collect()
@@ -68,14 +69,13 @@ pub fn update_density_viscosity(
     oil_viscosity_cp: f32,
     sea_water_density: f32,
 ) -> (f32, f32) {
-    
     // Emulsion density (weighted average)
     let density = y_w * sea_water_density + (1.0 - y_w) * oil_density_kgm3;
-    
+
     // Evaporation factor
     let kv1 = (oil_viscosity_cp.sqrt() * VISC_CURVFIT_PARAM).clamp(1.0, 10.0);
     let evap_factor = (kv1 * f_evap).exp();
-    
+
     // Emulsification factor (Mooney equation)
     let fw_d_fref = y_w / VISC_F_REF;
     let emul_factor = if (1.187 - fw_d_fref) > 0.0 {
@@ -83,9 +83,9 @@ pub fn update_density_viscosity(
     } else {
         1.0 // Shouldn't happen in practice (y_w < 0.84)
     };
-    
+
     let viscosity = oil_viscosity_cp * evap_factor * emul_factor;
-    
+
     (density, viscosity)
 }
 
@@ -101,17 +101,19 @@ fn evap_decay_constants(
     n_components: usize,
     molecular_weights: &[f32],
     boiling_points: &[f32],
-    evaporating_indices: &[(usize, usize)]
+    evaporating_indices: &[(usize, usize)],
 ) -> Vec<f32> {
     let mut decay = Vec::with_capacity(evaporating_indices.len() * n_components);
 
     for &(pos, idx) in evaporating_indices.iter() {
         let k = mass_transport_coeff(wind_speeds[pos]);
-        let sum_moles: f32 = mass_components[(idx * n_components)..((idx + 1) * n_components)].iter().zip(molecular_weights).map(
-            |(&mass, &mw)| mass * mw
-        ).sum();
+        let sum_moles: f32 = mass_components[(idx * n_components)..((idx + 1) * n_components)]
+            .iter()
+            .zip(molecular_weights)
+            .map(|(&mass, &mw)| mass * mw)
+            .sum();
 
-        let factor = -(areas[pos] * k) / (GAS_CONSTANT * sst_celsius[pos] * sum_moles);
+        let factor = -(areas[pos] * k) / (GAS_CONSTANT * (sst_celsius[pos] + 273.15) * sum_moles);
         let vp = vapor_pressure(boiling_points, sst_celsius[pos]);
         for &vp_val in &vp {
             decay.push(factor * vp_val);
@@ -135,7 +137,6 @@ pub fn update_evaporation(
     evaporating_indices: &[(usize, usize)],
     dt: f32,
 ) {
-
     let decay = evap_decay_constants(
         wind_speeds,
         sst_celsius,
@@ -154,8 +155,10 @@ pub fn update_evaporation(
     }
 
     for &(_, idx) in evaporating_indices.iter() {
-        total_mass[idx] = mass_components[idx * n_components..(idx + 1) * n_components].iter().sum();
-        f_evap[idx] = 1.0 - (total_mass[idx] / total_initial_mass)
+        total_mass[idx] = mass_components[idx * n_components..(idx + 1) * n_components]
+            .iter()
+            .sum();
+        f_evap[idx] = 1.0 - (total_mass[idx] / total_initial_mass);
     }
 }
 
@@ -167,7 +170,6 @@ pub fn update_emulsification(
     wind_speed: f32,
     dt: f32,
 ) -> bool {
-
     let y_max = y_max(viscosity);
 
     if y_max <= 0.0 {
@@ -177,10 +179,10 @@ pub fn update_emulsification(
     if *y_w >= y_max {
         return true;
     }
-    
+
     // maximum interfacial area
     let s_max = (6.0 / DROP_MIN) * (y_max / (1.0 - y_max));
-    
+
     // water uptake coefficient
     let k_emul = water_uptake_coefficient(wind_speed);
 
@@ -188,7 +190,7 @@ pub fn update_emulsification(
     let area_increment = k_emul * dt * (-k_emul / s_max * age_since_start).exp();
     *interfacial_area += area_increment;
     *interfacial_area = interfacial_area.min(s_max);
-    
+
     // update water fraction from interfacial area
     *y_w = (*interfacial_area * DROP_MAX) / (6.0 + *interfacial_area * DROP_MAX);
     *y_w = y_w.min(y_max);
@@ -206,33 +208,40 @@ pub fn step_particle_weathering(
 ) {
     let n = indices.len();
 
-    let initial_densities: Vec<f32> = (0..n).map(
-        |pos| lerp(&oil.density_kgm3,sst_celsius[pos])
-    ).collect();
+    let initial_densities: Vec<f32> = (0..n)
+        .map(|pos| lerp(&oil.density_kgm3, sst_celsius[pos]))
+        .collect();
 
-    let initial_viscosities: Vec<f32> = (0..n).map(
-        |pos| lerp(&oil.dynamic_viscosity_cp,sst_celsius[pos])
-    ).collect();
+    let initial_viscosities: Vec<f32> = (0..n)
+        .map(|pos| lerp(&oil.dynamic_viscosity_cp, sst_celsius[pos]))
+        .collect();
 
-    let (oil_densities, oil_viscosities): (Vec<f32>, Vec<f32>) = indices.iter().enumerate().map(
-        |(pos, &idx)| update_density_viscosity(
-        particles.y_w[idx],
-        particles.f_evap[idx],
-        initial_densities[pos],
-        initial_viscosities[pos],
-        sea_water_density(sst_celsius[pos])
-    )).collect();
+    let (oil_densities, oil_viscosities): (Vec<f32>, Vec<f32>) = indices
+        .iter()
+        .enumerate()
+        .map(|(pos, &idx)| {
+            update_density_viscosity(
+                particles.y_w[idx],
+                particles.f_evap[idx],
+                initial_densities[pos],
+                initial_viscosities[pos],
+                sea_water_density(sst_celsius[pos]),
+            )
+        })
+        .collect();
 
-    let areas: Vec<f32> = indices.iter().enumerate().map(
-        |(pos, &idx)| particles.total_mass[idx] / oil_densities[pos] / 1e-3
-    ).collect();
+    let areas: Vec<f32> = indices
+        .iter()
+        .enumerate()
+        .map(|(pos, &idx)| particles.total_mass[idx] / oil_densities[pos] / 1e-3)
+        .collect();
 
-    let evaporating_indices: Vec<(usize, usize)> = indices.iter().enumerate()
-        .filter(
-            |(_, &idx)| particles.age[idx] < 24.0 * 3600.0
-        ).map(
-            |(pos, &idx)| (pos, idx)
-        ).collect();
+    let evaporating_indices: Vec<(usize, usize)> = indices
+        .iter()
+        .enumerate()
+        .filter(|(_, &idx)| particles.age[idx] < 24.0 * 3600.0)
+        .map(|(pos, &idx)| (pos, idx))
+        .collect();
 
     if evaporating_indices.len() > 0 {
         update_evaporation(

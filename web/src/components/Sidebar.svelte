@@ -1,25 +1,35 @@
 <script lang="ts">
-    import logo from '$lib/assets/images/DriftMap.webp';
-    import BasicPanel from './basic/BasicPanel.svelte';  
-    import AdvancedPanel from './advanced/AdvancedPanel.svelte';
-    let activeTab: 'basic' | 'advanced' = 'basic';
+    import logo from "$lib/assets/images/DriftMap.webp";
+    import BasicPanel from "./basic/BasicPanel.svelte";
+    import AdvancedPanel from "./advanced/AdvancedPanel.svelte";
+    let activeTab: "basic" | "advanced" = "basic";
 </script>
 
 <div class="sidebar-container">
     <div class="sidebar" id="sidebar">
         <!-- header -->
         <div class="header-container">
-            <img class="logo" src={logo} alt="DriftMap Logo">
+            <img class="logo" src={logo} alt="DriftMap Logo" />
             <span class="title-text">DriftMap</span>
         </div>
         <!-- tabs -->
         <div class="sidebar-body">
             <div class="tabs-container">
-                <button class="tab" id="tab-basic" class:active={activeTab === 'basic'} on:click={() => activeTab = 'basic'}>BASIC</button>
-                <button class="tab" id="tab-advanced" class:active={activeTab === 'advanced'} on:click={() => activeTab = 'advanced'}>ADVANCED</button>
+                <button
+                    class="tab"
+                    id="tab-basic"
+                    class:active={activeTab === "basic"}
+                    on:click={() => (activeTab = "basic")}>BASIC</button
+                >
+                <button
+                    class="tab"
+                    id="tab-advanced"
+                    class:active={activeTab === "advanced"}
+                    on:click={() => (activeTab = "advanced")}>ADVANCED</button
+                >
             </div>
             <!-- basic panel -->
-            {#if activeTab === 'basic'}
+            {#if activeTab === "basic"}
                 <BasicPanel />
             {:else}
                 <AdvancedPanel />
@@ -70,12 +80,12 @@
         align-items: center;
         justify-content: center;
         background-color: var(--bg-header);
-        width: var(--width-sidebar)
+        width: var(--width-sidebar);
     }
 
     .logo {
         width: var(--width-logo);
-        padding: var(--spacing-sm)
+        padding: var(--spacing-sm);
     }
 
     .title-text {
@@ -83,9 +93,9 @@
         font-family: var(--font-family);
         font-size: var(--font-size-title);
         font-weight: var(--weight-primary);
-        padding: var(--spacing-sm)
+        padding: var(--spacing-sm);
     }
-    
+
     .tabs-container {
         width: 100%;
         display: flex;

@@ -21,7 +21,7 @@ pub struct AdiosOil {
 pub struct AdiosMetadata {
     pub product_type: String,
     #[serde(rename = "API")]
-    pub api: f32
+    pub api: f32,
 }
 
 // === SUBSAMPLE ===
@@ -141,17 +141,25 @@ pub struct AdiosDistillationCut {
 impl AdiosOil {
     // get unevaporated sample
     pub fn fresh_sample(&self) -> &AdiosSubSample {
-        self.sub_samples.iter().find(|s| {
-            let frac = s.metadata.fraction_evaporated.value;
-            frac == 0.0 || frac < 0.001 // margin for rounding errors
-        }).expect("No Subsample Found")
+        self.sub_samples
+            .iter()
+            .find(|s| {
+                let frac = s.metadata.fraction_evaporated.value;
+                frac == 0.0 || frac < 0.001 // margin for rounding errors
+            })
+            .expect("No Subsample Found")
     }
     // get the raw density measurements now, interpolate later
     pub fn densities(&self) -> Vec<(f32, f32)> {
-        let props = self.fresh_sample().physical_properties.as_ref()
+        let props = self
+            .fresh_sample()
+            .physical_properties
+            .as_ref()
             .expect("Physical properties missing");
 
-        let mut data: Vec<(f32, f32)> = props.densities.iter()
+        let mut data: Vec<(f32, f32)> = props
+            .densities
+            .iter()
             .map(|d| (d.ref_temp.value, d.density.value * 1000.0))
             .collect();
         data.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
@@ -159,12 +167,17 @@ impl AdiosOil {
     }
 
     pub fn viscosities(&self) -> Vec<(f32, f32)> {
-        let props = self.fresh_sample().physical_properties.as_ref()
+        let props = self
+            .fresh_sample()
+            .physical_properties
+            .as_ref()
             .expect("Physical properties missing");
 
         // prioritize dynamic viscosities
         if !props.dynamic_viscosities.is_empty() {
-            let mut data: Vec<(f32, f32)> = props.dynamic_viscosities.iter()
+            let mut data: Vec<(f32, f32)> = props
+                .dynamic_viscosities
+                .iter()
                 .map(|v| (v.ref_temp.value, v.viscosity.value))
                 .collect();
             data.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
@@ -172,7 +185,9 @@ impl AdiosOil {
         }
 
         // fall back to kinematic viscosity
-        let mut data: Vec<(f32, f32)> = props.kinematic_viscosities.iter()
+        let mut data: Vec<(f32, f32)> = props
+            .kinematic_viscosities
+            .iter()
             .map(|v| {
                 let temp = v.ref_temp.value;
                 let kinematic_cst = v.viscosity.value;
@@ -185,42 +200,64 @@ impl AdiosOil {
     }
 
     pub fn interfacial_tension(&self) -> Vec<(f32, f32)> {
-        let props = self.fresh_sample().physical_properties.as_ref()
+        let props = self
+            .fresh_sample()
+            .physical_properties
+            .as_ref()
             .expect("Physical properties missing");
 
         // prioritize seawater interfacial tension
         if !props.interfacial_tension_seawater.is_empty() {
-            return props.interfacial_tension_seawater.iter()
+            return props
+                .interfacial_tension_seawater
+                .iter()
                 .map(|v| (v.ref_temp.value, v.tension.value))
                 .collect();
         }
 
         // fall back to water interfacial tension
         if !props.interfacial_tension_water.is_empty() {
-            return props.interfacial_tension_water.iter()
+            return props
+                .interfacial_tension_water
+                .iter()
                 .map(|v| (v.ref_temp.value, v.tension.value))
                 .collect();
         }
 
         vec![(15.0, 0.001 * (39.0 - 0.2571 * self.metadata.api))]
     }
-    
+
     // SARA fractions
     pub fn saturate_fraction(&self) -> Option<f32> {
         let sample = self.fresh_sample();
         let sara = sample.sara.as_ref()?;
-        Some(sara.saturates.as_ref().map(|s| s.value / 100.0).unwrap_or(0.0))
+        Some(
+            sara.saturates
+                .as_ref()
+                .map(|s| s.value / 100.0)
+                .unwrap_or(0.0),
+        )
     }
 
     pub fn aromatic_fraction(&self) -> Option<f32> {
         let sample = self.fresh_sample();
         let sara = sample.sara.as_ref()?;
-        Some(sara.aromatics.as_ref().map(|a| a.value / 100.0).unwrap_or(0.0))
+        Some(
+            sara.aromatics
+                .as_ref()
+                .map(|a| a.value / 100.0)
+                .unwrap_or(0.0),
+        )
     }
     pub fn asphaltene_fraction(&self) -> Option<f32> {
         let sample = self.fresh_sample();
         let sara = sample.sara.as_ref()?;
-        Some(sara.asphaltenes.as_ref().map(|a| a.value / 100.0).unwrap_or(0.0))
+        Some(
+            sara.asphaltenes
+                .as_ref()
+                .map(|a| a.value / 100.0)
+                .unwrap_or(0.0),
+        )
     }
 
     pub fn resin_fraction(&self) -> Option<f32> {
@@ -248,32 +285,41 @@ impl AdiosOil {
     }
 
     pub fn sara_fractions(&self) -> (f32, f32, f32, f32) {
-        let asphaltene = self.asphaltene_fraction().unwrap_or(self.estimate_asphaltene_fraction());
-        let resin = self.resin_fraction().unwrap_or(self.estimate_resin_fraction());
-        
+        let asphaltene = self
+            .asphaltene_fraction()
+            .unwrap_or(self.estimate_asphaltene_fraction());
+        let resin = self
+            .resin_fraction()
+            .unwrap_or(self.estimate_resin_fraction());
+
         // estimate saturates and aromatics if not available
-        let (sat, arom) = if let (Some(s), Some(a)) = (
-            self.saturate_fraction(),
-            self.aromatic_fraction(),
-        ) {
-            (s, a)
-        } else {
-            // estimate from API
-            let api = self.metadata.api;
-            let sat = if api > 30.0 { 0.5 } else { 0.3 };
-            let arom = 1.0 - sat - resin - asphaltene;
-            (sat, arom)
-        };
-        
+        let (sat, arom) =
+            if let (Some(s), Some(a)) = (self.saturate_fraction(), self.aromatic_fraction()) {
+                (s, a)
+            } else {
+                // estimate from API
+                let api = self.metadata.api;
+                let sat = if api > 30.0 { 0.5 } else { 0.3 };
+                let arom = 1.0 - sat - resin - asphaltene;
+                (sat, arom)
+            };
+
         (sat, arom, resin, asphaltene)
     }
 
     // get vec of distillation cuts
     pub fn distillation_cuts(&self) -> Option<Vec<(f32, f32)>> {
-        let cuts = self.fresh_sample().distillation_data.as_ref()?.cuts.as_slice(); // takes cuts as a slice from distillation_data ref
-        Some(cuts.iter().map(|cut| {
-            (cut.fraction.value / 100.0, cut.vapor_temp.value)
-        }).collect())
+        let cuts = self
+            .fresh_sample()
+            .distillation_data
+            .as_ref()?
+            .cuts
+            .as_slice(); // takes cuts as a slice from distillation_data ref
+        Some(
+            cuts.iter()
+                .map(|cut| (cut.fraction.value / 100.0, cut.vapor_temp.value))
+                .collect(),
+        )
     }
 
     // adios2d distillation cut estimation from api
@@ -293,11 +339,11 @@ impl AdiosOil {
     pub fn molecular_weights(&self) -> Vec<f32> {
         let cuts = match self.distillation_cuts() {
             Some(c) => c,
-            None => self.distillation_cuts_from_api(10)
+            None => self.distillation_cuts_from_api(10),
         };
-        
+
         let mut mw = Vec::with_capacity(cuts.len() * 4);
-        
+
         for (_, bp_c) in &cuts {
             let bp_k = bp_c + 273.15;
             mw.push(1000.0 / saturate_mol_wt(bp_k));
@@ -313,11 +359,11 @@ impl AdiosOil {
             Some(c) => c,
             None => self.distillation_cuts_from_api(10),
         };
-        
+
         let (f_sat, f_arom, f_res, f_asph) = self.sara_fractions();
-        
+
         let mut components = Vec::with_capacity(cuts.len() * 4);
-        
+
         for i in 0..cuts.len() {
             // mass fraction for this cut (cumulative difference)
             let cut_fraction = if i == 0 {
@@ -326,7 +372,7 @@ impl AdiosOil {
                 cuts[i].0 - cuts[i - 1].0
             };
             let cut_mass = total_mass * cut_fraction;
-            
+
             // distribute cut mass across SARA fractions
             components.push(cut_mass * f_sat);
             components.push(cut_mass * f_arom);
@@ -336,11 +382,13 @@ impl AdiosOil {
 
         components
     }
-    
+
     // adios2 bullwinkle_fraction estimation
     pub fn bullwinkle_fraction(&self) -> f32 {
         let api = self.metadata.api;
-        let f_asph: f32 = self.asphaltene_fraction().unwrap_or(self.estimate_asphaltene_fraction());
+        let f_asph: f32 = self
+            .asphaltene_fraction()
+            .unwrap_or(self.estimate_asphaltene_fraction());
         let bullwinkle_fraction: f32;
         let t_g = 1356.7 - 247.36 * api.ln();
         let t_bp = 532.98 - 3.1295 * api;
@@ -361,14 +409,14 @@ impl AdiosOil {
 }
 
 // interpolation helper
-pub fn lerp(props: &[(f32, f32)], target: f32) -> f32 { 
+pub fn lerp(props: &[(f32, f32)], target: f32) -> f32 {
     if target <= props[0].0 {
         return props[0].1;
     }
     if target >= props.last().unwrap().0 {
         return props.last().unwrap().1;
     }
-    
+
     for i in 0..props.len() - 1 {
         if target >= props[i].0 && target <= props[i + 1].0 {
             let t0 = props[i].0;
@@ -379,7 +427,7 @@ pub fn lerp(props: &[(f32, f32)], target: f32) -> f32 {
             return v0 + frac * (v1 - v0);
         }
     }
-    
+
     props.last().unwrap().1
 }
 
@@ -408,7 +456,8 @@ fn asphaltene_mol_wt(_boiling_point_k: f32) -> f32 {
 }
 
 pub fn boiling_points(distillation_cuts: Vec<(f32, f32)>) -> Vec<f32> {
-    distillation_cuts.iter().flat_map(
-        |(_, bp_c)| std::iter::repeat(*bp_c + 273.15).take(4)
-    ).collect()
+    distillation_cuts
+        .iter()
+        .flat_map(|(_, bp_c)| std::iter::repeat(*bp_c + 273.15).take(4))
+        .collect()
 }

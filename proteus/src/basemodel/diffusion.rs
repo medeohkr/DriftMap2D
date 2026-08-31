@@ -1,6 +1,6 @@
+use super::{normalize_lon, DataLoader, ParticleView};
 use rand::prelude::*;
-use rand_distr::{Normal, Distribution};
-use super::{DataLoader, ParticleView, normalize_lon};
+use rand_distr::{Distribution, Normal};
 macro_rules! log {
     ( $( $t:tt )* ) => {
         web_sys::console::log_1(&format!( $( $t )* ).into());
@@ -38,7 +38,6 @@ impl Diffusion {
         let mut probes = Vec::with_capacity(n);
         let mut final_positions = Vec::with_capacity(n);
 
-
         for (i, &(lon, lat, depth)) in positions.iter().enumerate() {
             let mid_lon = (old_view.lon(i) + lon) / 2.0;
             let mid_lat = (old_view.lat(i) + lat) / 2.0;
@@ -59,15 +58,15 @@ impl Diffusion {
             let vel_lat_minus = velocities[base + 2];
             let vel_lat_plus = velocities[base + 3];
 
-            if  vel_lon_minus.0 == 0.0 ||
-                vel_lon_minus.1 == 0.0 ||
-                vel_lon_plus.0 == 0.0 ||
-                vel_lon_plus.1 == 0.0 ||
-                vel_lat_minus.0 == 0.0 ||
-                vel_lat_minus.1 == 0.0 ||
-                vel_lat_plus.0 == 0.0 ||
-                vel_lat_plus.1 == 0.0
-             {
+            if vel_lon_minus.0 == 0.0
+                || vel_lon_minus.1 == 0.0
+                || vel_lon_plus.0 == 0.0
+                || vel_lon_plus.1 == 0.0
+                || vel_lat_minus.0 == 0.0
+                || vel_lat_minus.1 == 0.0
+                || vel_lat_plus.0 == 0.0
+                || vel_lat_plus.1 == 0.0
+            {
                 final_positions.push((lon, lat));
                 continue;
             }

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { simulation, config, stats } from '$lib/stores.svelte'
+    import { simulation, config, stats } from "$lib/stores.svelte";
 </script>
 
 {#if simulation.simulationActive}
@@ -11,15 +11,21 @@
             </div>
             <div class="container-secondary">
                 <span class="stats-primary-text">Emulsified</span>
-                <span class="unit-text" id="emulsified">{stats.emulsified}%</span>
+                <span class="unit-text" id="emulsified"
+                    >{stats.emulsified}%</span
+                >
             </div>
             <div class="container-secondary">
                 <span class="stats-primary-text">Evaporated</span>
-                <span class="unit-text" id="evaporated">{stats.evaporated}%</span>
+                <span class="unit-text" id="evaporated"
+                    >{stats.evaporated}%</span
+                >
             </div>
             <div class="container-secondary">
                 <span class="stats-primary-text">Total Floating Mass</span>
-                <span class="unit-text" id="total-mass">{stats.totalMass} t</span>
+                <span class="unit-text" id="total-mass"
+                    >{stats.totalMass} t</span
+                >
             </div>
         </div>
     {/if}
@@ -45,7 +51,10 @@
         color: var(--text-secondary);
     }
 
-    #stranded, #emulsified, #evaporated, #total-mass {
+    #stranded,
+    #emulsified,
+    #evaporated,
+    #total-mass {
         width: var(--width-stats-units);
     }
 </style>

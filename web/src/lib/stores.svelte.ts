@@ -1,5 +1,5 @@
-import type { Proteus } from '../pkg/proteus'
-import * as maplibregl from 'maplibre-gl';
+import type { Proteus } from "../pkg/proteus";
+import * as maplibregl from "maplibre-gl";
 
 // === TYPES ===
 
@@ -37,15 +37,18 @@ export interface Visualization {
     concentrations: number[];
     heatmap: any | null;
     lastGridUpdate: number;
-    visualizationMode: 'particles' | 'heatmap';
+    visualizationMode: "particles" | "heatmap";
     boundingBox: Float32Array;
     currentMarker: maplibregl.Marker | null;
+    mapLon: string | null;
+    mapLat: string | null;
 }
 
 export interface Timeline {
     timelineDay: number;
+    timelineDate: string;
     timelinePlaying: boolean;
-    timelineAnimationId: number | null;
+    timelineAnimationId: ReturnType<typeof setTimeout> | null;
     playbackSpeed: number;
     playbackMode: boolean;
 }
@@ -68,8 +71,8 @@ export const simulation: Simulation = $state({
     simulationHistory: [],
     landmaskPromise: null,
     stepCount: 0,
-    currentTime: ''
-})
+    currentTime: "",
+});
 
 export const config: Config = $state({
     lon: 56.5,
@@ -78,48 +81,48 @@ export const config: Config = $state({
     particleCount: 10000,
     stepsPerDay: 96,
 
-    startDate: new Date().toISOString().split('T')[0],
+    startDate: new Date().toISOString().split("T")[0],
     totalDays: 7.0,
 
     spreadKm: 1.0,
     releaseAmount: 1000.0,
     releaseDuration: 1.0,
 
-    tracerType: 'oil',
-    oilName: 'arabian-light',
+    tracerType: "oil",
+    oilName: "arabian-light",
 
-    autoZoom: true
-})
+    autoZoom: true,
+});
 
 export const visualization: Visualization = $state({
     gridUpdateInterval: 100,
     gridSize: 0.025,
     concentrations: [
-    0.0002, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2,
+        0.0002, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2,
     ],
 
     heatmap: null,
     lastGridUpdate: 0,
-    visualizationMode: 'particles',
-    boundingBox: new Float32Array,
+    visualizationMode: "particles",
+    boundingBox: new Float32Array(),
     currentMarker: null,
-})
+
+    mapLon: null,
+    mapLat: null,
+});
 
 export const timeline: Timeline = $state({
     timelineDay: 0,
+    timelineDate: "",
     timelinePlaying: false,
     timelineAnimationId: null,
     playbackSpeed: 100,
     playbackMode: false,
-})
+});
 
 export const stats: Stats = $state({
-    stranded: '',
-    emulsified: '',
-    evaporated: '',
-    totalMass: ''
-})
-
-
-
-
+    stranded: "",
+    emulsified: "",
+    evaporated: "",
+    totalMass: "",
+});

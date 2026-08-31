@@ -22,12 +22,7 @@ impl Particles {
         }
     }
 
-    pub fn add_particle(
-        &mut self,
-        lon: f32,
-        lat: f32,
-        depth: f32,
-    ) {
+    pub fn add_particle(&mut self, lon: f32, lat: f32, depth: f32) {
         self.lons.push(lon);
         self.lats.push(lat);
         self.depths.push(depth);
@@ -35,7 +30,7 @@ impl Particles {
         self.stranded.push(false);
         self.len += 1;
     }
-    
+
     pub fn stranded_count(&self) -> usize {
         self.stranded.iter().filter(|&&a| a).count()
     }
@@ -46,7 +41,7 @@ impl Particles {
         let mut lon_max = f32::MIN;
         let mut lat_min = f32::MAX;
         let mut lat_max = f32::MIN;
-        
+
         for i in 0..self.len {
             if !self.stranded[i] {
                 lon_min = lon_min.min(self.lons[i]);
@@ -55,7 +50,7 @@ impl Particles {
                 lat_max = lat_max.max(self.lats[i]);
             }
         }
-        
+
         vec![lon_min, lon_max, lat_min, lat_max]
     }
     pub fn view(&self) -> ParticleView {
@@ -65,7 +60,7 @@ impl Particles {
             lons: &self.lons,
             lats: &self.lats,
             depths: &self.depths,
-            indices
+            indices,
         }
     }
 }
@@ -91,8 +86,9 @@ impl ParticleView<'_> {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (usize, f32, f32, f32)> + '_ {
-        self.indices.iter().enumerate().map(|(pos, &idx)| {
-            (pos, self.lons[idx], self.lats[idx], self.depths[idx])
-        })
+        self.indices
+            .iter()
+            .enumerate()
+            .map(|(pos, &idx)| (pos, self.lons[idx], self.lats[idx], self.depths[idx]))
     }
 }
