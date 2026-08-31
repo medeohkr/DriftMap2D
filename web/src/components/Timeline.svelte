@@ -1,20 +1,19 @@
 <script lang="ts">
     import rewindBtn from "$lib/assets/images/RewindBtn.webp";
     import pauseBtn from "$lib/assets/images/PauseBtn.webp";
-    import { simulation, stats, timeline } from "$lib/stores.svelte";
+    import { stats, timeline, history} from "$lib/stores.svelte";
     import { map } from "$lib/map";
-    import { GeoJSONSource } from "maplibre-gl";
 
     $effect(() => {
         if (timeline.playbackMode) {
-            timeline.timelineDay = simulation.simulationHistory.length - 1
-            timeline.timelineDate = simulation.simulationHistory[simulation.simulationHistory.length - 1].dateStr;
-            updateDisplay(simulation.simulationHistory.length - 1);
+            timeline.timelineDay = history.simulationHistory.length - 1
+            timeline.timelineDate = history.simulationHistory[history.simulationHistory.length - 1].dateStr;
+            updateDisplay(history.simulationHistory.length - 1);
         }
     });
 
     function updateDisplay(index: number) {
-        const s = simulation.simulationHistory[index];
+        const s = history.simulationHistory[index];
         if (!s) return;
 
         timeline.timelineDay = index;
@@ -25,20 +24,14 @@
         stats.evaporated = s.evaporated;
         stats.totalMass = s.totalMass;
 
-        (map.getSource("particles-unstranded") as GeoJSONSource).setData(
-            s.unstrandedGeojson,
-        );
-        (map.getSource("particles-stranded") as GeoJSONSource).setData(
-            s.strandedGeojson,
-        );
-        (map.getSource("concentration") as GeoJSONSource).setData(
-            s.heatmapGeojson,
-        );
+        map.getSource("particles-unstranded").setData(s.unstrandedGeojson);
+        map.getSource("particles-stranded").setData(s.strandedGeojson);
+        map.getSource("concentration").setData(s.heatmapGeojson);
     }
 
     function timelinePlayback() {
         if (!timeline.timelinePlaying) return;
-        if (timeline.timelineDay < simulation.simulationHistory.length - 1) {
+        if (timeline.timelineDay < history.simulationHistory.length - 1) {
             timeline.timelineDay++;
             updateDisplay(timeline.timelineDay);
             timeline.timelineAnimationId = setTimeout(
@@ -117,15 +110,15 @@
             id="timeline-slider"
             class="timeline-slider"
             min="0"
-            max={simulation.simulationHistory.length - 1}
+            max={history.simulationHistory.length - 1}
             value={timeline.timelineDay}
         />
         <div class="timeline-labels">
             <span id="timeline-start">Day 0</span>
             <span id="timeline-current">{timeline.timelineDate}</span>
             <span id="timeline-end"
-                >Day {simulation.simulationHistory[
-                    simulation.simulationHistory.length - 1
+                >Day {history.simulationHistory[
+                    history.simulationHistory.length - 1
                 ]?.day ?? 0}</span
             >
         </div>

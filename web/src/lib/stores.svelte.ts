@@ -1,5 +1,4 @@
 import type { Proteus } from "../pkg/proteus";
-import * as maplibregl from "maplibre-gl";
 
 // === TYPES ===
 
@@ -9,7 +8,6 @@ export interface Simulation {
     simulationRunning: boolean;
     simulationVersion: number;
     animationId: number | null;
-    simulationHistory: any[];
     landmaskPromise: Promise<void> | null;
     stepCount: number;
     currentTime: string;
@@ -39,7 +37,7 @@ export interface Visualization {
     lastGridUpdate: number;
     visualizationMode: "particles" | "heatmap";
     boundingBox: Float32Array;
-    currentMarker: maplibregl.Marker | null;
+    currentMarker: any;
     mapLon: string | null;
     mapLat: string | null;
 }
@@ -60,6 +58,10 @@ export interface Stats {
     totalMass: string;
 }
 
+export interface History {
+    simulationHistory: any[];
+}
+
 // === GLOBAL STATE ===
 
 export const simulation: Simulation = $state({
@@ -68,7 +70,6 @@ export const simulation: Simulation = $state({
     simulationRunning: false,
     simulationVersion: 0,
     animationId: null,
-    simulationHistory: [],
     landmaskPromise: null,
     stepCount: 0,
     currentTime: "",
@@ -126,3 +127,7 @@ export const stats: Stats = $state({
     evaporated: "",
     totalMass: "",
 });
+
+export const history: History = {
+    simulationHistory: []
+}
