@@ -95,7 +95,7 @@ export async function simulationStep(version: number) {
 
     try {
         const todayDateInt = simulation.proteus.get_current_date_int();
-        if (simulation.stepCount % config.stepsPerDay === 0) {
+        if (simulation.stepCount != 0 && simulation.stepCount % config.stepsPerDay === 0) {
             const oceanTiles = preloader.getTileIndicesForOcean(
                 simulation.proteus.get_positions(),
             );
@@ -119,7 +119,7 @@ export async function simulationStep(version: number) {
                 }
             }
         }
-        
+
         await simulation.proteus?.step(simulation.stepCount);
 
         if (simulation.stepCount % (config.stepsPerDay / 24) === 0) {

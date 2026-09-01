@@ -1,5 +1,3 @@
-// src/lib/preloader.ts
-
 interface TileIndex {
     lonIdx: number;
     latIdx: number;
@@ -27,14 +25,11 @@ export class TilePreloader {
         this.baseUrl = "https://tiles.driftmap2d.com/tiles";
         this.landmaskUrl = "https://tiles.driftmap2d.com/roaring_landmask";
 
-        // Initialize cache from window or create new
         if (!window.__tileCache) {
             window.__tileCache = new Map();
         }
         this.cache = window.__tileCache;
     }
-
-    // ========== LANDMASK METHODS ==========
 
     preloadLandmask(lonIdx: number, latIdx: number): void {
         const url = `${this.landmaskUrl}/landmask_${String(lonIdx).padStart(3, "0")}_${String(latIdx).padStart(3, "0")}.bin`;
@@ -97,8 +92,6 @@ export class TilePreloader {
         });
     }
 
-    // ========== OCEAN METHODS ==========
-
     getUrl(date: number, lonIdx: number, latIdx: number): string {
         const year = Math.floor(date / 10000);
         const month = Math.floor((date % 10000) / 100);
@@ -130,11 +123,10 @@ export class TilePreloader {
         this.pending.set(url, promise);
     }
 
-    async preloadTiles(date: number, tileIndices: TileIndex[]): Promise<void> {
-        const promises = tileIndices.map(({ lonIdx, latIdx }) => {
-            return this.preloadTile(date, lonIdx, latIdx);
-        });
-        await Promise.all(promises);
+    preloadTiles(date: number, tileIndices: TileIndex[]): void {
+        for (const { lonIdx, latIdx } of tileIndices) {
+            this.preloadTile(date, lonIdx, latIdx);
+        }
     }
 
     getTileIndicesForOcean(
@@ -187,17 +179,15 @@ export class TilePreloader {
             return { lonIdx, latIdx };
         });
     }
-
-    // ========== FUTURE PRELOADING ==========
-
-    async preloadFutureSteps(
+    
+    preloadFutureSteps(
         currentDate: number,
         oceanTiles: TileIndex[],
         stepsAhead: number = 1,
-    ): Promise<void> {
+    ): void {
         for (let step = 1; step <= stepsAhead; step++) {
             const futureDate = this.addDays(currentDate, step);
-            await this.preloadTiles(futureDate, oceanTiles);
+            this.preloadTiles(futureDate, oceanTiles);
         }
     }
 
@@ -216,7 +206,6 @@ export class TilePreloader {
     }
 }
 
-// ── Expose to window ──
 window.getPreloadedTile = (url: string): Uint8Array | null => {
     if (window.__tileCache && window.__tileCache.has(url)) {
         return window.__tileCache.get(url)!;
