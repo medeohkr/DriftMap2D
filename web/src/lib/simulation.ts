@@ -9,7 +9,7 @@ import {
 import { map, updateMarker, normalizeLongitude, zoom } from "./map";
 import { preloader } from "./preloader";
 import {
-    updateGridVisualization,
+    updateHeatmapVisualization,
     updateParticleVisualization,
     updateBoundingBox,
     updateConcentrationLayer,
@@ -95,27 +95,17 @@ export async function simulationStep(version: number) {
 
     try {
         const todayDateInt = simulation.proteus.get_current_date_int();
-
-        await simulation.proteus?.step(simulation.stepCount);
-
-        if (simulation.stepCount % (config.stepsPerDay / 24) === 0) {
-            updateStats();
-            captureSnapshot(Math.floor(simulation.proteus.current_day()));
-        }
-
         if (simulation.stepCount % config.stepsPerDay === 0) {
             const oceanTiles = preloader.getTileIndicesForOcean(
                 simulation.proteus.get_positions(),
-                -80,
             );
             preloader.preloadTiles(todayDateInt, oceanTiles);
             preloader.preloadFutureSteps(
                 todayDateInt,
-                simulation.proteus.get_positions(),
-                2,
-                0,
+                oceanTiles,
+                1,
             );
-            // Clean old tiles
+
             if (window.__tileCache) {
                 for (const url of window.__tileCache?.keys()) {
                     const match = url.match(/(\d{4})\/(\d{2})\/(\d{2})/);
@@ -129,6 +119,13 @@ export async function simulationStep(version: number) {
                 }
             }
         }
+        
+        await simulation.proteus?.step(simulation.stepCount);
+
+        if (simulation.stepCount % (config.stepsPerDay / 24) === 0) {
+            updateStats();
+            captureSnapshot(Math.floor(simulation.proteus.current_day()));
+        }
 
         updateBoundingBox();
 
@@ -137,7 +134,7 @@ export async function simulationStep(version: number) {
             performance.now() - visualization.lastGridUpdate >
                 visualization.gridUpdateInterval
         ) {
-            updateGridVisualization();
+            updateHeatmapVisualization();
             visualization.lastGridUpdate = performance.now();
         } else if (visualization.visualizationMode !== "heatmap") {
             updateParticleVisualization();

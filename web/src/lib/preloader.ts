@@ -130,17 +130,25 @@ export class TilePreloader {
         this.pending.set(url, promise);
     }
 
-    preloadTiles(date: number, tileIndices: TileIndex[]): void {
-        for (const { lonIdx, latIdx } of tileIndices) {
-            this.preloadTile(date, lonIdx, latIdx);
-        }
+    async preloadTiles(date: number, tileIndices: TileIndex[]): Promise<void> {
+        const promises = tileIndices.map(({ lonIdx, latIdx }) => {
+            return this.preloadTile(date, lonIdx, latIdx);
+        });
+        await Promise.all(promises);
     }
 
     getTileIndicesForOcean(
         positions: Float32Array,
-        bufferTiles: number = 0,
+        edgeThreshold: number = 0.1
     ): TileIndex[] {
         const tiles = new Set<string>();
+
+        const addTile = (lonIdx: number, latIdx: number) => {
+            let wrappedLonIdx = ((lonIdx % 36) + 36) % 36;
+            if (wrappedLonIdx >= 0 && wrappedLonIdx < 36 && latIdx >= 0 && latIdx < 17) {
+                tiles.add(`${wrappedLonIdx},${latIdx}`);
+            }
+        };
 
         for (let i = 0; i < positions.length; i += 2) {
             const lon = positions[i];
@@ -149,65 +157,50 @@ export class TilePreloader {
             const centerLonIdx = Math.floor((lon + 180) / 10);
             const centerLatIdx = Math.floor((lat + 80) / 10);
 
-            for (let dx = -bufferTiles; dx <= bufferTiles; dx++) {
-                for (let dy = -bufferTiles; dy <= bufferTiles; dy++) {
-                    const lonIdx = centerLonIdx + dx;
-                    const latIdx = centerLatIdx + dy;
-                    if (
-                        lonIdx >= 0 &&
-                        lonIdx < 36 &&
-                        latIdx >= 0 &&
-                        latIdx < 17
-                    ) {
-                        tiles.add(`${lonIdx},${latIdx}`);
-                    }
-                }
+            addTile(centerLonIdx, centerLatIdx);
+
+            const lonMod = ((lon % 10) + 10) % 10;
+            const latMod = ((lat % 10) + 10) % 10;
+
+            if (lonMod < edgeThreshold) {
+                addTile(centerLonIdx - 1, centerLatIdx);
+            } else if (lonMod > 10 - edgeThreshold) {
+                addTile(centerLonIdx + 1, centerLatIdx);
+            }
+
+            if (latMod < edgeThreshold) {
+                addTile(centerLonIdx, centerLatIdx - 1);
+            } else if (latMod > 10 - edgeThreshold) {
+                addTile(centerLonIdx, centerLatIdx + 1);
+            }
+
+            if ((lonMod < edgeThreshold || lonMod > 10 - edgeThreshold) &&
+                (latMod < edgeThreshold || latMod > 10 - edgeThreshold)) {
+                const lonDir = lonMod < edgeThreshold ? -1 : 1;
+                const latDir = latMod < edgeThreshold ? -1 : 1;
+                addTile(centerLonIdx + lonDir, centerLatIdx + latDir);
             }
         }
 
         return Array.from(tiles).map((key) => {
-            const [lonIdx, latIdx] = key.split(",").map(Number);
+            const [lonIdx, latIdx] = key.split(',').map(Number);
             return { lonIdx, latIdx };
         });
     }
 
     // ========== FUTURE PRELOADING ==========
 
-    preloadFutureSteps(
+    async preloadFutureSteps(
         currentDate: number,
-        currentPositions: Float32Array,
-        stepsAhead: number = 3,
-        bufferTiles: number = 1,
-    ): void {
+        oceanTiles: TileIndex[],
+        stepsAhead: number = 1,
+    ): Promise<void> {
         for (let step = 1; step <= stepsAhead; step++) {
             const futureDate = this.addDays(currentDate, step);
-            const futurePositions = this.predictPositions(
-                currentPositions,
-                step,
-            );
-
-            const futureOceanTiles = this.getTileIndicesForOcean(
-                futurePositions,
-                bufferTiles,
-            );
-            this.preloadTiles(futureDate, futureOceanTiles);
-
-            const futureLandmaskTiles = this.getTileIndicesForLandmask(
-                futurePositions,
-                bufferTiles,
-            );
-            this.preloadLandmaskTiles(futureLandmaskTiles);
+            await this.preloadTiles(futureDate, oceanTiles);
         }
     }
 
-    predictPositions(
-        positions: Float32Array,
-        _stepsAhead: number,
-    ): Float32Array {
-        // Simple linear extrapolation based on current velocity
-        // For now, just return current positions (conservative — preloads nearby tiles)
-        return positions;
-    }
 
     addDays(dateInt: number, days: number): number {
         const year = Math.floor(dateInt / 10000);
