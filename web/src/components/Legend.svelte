@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { simulation, visualization } from "$lib/stores.svelte";
+    import { simulation, config, visualization } from "$lib/stores.svelte";
     import { getScaledConcentrations } from "$lib/visualization";
 
     const COLORS = [
@@ -15,7 +15,13 @@
         "rgb(140, 15, 100)",
     ];
 
-    let scaled = getScaledConcentrations();
+    let scaled = $state(getScaledConcentrations());
+
+    $effect(() => {
+        if (!simulation.simulationActive) {
+            scaled = getScaledConcentrations();
+        }
+    });
 </script>
 
 {#if visualization.visualizationMode === "heatmap" && simulation.simulationActive}
