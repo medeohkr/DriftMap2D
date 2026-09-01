@@ -16,7 +16,7 @@ extern "C" {
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
-        web_sys::console::log_1(&format!( $( $t )* ).into());
+        web_sys::console::log_1(&format!( $( $t )* ).into())
     }
 }
 
@@ -90,13 +90,11 @@ impl DataLoader {
         needed
     }
 
-    /// Load tiles for a given day. One request gets all 24 hours.
     pub async fn load_by_date(
         &mut self,
         date: usize,
         tiles: &HashSet<TileKey>,
     ) -> Result<(), LoaderError> {
-        // log!("load_by_date: {} tiles: {:?}", tiles.len(), tiles.iter().map(|t| (t.lon_idx, t.lat_idx)).collect::<Vec<_>>());
         for tile in tiles {
             if self.cache.contains_key(tile) || self.pending.contains(tile) {
                 continue;
@@ -423,28 +421,58 @@ impl DataLoader {
 
     fn fetch_tiles(&self, particles: &Particles) -> HashSet<TileKey> {
         let mut tiles = HashSet::new();
+        let edge_threshold = 0.1;
 
         for i in 0..particles.len {
             if particles.stranded[i] {
                 continue;
             }
 
-            let lon = normalize_lon(particles.lons[i]);
-            let lat = particles.lats[i];
+            let lon = normalize_lon(particles.lons[i]) as f64;
+            let lat = particles.lats[i] as f64;
 
-            let lon_idx = ((lon - self.min_lon) / self.tile_size).floor() as i32;
-            let lat_idx = ((lat - self.min_lat) / self.tile_size).floor() as i32;
+            let lon_idx = ((lon - self.min_lon as f64) / self.tile_size as f64).floor() as i32;
+            let lat_idx = ((lat - self.min_lat as f64) / self.tile_size as f64).floor() as i32;
 
-            if lon_idx >= 0 && lon_idx < 36 && lat_idx >= 0 && lat_idx < 17 {
-                tiles.insert(TileKey {
-                    lon_idx: lon_idx as usize,
-                    lat_idx: lat_idx as usize,
-                    day: self.current_day,
-                });
+            let mut add_tile = |lon_idx: i32, lat_idx: i32| {
+                if lon_idx >= 0 && lon_idx < 36 && lat_idx >= 0 && lat_idx < 17 {
+                    tiles.insert(TileKey {
+                        lon_idx: lon_idx as usize,
+                        lat_idx: lat_idx as usize,
+                        day: self.current_day,
+                    });
+                }
+            };
+
+            add_tile(lon_idx, lat_idx);
+
+            let lon_mod = ((lon % 10.0) + 10.0) % 10.0;
+            let lat_mod = ((lat % 10.0) + 10.0) % 10.0;
+
+            if lon_mod < edge_threshold {
+                add_tile(lon_idx - 1, lat_idx);
+            } else if lon_mod > 10.0 - edge_threshold {
+                if lon_idx == 14 && lat_idx == 10 {
+                }
+                add_tile(lon_idx + 1, lat_idx);
+            }
+
+            if lat_mod < edge_threshold {
+                add_tile(lon_idx, lat_idx - 1);
+            } else if lat_mod > 10.0 - edge_threshold {
+                add_tile(lon_idx, lat_idx + 1);
+            }
+
+            if (lon_mod < edge_threshold || lon_mod > 10.0 - edge_threshold) &&
+            (lat_mod < edge_threshold || lat_mod > 10.0 - edge_threshold) {
+                let lon_dir = if lon_mod < edge_threshold { -1 } else { 1 };
+                let lat_dir = if lat_mod < edge_threshold { -1 } else { 1 };
+                add_tile(lon_idx + lon_dir, lat_idx + lat_dir);
             }
         }
 
         tiles
+
     }
 
     fn tile_url(&self, date: usize, tile: &TileKey) -> String {
@@ -458,12 +486,10 @@ impl DataLoader {
     }
 
     async fn load_tile(&self, url: &str) -> Result<TileData, LoaderError> {
-        // Try preloader cache first
         if let Some(bytes) = get_preloaded_tile(url) {
             return parse_tile_data(&bytes).map_err(LoaderError::Parse);
         }
 
-        // Fall back to network if preloader missed it
         let response = Request::get(url)
             .send()
             .await
@@ -675,3 +701,4 @@ pub fn parse_tile_data(bytes: &[u8]) -> Result<TileData, String> {
         n_steps,
     })
 }
+

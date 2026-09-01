@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-
+macro_rules! log {
+    ( $( $t:tt )* ) => {
+        web_sys::console::log_1(&format!( $( $t )* ).into());
+    }
+}
 // ============================================================================
 // POINT STRUCT
 // ============================================================================
@@ -29,7 +33,7 @@ pub struct EulerianGrid {
 
 impl EulerianGrid {
     pub fn new(lon_min: f64, lon_max: f64, lat_min: f64, lat_max: f64, cell_size: f64) -> Self {
-        // Guard against invalid bounds
+
         if lon_min >= lon_max || lat_min >= lat_max {
             return Self {
                 lon_min: 0.0,
@@ -146,7 +150,6 @@ impl EulerianGrid {
         for contour in &contours {
             for ring in &contour.rings {
                 let coordinates: Vec<Vec<f64>> = ring.iter().map(|p| vec![p.x, p.y]).collect();
-
                 let feature = serde_json::json!({
                     "type": "Feature",
                     "geometry": {

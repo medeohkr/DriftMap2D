@@ -73,7 +73,7 @@ export async function updateMarker() {
         normalizeLongitude(config.lon),
         config.lat,
     ]);
-    const oceanTile = preloader.getTileIndicesForOcean(positions, 0);
+    const oceanTile = preloader.getTileIndicesForOcean(positions);
     preloader.preloadTiles(currentDate, oceanTile);
     simulation.landmaskPromise =
         simulation.proteus?.init_landmask(

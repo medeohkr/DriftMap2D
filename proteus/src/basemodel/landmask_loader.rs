@@ -1,7 +1,8 @@
 use gloo_net::http::Request;
 use roaring::RoaringBitmap;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use wasm_bindgen::prelude::*;
+use super::Particles;
 
 #[wasm_bindgen]
 extern "C" {
@@ -18,6 +19,7 @@ pub struct LandMaskLoader {
     cells_per_tile: u32,
     base_url: String,
     cache: HashMap<(usize, usize), RoaringBitmap>,
+    loaded_tiles: HashSet<(usize, usize)>,
 }
 
 impl LandMaskLoader {
@@ -35,7 +37,24 @@ impl LandMaskLoader {
             cells_per_tile,
             base_url: base_url.to_string(),
             cache: HashMap::new(),
+            loaded_tiles: HashSet::new()
         }
+    }
+
+    pub fn update_tiles(&mut self, particles: &Particles) -> HashSet<(usize, usize)> {
+        let mut needed = HashSet::new();
+        for i in 0..particles.len {
+            if particles.stranded[i] { continue; }
+            let lon_idx = ((particles.lons[i] + 180.0) / 10.0).floor() as i32;
+            let lat_idx = ((particles.lats[i] + 90.0) / 10.0).floor() as i32;
+            if lon_idx >= 0 && lon_idx < 36 && lat_idx >= 0 && lat_idx < 18 {
+                needed.insert((lon_idx as usize, lat_idx as usize));
+            }
+        }
+
+        self.loaded_tiles.retain(|t| needed.contains(t));
+
+        needed.difference(&self.loaded_tiles).cloned().collect()
     }
 
     pub async fn load_tile(&mut self, lon_idx: usize, lat_idx: usize) -> Result<(), String> {
@@ -44,11 +63,9 @@ impl LandMaskLoader {
             self.base_url, lon_idx, lat_idx
         );
 
-        // Try preloader cache first
         let bytes = if let Some(preloaded) = get_preloaded_tile(&url) {
             preloaded
         } else {
-            // Fall back to network
             let response = Request::get(&url)
                 .send()
                 .await
@@ -64,16 +81,15 @@ impl LandMaskLoader {
                 .map_err(|e| format!("Binary error: {}", e))?
         };
 
-        // Parse: 8-byte header (n_lon, n_lat) + roaring bitmap
         if bytes.len() < 8 {
             return Err("File too short".to_string());
         }
 
-        // Deserialize roaring bitmap from remaining bytes
         let bitmap = RoaringBitmap::deserialize_from(&bytes[8..])
             .map_err(|e| format!("Failed to deserialize bitmap: {:?}", e))?;
 
         self.cache.insert((lon_idx, lat_idx), bitmap);
+        self.loaded_tiles.insert((lon_idx, lat_idx));
         Ok(())
     }
 
@@ -83,7 +99,6 @@ impl LandMaskLoader {
             return false;
         }
 
-        // Calculate tile indices
         let lon_idx_raw = (lon - self.min_lon) / self.tile_size;
         let lat_idx_raw = (lat - self.min_lat) / self.tile_size;
         let lon_idx = lon_idx_raw.floor() as i32;
@@ -100,10 +115,8 @@ impl LandMaskLoader {
             let tile_min_lon = self.min_lon + (lon_idx as f32) * self.tile_size;
             let tile_min_lat = self.min_lat + (lat_idx as f32) * self.tile_size;
 
-            // Local X (longitude)
             let ix = ((lon - tile_min_lon) / self.resolution_deg).floor() as u32;
 
-            // Local Y (latitude) - NO FLIP
             let iy = ((lat - tile_min_lat) / self.resolution_deg).floor() as u32;
 
             if ix >= self.cells_per_tile || iy >= self.cells_per_tile {

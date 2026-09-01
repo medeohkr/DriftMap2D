@@ -9,7 +9,7 @@ use wasm_bindgen::prelude::*;
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
-        web_sys::console::log_1(&format!( $( $t )* ).into());
+        web_sys::console::log_1(&format!( $( $t )* ).into())
     }
 }
 
@@ -82,7 +82,7 @@ impl Proteus {
         let simulation = Simulation::new(sim_config, tracer);
         let loader = DataLoader::new("https://tiles.driftmap2d.com/tiles", -180.0, -80.0);
         let landmask = LandMaskLoader::new(
-            "https://tiles.driftmap2d.com/roaring_landmask", // Local path for landmask tiles
+            "https://tiles.driftmap2d.com/roaring_landmask",
             -180.0,
             -90.0,
             90.0,
@@ -135,7 +135,6 @@ impl Proteus {
 
         self.simulation.release_particles(dt_days);
 
-        // Load tiles for the released particles
         let needed_ocean_tiles = self.loader.update_tiles(&self.simulation.get_particles());
 
         if let Err(e) = self
@@ -146,22 +145,10 @@ impl Proteus {
             web_sys::console::error_1(&format!("Failed to load ocean tiles: {:?}", e).into());
             return Err(JsValue::from_str(&format!("{:?}", e)));
         }
-        // log!("step: {} hour: {}, days_since_start {}", self.step_count, hour, self.days_since_start);
-        // log!("Needed tiles for date {}: {:?}", current_date_int, needed_ocean_tiles.iter().map(|t| (t.lon_idx, t.lat_idx)).collect::<Vec<_>>());
 
-        // Load landmask tiles
-        let particles = self.simulation.get_particles();
-        let mut landmask_tiles = std::collections::HashSet::new();
-        for i in 0..particles.len {
-            if !particles.stranded[i] {
-                let lon_idx = ((particles.lons[i] + 180.0) / 10.0).floor() as i32;
-                let lat_idx = ((particles.lats[i] + 90.0) / 10.0).floor() as i32;
-                if lon_idx >= 0 && lon_idx < 36 && lat_idx >= 0 && lat_idx < 18 {
-                    landmask_tiles.insert((lon_idx as usize, lat_idx as usize));
-                }
-            }
-        }
-        for (lon_idx, lat_idx) in landmask_tiles {
+        let needed_landmask_tiles = self.landmask.update_tiles(&self.simulation.get_particles());
+
+        for (lon_idx, lat_idx) in needed_landmask_tiles {
             if let Err(e) = self.landmask.load_tile(lon_idx, lat_idx).await {
                 web_sys::console::warn_1(
                     &format!("Landmask tile load failed: {}_{}: {}", lon_idx, lat_idx, e).into(),
@@ -176,9 +163,9 @@ impl Proteus {
             &self.landmask,
         );
 
+        self.step_count += 1;
         self.days_since_start = self.step_count as f32 / self.steps_per_day as f32;
         self.hour_count = hour as u32;
-        self.step_count += 1;
         Ok(())
     }
 
@@ -323,7 +310,7 @@ impl Proteus {
                     if !particles.stranded[i] {
                         data.push(particles.lons[i]);
                         data.push(particles.lats[i]);
-                        data.push(oil.data.total_mass[i] / 1000.0);
+                        data.push(oil.data.total_mass[i]);
                     }
                 }
             }

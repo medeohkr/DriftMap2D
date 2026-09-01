@@ -125,7 +125,7 @@ const COLORS = [
 ];
 
 export function getScaledConcentrations() {
-    const scale = config.releaseAmount / 100000.0;
+    const scale = config.releaseAmount / 100.0;
     return CONCENTRATIONS.map((c) => c * scale);
 }
 
@@ -137,6 +137,7 @@ export function tonsPerKm2ToTonsPerCell(value: number) {
         kmPerDegreeLat *
         visualization.gridSize *
         visualization.gridSize;
+
     return value * cellAreaKm2;
 }
 
@@ -157,21 +158,21 @@ export function updateConcentrationLayer() {
 
 // ========== VISUALIZATION ==========
 export function toggleVisualizationMode() {
-    const isGrid = visualization.visualizationMode === "heatmap";
+    const isHeatmap = visualization.visualizationMode === "heatmap";
     map.setLayoutProperty(
         "concentration-fill",
         "visibility",
-        isGrid ? "visible" : "none",
+        isHeatmap ? "visible" : "none",
     );
     map.setLayoutProperty(
         "unstranded-particles-layer",
         "visibility",
-        isGrid ? "none" : "visible",
+        isHeatmap ? "none" : "visible",
     );
     map.setLayoutProperty(
         "stranded-particles-layer",
         "visibility",
-        isGrid ? "none" : "visible",
+        isHeatmap ? "none" : "visible",
     );
 }
 
@@ -179,14 +180,14 @@ export function toggleParticleMode() {
     if (visualization.visualizationMode === "particles") return;
     visualization.visualizationMode = "particles";
     toggleVisualizationMode();
-    if (!timeline.playbackMode) updateParticleVisualization();
+    if (!timeline.playbackMode && simulation.simulationActive) updateParticleVisualization();
 }
 
 export function toggleHeatmapMode() {
     if (visualization.visualizationMode === "heatmap") return;
     visualization.visualizationMode = "heatmap";
     toggleVisualizationMode();
-    if (!timeline.playbackMode) updateGridVisualization();
+    if (!timeline.playbackMode && simulation.simulationActive) updateHeatmapVisualization();
 }
 
 export function updateParticleVisualization() {
@@ -231,9 +232,7 @@ export function updateParticleVisualization() {
     );
 }
 
-export function updateGridVisualization() {
-    const data = simulation.proteus?.get_unstranded_positions_with_mass();
-    if (!data?.length) return;
+export function updateHeatmapVisualization() {
     buildHeatmap();
     const geojson = JSON.parse(
         visualization.heatmap.to_contour_geojson(
@@ -251,7 +250,7 @@ export function buildHeatmap() {
     const padding = visualization.gridSize * 2;
     visualization.heatmap = new HeatmapGenerator(
         lonMin - padding,
-        lonMax + padding * 2,
+        lonMax + padding,
         visualization.boundingBox[2] - padding,
         visualization.boundingBox[3] + padding,
         visualization.gridSize,
@@ -333,7 +332,6 @@ export function getShiftedBounds(positions: Float32Array) {
     let lonMax = visualization.boundingBox[1];
 
     if (lonMax - lonMin > 180) {
-        // Find actual particle extent in 0-360 space
         let shiftedMin = Infinity;
         let shiftedMax = -Infinity;
 

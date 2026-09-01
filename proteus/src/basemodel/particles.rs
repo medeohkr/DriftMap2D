@@ -53,7 +53,7 @@ impl Particles {
 
         vec![lon_min, lon_max, lat_min, lat_max]
     }
-    pub fn view(&self) -> ParticleView {
+    pub fn view(&self) -> ParticleView<'_> {
         let indices: Vec<usize> = (0..self.len).filter(|&i| !self.stranded[i]).collect();
 
         ParticleView {

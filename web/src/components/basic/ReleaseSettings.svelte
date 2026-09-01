@@ -10,13 +10,21 @@
         updateMarker();
     }
 
+    function onLatInput(e: Event) {
+        const value = parseFloat((e.target as HTMLInputElement).value);
+        if (!isNaN(value)) {
+            config.lat = value;
+        }
+        updateMarker();
+    }
+
 </script>
 
 <div class="container-wrapper">
     <span>Release Settings</span>
     <div class="container-secondary">
         <span class="release-text">Latitude</span>
-        <input onblur={updateMarker} bind:value={config.lat} type="text" class="field-primary" id="lat-field">
+        <input onblur={onLatInput} type="text" class="field-primary" id="lat-field" value={config.lat.toFixed(2)}>
         <span class="unit-text">° N</span>
     </div>
     <div class="container-secondary">
