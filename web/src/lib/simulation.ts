@@ -15,8 +15,23 @@ import {
     updateConcentrationLayer,
     captureSnapshot,
 } from "./visualization";
-import { getOilData } from "./oils";
 import { Proteus } from "../pkg/proteus";
+
+export function createProteus() {
+    simulation.proteus = new Proteus(
+        normalizeLongitude(config.lon),
+        config.lat,
+        config.csValue,
+        config.particleCount,
+        config.spreadKm,
+        config.startDate,
+        config.stepsPerDay,
+        config.releaseAmount,
+        config.releaseDuration,
+        config.tracerType,
+        config.oilJson
+    );
+}
 
 export function validateSimulation() {
     const errors = [];
@@ -180,18 +195,7 @@ export async function startSimulation() {
 
     if (visualization.currentMarker) visualization.currentMarker.remove();
 
-    simulation.proteus = new Proteus(
-        normalizeLongitude(config.lon),
-        config.lat,
-        config.csValue,
-        config.particleCount,
-        config.spreadKm,
-        config.startDate,
-        config.stepsPerDay,
-        config.releaseAmount,
-        config.releaseDuration,
-        getOilData(),
-    );
+    createProteus();
 
     simulationStep(simulation.simulationVersion);
 
@@ -222,18 +226,7 @@ export async function resetSimulation() {
 
     if (simulation.animationId) cancelAnimationFrame(simulation.animationId);
 
-    simulation.proteus = new Proteus(
-        normalizeLongitude(config.lon),
-        config.lat,
-        config.csValue,
-        config.particleCount,
-        config.spreadKm,
-        config.startDate,
-        config.stepsPerDay,
-        config.releaseAmount,
-        config.releaseDuration,
-        getOilData(),
-    );
+    createProteus();
 
     if (map) {
         map.getSource("concentration").setData({

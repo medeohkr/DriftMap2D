@@ -1,9 +1,5 @@
 use super::super::Tracer;
-use super::adios::AdiosOil;
-use super::weathering;
-use super::OilConfig;
-use super::OilData;
-use super::OilProperties;
+use super::{weathering, OilData, OilProperties, OilPropertiesJson};
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
@@ -12,7 +8,6 @@ macro_rules! log {
 }
 
 pub struct OilTracer {
-    pub config: OilConfig,
     pub properties: OilProperties,
     pub data: OilData,
 }
@@ -53,33 +48,26 @@ impl Tracer for OilTracer {
 }
 
 impl OilTracer {
-    pub fn new(config: OilConfig, capacity: usize, total_mass_per_particle: f32) -> Self {
-        let adios: AdiosOil =
-            serde_json::from_str(&config.adios_json).expect("Failed to parse ADIOS JSON");
+    pub fn new(oil_json: &str, capacity: usize, total_mass_per_particle: f32) -> Self {
+        let json: OilPropertiesJson =
+            serde_json::from_str(oil_json).expect("Failed to parse oil JSON");
 
-        let initial_mass_components = adios.initial_mass_components(total_mass_per_particle);
-        let n_components = initial_mass_components.len();
+        let n_components = json.component_mass_fractions.len();
         Self {
-            config: config.clone(),
             properties: OilProperties {
                 total_mass_per_particle,
-                wind_factor: config.overrides.wind_factor.unwrap_or(0.03),
-                wind_deflection: config.overrides.wind_factor,
-                product_type: adios.metadata.product_type.clone(),
-                api: config.overrides.api.unwrap_or(adios.metadata.api),
-                density_kgm3: config.overrides.density_kgm3.unwrap_or(adios.densities()),
-                dynamic_viscosity_cp: config
-                    .overrides
-                    .dynamic_viscosity_cp
-                    .unwrap_or(adios.viscosities()),
-                boiling_points: adios.boiling_points(),
-                initial_mass_components,
-                molecular_weights: adios.molecular_weights(),
-                bullwinkle_fraction: config
-                    .overrides
-                    .bullwinkle_fraction
-                    .unwrap_or(adios.bullwinkle_fraction()),
-                interfacial_tension: adios.interfacial_tension(),
+                wind_factor: 0.03,
+                wind_deflection: None,
+                product_type: json.product_type,
+                api: json.api,
+                density_kgm3: json.density_kgm3,
+                dynamic_viscosity_cp: json.dynamic_viscosity_cp,
+                interfacial_tension: json.interfacial_tension_n_m,
+                asphaltenes_frac: json.sara_mass_fractions.asphaltenes,
+                boiling_points: json.boiling_points_c,
+                initial_mass_components: json.component_mass_fractions,
+                molecular_weights: json.molecular_weights_kg_mol,
+                bullwinkle_fraction: json.bullwinkle_fraction,
             },
             data: OilData {
                 age: Vec::with_capacity(capacity),

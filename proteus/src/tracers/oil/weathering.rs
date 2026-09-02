@@ -1,4 +1,3 @@
-use super::adios::lerp;
 use super::OilData;
 use super::OilProperties;
 
@@ -20,6 +19,27 @@ const R_CAL: f32 = 1.987;
 const VISC_F_REF: f32 = 0.84;
 const VISC_CURVFIT_PARAM: f32 = 1.5e3;
 
+fn lerp(props: &[(f32, f32)], target: f32) -> f32 {
+    if target <= props[0].1 {
+        return props[0].0;
+    }
+    if target >= props.last().unwrap().1 {
+        return props.last().unwrap().0;
+    }
+
+    for i in 0..props.len() - 1 {
+        if target >= props[i].1 && target <= props[i + 1].1 {
+            let t0 = props[i].1;
+            let t1 = props[i + 1].1;
+            let v0 = props[i].0;
+            let v1 = props[i + 1].0;
+            let frac = (target - t0) / (t1 - t0);
+            return v0 + frac * (v1 - v0);
+        }
+    }
+
+    props.last().unwrap().1
+}
 // adios2 estimation of y_max
 fn y_max(viscosity: f32) -> f32 {
     let viscosity_pas = viscosity * CP_TO_PAS;
@@ -103,7 +123,6 @@ fn evap_decay_constants(
     boiling_points: &[f32],
     evaporating_indices: &[(usize, usize)],
 ) -> Vec<f32> {
-    // log!("mass_components{:?}", mass_components);
     let mut decay = Vec::with_capacity(evaporating_indices.len() * n_components);
 
     for &(pos, idx) in evaporating_indices.iter() {
@@ -113,12 +132,13 @@ fn evap_decay_constants(
             .zip(molecular_weights)
             .map(|(&mass, &mw)| mass * mw)
             .sum();
-
+        log!("sum_moles: {}", sum_moles);
         let factor = -(areas[pos] * k) / (GAS_CONSTANT * (sst_celsius[pos] + 273.15) * sum_moles);
+        // log!("factor: {}, areas: {}, k: {}, sst: {}", factor, areas[pos], k, sst_celsius[pos]);
         let vp = vapor_pressure(boiling_points, sst_celsius[pos]);
         for &vp_val in &vp {
             decay.push(factor * vp_val);
-            // log!("decay: {}", factor * vp_val);
+            log!("decay: {}", factor * vp_val);
         }
     }
 
@@ -150,36 +170,33 @@ pub fn update_evaporation(
         evaporating_indices,
     );
 
-    // for (i, (_, idx)) in evaporating_indices.iter().enumerate() {
-    //     for j in 0..n_components {
-    //         mass_components[idx * n_components + j] *= (decay[i * n_components + j] * dt).exp()
-    //     }
-    // }
+    for (i, (_, idx)) in evaporating_indices.iter().enumerate() {
+        for j in 0..n_components {
+            mass_components[idx * n_components + j] *= (decay[i * n_components + j] * dt).exp()
+        }
+    }
 
-    // for &(_, idx) in evaporating_indices.iter() {
-    //     total_mass[idx] = mass_components[idx * n_components..(idx + 1) * n_components]
-    //         .iter()
-    //         .sum();
-    //     f_evap[idx] = 1.0 - (total_mass[idx] / total_initial_mass);
-    // }
+    for &(_, idx) in evaporating_indices.iter() {
+        total_mass[idx] = mass_components[idx * n_components..(idx + 1) * n_components]
+            .iter()
+            .sum();
+        f_evap[idx] = 1.0 - (total_mass[idx] / total_initial_mass);
+    }
 }
 
 pub fn update_emulsification(
     y_w: &mut f32,
     interfacial_area: &mut f32,
     viscosity: f32,
+    asphaltenes_frac: f32,
     age_since_start: f32,
     wind_speed: f32,
     dt: f32,
-) -> bool {
+) {
     let y_max = y_max(viscosity);
 
-    if y_max <= 0.0 {
-        return false;
-    }
-
-    if *y_w >= y_max {
-        return true;
+    if y_max <= 0.0 || *y_w >= y_max || asphaltenes_frac <= 0.0 {
+        return;
     }
 
     // maximum interfacial area
@@ -196,8 +213,6 @@ pub fn update_emulsification(
     // update water fraction from interfacial area
     *y_w = (*interfacial_area * DROP_MAX) / (6.0 + *interfacial_area * DROP_MAX);
     *y_w = y_w.min(y_max);
-
-    true
 }
 
 pub fn step_particle_weathering(
@@ -277,6 +292,7 @@ pub fn step_particle_weathering(
                 &mut particles.y_w[idx],
                 &mut particles.interfacial_area[idx],
                 oil_viscosities[pos],
+                oil.asphaltenes_frac,
                 age_since_start,
                 wind_speeds[pos],
                 dt,
