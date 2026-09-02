@@ -272,6 +272,7 @@ impl AdiosOil {
         let a = 10.0 * (0.001 * density).exp();
         let b = 10.0 * (1000.0 * density * viscosity).ln();
         let f_res = 0.033 * a + 0.00087 * b - 0.74;
+        log!("density: {density} viscosity: {viscosity} f_res: {f_res}");
         f_res.clamp(0.0, 1.0)
     }
 
@@ -288,10 +289,11 @@ impl AdiosOil {
         let asphaltene = self
             .asphaltene_fraction()
             .unwrap_or(self.estimate_asphaltene_fraction());
+        log!("asphaltene: {}", asphaltene);
         let resin = self
             .resin_fraction()
             .unwrap_or(self.estimate_resin_fraction());
-
+        log!("resin: {}", resin);
         // estimate saturates and aromatics if not available
         let (sat, arom) =
             if let (Some(s), Some(a)) = (self.saturate_fraction(), self.aromatic_fraction()) {
@@ -314,7 +316,12 @@ impl AdiosOil {
             .distillation_data
             .as_ref()?
             .cuts
-            .as_slice(); // takes cuts as a slice from distillation_data ref
+            .as_slice();
+
+        if cuts.is_empty() {
+            return None;
+        }
+
         Some(
             cuts.iter()
                 .map(|cut| (cut.fraction.value / 100.0, cut.vapor_temp.value))
@@ -331,9 +338,21 @@ impl AdiosOil {
         for i in 0..n_cuts {
             let fraction = (i + 1) as f32 / n_cuts as f32;
             let temp = t0 + (tg * (i + 1) as f32) / n_cuts as f32;
-            cuts.push((fraction, temp));
+            cuts.push((fraction, temp - 273.15));
         }
         cuts
+    }
+
+    pub fn boiling_points(&self) -> Vec<f32> {
+        let cuts = match self.distillation_cuts() {
+            Some(c) => c,
+            None => self.distillation_cuts_from_api(10),
+        };
+        log!("cuts: {:?}", cuts);
+        cuts
+            .iter()
+            .flat_map(|(_, bp_c)| std::iter::repeat(*bp_c + 273.15).take(4))
+            .collect()
     }
 
     pub fn molecular_weights(&self) -> Vec<f32> {
@@ -361,7 +380,7 @@ impl AdiosOil {
         };
 
         let (f_sat, f_arom, f_res, f_asph) = self.sara_fractions();
-
+        log!("{f_sat}, {f_arom}, {f_res}, {f_asph}");
         let mut components = Vec::with_capacity(cuts.len() * 4);
 
         for i in 0..cuts.len() {
@@ -453,11 +472,4 @@ fn resin_mol_wt(_boiling_point_k: f32) -> f32 {
 // foxed molecular weight (g/mol) for asphaltenes
 fn asphaltene_mol_wt(_boiling_point_k: f32) -> f32 {
     1000.0
-}
-
-pub fn boiling_points(distillation_cuts: Vec<(f32, f32)>) -> Vec<f32> {
-    distillation_cuts
-        .iter()
-        .flat_map(|(_, bp_c)| std::iter::repeat(*bp_c + 273.15).take(4))
-        .collect()
 }

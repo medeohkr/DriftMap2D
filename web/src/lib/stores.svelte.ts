@@ -1,7 +1,5 @@
 import type { Proteus } from "../pkg/proteus";
 
-// === TYPES ===
-
 export interface Simulation {
     proteus: Proteus | null;
     simulationActive: boolean;
@@ -26,6 +24,7 @@ export interface Config {
     releaseDuration: number;
     tracerType: string;
     oilName: string;
+    oilJson: string;
     autoZoom: boolean;
 }
 
@@ -62,7 +61,10 @@ export interface History {
     simulationHistory: any[];
 }
 
-// === GLOBAL STATE ===
+export interface OilOverrides {
+    api: string | null;
+    bullwinkleFrac: string | null;
+}
 
 export const simulation: Simulation = $state({
     proteus: null,
@@ -91,6 +93,7 @@ export const config: Config = $state({
 
     tracerType: "oil",
     oilName: "arabian-light",
+    oilJson: "",
 
     autoZoom: true,
 });
@@ -130,4 +133,9 @@ export const stats: Stats = $state({
 
 export const history: History = {
     simulationHistory: []
+}
+
+export const oilOverrides: OilOverrides = {
+    api: null,
+    bullwinkleFrac: null,
 }

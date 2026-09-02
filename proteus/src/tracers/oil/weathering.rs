@@ -103,6 +103,7 @@ fn evap_decay_constants(
     boiling_points: &[f32],
     evaporating_indices: &[(usize, usize)],
 ) -> Vec<f32> {
+    // log!("mass_components{:?}", mass_components);
     let mut decay = Vec::with_capacity(evaporating_indices.len() * n_components);
 
     for &(pos, idx) in evaporating_indices.iter() {
@@ -117,6 +118,7 @@ fn evap_decay_constants(
         let vp = vapor_pressure(boiling_points, sst_celsius[pos]);
         for &vp_val in &vp {
             decay.push(factor * vp_val);
+            // log!("decay: {}", factor * vp_val);
         }
     }
 
@@ -148,18 +150,18 @@ pub fn update_evaporation(
         evaporating_indices,
     );
 
-    for (i, (_, idx)) in evaporating_indices.iter().enumerate() {
-        for j in 0..n_components {
-            mass_components[idx * n_components + j] *= (decay[i * n_components + j] * dt).exp()
-        }
-    }
+    // for (i, (_, idx)) in evaporating_indices.iter().enumerate() {
+    //     for j in 0..n_components {
+    //         mass_components[idx * n_components + j] *= (decay[i * n_components + j] * dt).exp()
+    //     }
+    // }
 
-    for &(_, idx) in evaporating_indices.iter() {
-        total_mass[idx] = mass_components[idx * n_components..(idx + 1) * n_components]
-            .iter()
-            .sum();
-        f_evap[idx] = 1.0 - (total_mass[idx] / total_initial_mass);
-    }
+    // for &(_, idx) in evaporating_indices.iter() {
+    //     total_mass[idx] = mass_components[idx * n_components..(idx + 1) * n_components]
+    //         .iter()
+    //         .sum();
+    //     f_evap[idx] = 1.0 - (total_mass[idx] / total_initial_mass);
+    // }
 }
 
 pub fn update_emulsification(

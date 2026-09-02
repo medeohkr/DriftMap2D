@@ -1,5 +1,5 @@
 use super::super::Tracer;
-use super::adios::{boiling_points, AdiosOil};
+use super::adios::AdiosOil;
 use super::weathering;
 use super::OilConfig;
 use super::OilData;
@@ -72,11 +72,7 @@ impl OilTracer {
                     .overrides
                     .dynamic_viscosity_cp
                     .unwrap_or(adios.viscosities()),
-                boiling_points: boiling_points(
-                    adios
-                        .distillation_cuts()
-                        .unwrap_or(adios.distillation_cuts_from_api(10)),
-                ),
+                boiling_points: adios.boiling_points(),
                 initial_mass_components,
                 molecular_weights: adios.molecular_weights(),
                 bullwinkle_fraction: config

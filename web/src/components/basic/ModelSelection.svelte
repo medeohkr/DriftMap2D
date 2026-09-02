@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { config } from "$lib/stores.svelte"
+    import OilSearch from "./OilSearch.svelte";
 
     let selectorType: 'oil-weathering' | 'plastic-drift' | 'search-and-rescue' = 'oil-weathering';
 </script>
@@ -16,16 +16,7 @@
     </div>
     <!-- oil selector -->
      {#if selectorType === 'oil-weathering'}
-        <div class="container-secondary" id="oil-selector-container-basic">
-            <span class="oil-text">Oil Type</span>
-            <select bind:value={config.oilName} name="oil-selector-basic" class="selector-primary" id="oil-selector-basic">
-            <option value="marine-diesel">Marine Diesel</option>
-            <option value="bonny-light">Bonny Light</option>
-            <option value="arabian-light" selected>Arabian Light</option>
-            <option value="venezuelan-heavy">Venezuelan Heavy</option>
-            <option value="ifo-380">IFO 380</option>
-            </select>
-        </div>
+        <OilSearch />
     {:else if selectorType === 'plastic-drift'}
         <div class="container-secondary" id="plastic-selector-container-basic">
             <span>Plastic Type</span>
