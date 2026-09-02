@@ -1,26 +1,27 @@
 <script lang="ts">
     import { config } from '$lib/stores.svelte';
     import { searchOils, type OilRecord, getOilJsonForRust, getGenericOils } from '$lib/oils';
+    import { createProteus } from '$lib/simulation';
 
     let query = $state('');
     let results: OilRecord[] = $state([]);
-    let selectedOil: OilRecord | null = $state(null);
     let isFocused = $state(false);
 
     $effect(() => {
         if (query.length > 0) {
             results = searchOils(query);
-        } else {
+        } else if (isFocused) {
             results = getGenericOils();
         }
     });
 
     function selectOil(oil: OilRecord) {
-        selectedOil = oil;
         config.oilJson = getOilJsonForRust(oil.oil_id);
         query = oil.name || oil.oil_id;
         results = [];
         isFocused = false;
+
+        createProteus();
     }
 </script>
 

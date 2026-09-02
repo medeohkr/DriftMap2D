@@ -3,7 +3,7 @@ use crate::basemodel::release_manager::{ReleaseConfig, Schedule};
 use crate::basemodel::simulation::{Simulation, SimulationConfig};
 use crate::basemodel::DataLoader;
 use crate::basemodel::LandMaskLoader;
-use crate::tracers::{OilTracer, TracerConfig, TracerKind};
+use crate::tracers::{OilTracer, TracerKind};
 use chrono::{Datelike, Days, NaiveDate};
 use wasm_bindgen::prelude::*;
 
@@ -43,7 +43,8 @@ impl Proteus {
         steps_per_day: u32,
         release_amount: f64,
         release_duration: f32,
-        tracer_config: &str,
+        tracer_type: &str,
+        tracer_json: &str
     ) -> Self {
         let start_date =
             NaiveDate::parse_from_str(start_date_str, "%Y-%m-%d").expect("Invalid date format");
@@ -54,12 +55,16 @@ impl Proteus {
                 total_days: release_duration,
             }
         };
-        let tracer_config: TracerConfig =
-            serde_json::from_str(tracer_config).expect("Failed to parse tracer config");
 
-        let tracer = match tracer_config {
-            TracerConfig::Oil(config) => TracerKind::Oil(OilTracer::new(
-                config,
+        let tracer = match tracer_type {
+            "oil" => TracerKind::Oil(OilTracer::new(
+                tracer_json,
+                particle_count,
+                release_amount as f32 / particle_count as f32,
+            )),
+
+            _ => TracerKind::Oil(OilTracer::new(
+                tracer_json,
                 particle_count,
                 release_amount as f32 / particle_count as f32,
             )),

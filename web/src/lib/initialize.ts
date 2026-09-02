@@ -1,7 +1,8 @@
 import { simulation, config } from "./stores.svelte";
 import { initMap, updateMarker, normalizeLongitude } from "./map";
 import { initGridLayer } from "./visualization";
-import { getOilData, loadOilCatalog} from "./oils";
+import { loadOilCatalog} from "./oils";
+import { createProteus } from "./simulation";
 import init, { Proteus, setup_panic_hook } from "../pkg/proteus";
 
 export async function initialize() {
@@ -10,19 +11,6 @@ export async function initialize() {
     initMap();
     initGridLayer();
     loadOilCatalog();
-    
-    simulation.proteus = new Proteus(
-        normalizeLongitude(config.lon),
-        config.lat,
-        config.csValue,
-        config.particleCount,
-        config.spreadKm,
-        config.startDate,
-        config.stepsPerDay,
-        config.releaseAmount,
-        config.releaseDuration,
-        getOilData(),
-    );
-
+    createProteus();
     updateMarker();
 }

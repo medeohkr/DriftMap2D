@@ -4,7 +4,7 @@ mod oil;
 // mod generic;
 use serde::{Deserialize};
 // pub use generic::GenericTracer;
-pub use oil::{OilTracer, OilConfig, OilData};
+pub use oil::{OilTracer, OilData};
 
 // pub use plastic::PlasticTracer;
 // pub use leeway::LeewayTracer;
@@ -14,16 +14,6 @@ pub enum TracerKind {
     Oil(OilTracer),
     // Plastic(PlasticTracer),
     // Leeway(LeewayTracer)
-}
-
-#[derive(Debug, Clone, Deserialize)]  
-#[serde(tag = "type")]
-pub enum TracerConfig {
-    // Generic(GenericConfig),
-    #[serde(rename = "oil")]
-    Oil(OilConfig),
-    // Plastic(PlasticConfig),
-    // Leeway(LeewayConfig)
 }
 
 pub enum TracerData {
