@@ -3,7 +3,8 @@
     --width-sidebar: 280px;
     --width-summary-text: 188px;
 
-    --width-container-margin: 240px;
+    --width-container-margin: 242px;
+    --oil-results-height: 150px;
     --width-container: 218px;
     --width-selector: 126px;
     --width-number: 90px;
@@ -20,6 +21,7 @@
     --width-stats-units: 50px;
 
     --legend-offset: 100px;
+
     /* colors */
     --bg-header: rgb(20, 20, 20);
     --bg-primary: rgb(27, 27, 27);
@@ -53,6 +55,7 @@
     
     /* typography */
     --font-family: Montserrat;
+    --font-size-xxs: 11px;
     --font-size-xs: 12px;
     --font-size-sm: 14px;
     --font-size-md: 16px;
@@ -64,6 +67,7 @@
     --weight-secondary: 400;
 
     /* border-size */
+    --border-xl: 6px;
     --border-lg: 4px;
     --border-md: 2px;
     --border-sm: 1px;

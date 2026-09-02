@@ -11,5 +11,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "npm run build && npx wrangler pages deploy --project-name driftmap dist"
+  },
+  "dependencies": {
+    "pako": "^3.0.1"
   }
 }
