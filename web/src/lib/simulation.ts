@@ -180,7 +180,7 @@ export async function startSimulation() {
 
     if (errors.length) {
         alert(`❌ Cannot start simulation:\n\n${errors.join("\n\n")}`);
-        return;
+        return errors;
     }
 
     simulation.simulationActive = true;
@@ -198,8 +198,6 @@ export async function startSimulation() {
     createProteus();
 
     simulationStep(simulation.simulationVersion);
-
-    return errors;
 }
 
 export function stopSimulation() {

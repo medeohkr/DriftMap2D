@@ -1,4 +1,5 @@
 import type { Proteus } from "../pkg/proteus";
+import { getOilById } from "./oils";
 
 export interface Simulation {
     proteus: Proteus | null;
@@ -64,6 +65,7 @@ export interface History {
 export interface OilOverrides {
     api: string | null;
     bullwinkleFrac: string | null;
+    maxWaterFrac: string | null;
 }
 
 export const simulation: Simulation = $state({
@@ -138,4 +140,5 @@ export const history: History = {
 export const oilOverrides: OilOverrides = {
     api: null,
     bullwinkleFrac: null,
+    maxWaterFrac: null
 }
