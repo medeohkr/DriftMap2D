@@ -3,7 +3,7 @@ use super::OilProperties;
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
-        web_sys::console::log_1(&format!( $( $t )* ).into());
+        web_sys::console::log_1(&format!( $( $t )* ).into())
     }
 }
 
@@ -132,13 +132,10 @@ fn evap_decay_constants(
             .zip(molecular_weights)
             .map(|(&mass, &mw)| mass * mw)
             .sum();
-        log!("sum_moles: {}", sum_moles);
         let factor = -(areas[pos] * k) / (GAS_CONSTANT * (sst_celsius[pos] + 273.15) * sum_moles);
-        // log!("factor: {}, areas: {}, k: {}, sst: {}", factor, areas[pos], k, sst_celsius[pos]);
         let vp = vapor_pressure(boiling_points, sst_celsius[pos]);
         for &vp_val in &vp {
             decay.push(factor * vp_val);
-            log!("decay: {}", factor * vp_val);
         }
     }
 
@@ -172,7 +169,8 @@ pub fn update_evaporation(
 
     for (i, (_, idx)) in evaporating_indices.iter().enumerate() {
         for j in 0..n_components {
-            mass_components[idx * n_components + j] *= (decay[i * n_components + j] * dt).exp()
+            let new_component =  mass_components[idx * n_components + j] * (decay[i * n_components + j] * dt).exp();
+            mass_components[idx * n_components + j] = new_component;
         }
     }
 
@@ -256,7 +254,7 @@ pub fn step_particle_weathering(
     let evaporating_indices: Vec<(usize, usize)> = indices
         .iter()
         .enumerate()
-        .filter(|(_, &idx)| particles.age[idx] < 24.0 * 3600.0)
+        .filter(|(_, &idx)| particles.age[idx] == 0.0)
         .map(|(pos, &idx)| (pos, idx))
         .collect();
 

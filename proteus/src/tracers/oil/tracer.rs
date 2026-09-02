@@ -52,7 +52,17 @@ impl OilTracer {
         let json: OilPropertiesJson =
             serde_json::from_str(oil_json).expect("Failed to parse oil JSON");
 
-        let n_components = json.component_mass_fractions.len();
+        let mass_components: Vec<f32> = json.component_mass_fractions
+            .iter()
+            .map(|&mass_frac| mass_frac * total_mass_per_particle)
+            .collect();
+        let boiling_points: Vec<f32> = json.boiling_points_c
+            .iter()
+            .map(|&temp_c| temp_c.max(0.0) + 273.15)
+            .collect();
+
+        let n_components = mass_components.len();
+
         Self {
             properties: OilProperties {
                 total_mass_per_particle,
@@ -64,8 +74,8 @@ impl OilTracer {
                 dynamic_viscosity_cp: json.dynamic_viscosity_cp,
                 interfacial_tension: json.interfacial_tension_n_m,
                 asphaltenes_frac: json.sara_mass_fractions.asphaltenes,
-                boiling_points: json.boiling_points_c,
-                initial_mass_components: json.component_mass_fractions,
+                boiling_points: boiling_points,
+                initial_mass_components: mass_components,
                 molecular_weights: json.molecular_weights_kg_mol,
                 bullwinkle_fraction: json.bullwinkle_fraction,
             },
@@ -74,7 +84,7 @@ impl OilTracer {
                 total_initial_mass: total_mass_per_particle,
                 mass_components: Vec::with_capacity(capacity * n_components),
                 total_mass: Vec::with_capacity(capacity),
-                n_components: n_components,
+                n_components,
                 f_evap: Vec::with_capacity(capacity),
                 emulsification_start_age: Vec::with_capacity(capacity),
                 y_w: Vec::with_capacity(capacity),
