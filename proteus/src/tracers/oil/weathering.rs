@@ -41,13 +41,16 @@ fn lerp(props: &[(f32, f32)], target: f32) -> f32 {
     props.last().unwrap().1
 }
 // adios2 estimation of y_max
-fn y_max(viscosity: f32) -> f32 {
-    let viscosity_pas = viscosity * CP_TO_PAS;
-    if viscosity_pas > 0.050 {
-        return 0.9 - 0.0952 * (viscosity_pas / 0.050).ln();
+fn y_max(viscosity_cp: f32) -> f32 {
+    let viscosity_pas = (viscosity_cp * 1e-3).max(1e-12);
+
+    let value = if viscosity_pas > 0.050 {
+        0.9 - 0.0952 * (viscosity_pas / 0.050).ln()
     } else {
-        return 0.9;
-    }
+        0.9
+    };
+
+    value.clamp(0.0, 0.9)
 }
 
 // adios2 estimation helper for missing interfacial tension

@@ -29,7 +29,7 @@
     <div class="container-secondary">
         <span>Oil Type</span>
         <input
-            class="field-primary"
+            class="selector-primary"
             id="oil-search"
             type="text"
             bind:value={query}
@@ -81,7 +81,6 @@
         background: var(--bg-selector);
         border: var(--border-md) solid var(--text-muted);
         border-radius: var(--border-xl);
-        z-index: 100;
         box-shadow: var(--shadow-size-secondary) var(--shadow-secondary);
     }
 
