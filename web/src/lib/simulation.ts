@@ -16,6 +16,7 @@ import {
     captureSnapshot,
 } from "./visualization";
 import { Proteus } from "../pkg/proteus";
+import { getTotalDays, startDateTime } from "./utils";
 
 export function createProteus() {
     simulation.proteus = new Proteus(
@@ -24,7 +25,7 @@ export function createProteus() {
         config.csValue,
         config.particleCount,
         config.spreadKm,
-        config.startDate,
+        startDateTime(),
         config.stepsPerDay,
         config.releaseAmount,
         config.releaseDuration,
@@ -72,14 +73,14 @@ export function validateSimulation() {
     }
 
     const simEnd = new Date(simStart);
-    simEnd.setDate(simEnd.getDate() + Math.ceil(config.totalDays));
+    simEnd.setDate(simEnd.getDate() + Math.ceil(getTotalDays()));
     if (simEnd > maxDate) {
         errors.push(
             `Simulation would end beyond forecast range (${maxDate.toISOString().split("T")[0]})`,
         );
     }
 
-    if (isNaN(config.totalDays) || config.totalDays <= 0)
+    if (isNaN(getTotalDays()) || getTotalDays() <= 0)
         errors.push(`Total days must be positive.`);
     if (isNaN(config.releaseAmount) || config.releaseAmount <= 0)
         errors.push(`Release amount must be positive.`);
@@ -108,9 +109,11 @@ export async function simulationStep(version: number) {
     )
         return;
 
+    await simulation.proteus?.step(simulation.stepCount);
+
     try {
         const todayDateInt = simulation.proteus.get_current_date_int();
-        if (simulation.stepCount != 0 && simulation.stepCount % config.stepsPerDay === 0) {
+        if (simulation.stepCount % config.stepsPerDay === 0) {
             const oceanTiles = preloader.getTileIndicesForOcean(
                 simulation.proteus.get_positions(),
             );
@@ -135,8 +138,6 @@ export async function simulationStep(version: number) {
             }
         }
 
-        await simulation.proteus?.step(simulation.stepCount);
-
         if (simulation.stepCount % (config.stepsPerDay / 24) === 0) {
             updateStats();
             captureSnapshot(Math.floor(simulation.proteus.current_day()));
@@ -156,7 +157,7 @@ export async function simulationStep(version: number) {
         }
 
         simulation.currentTime = simulation.proteus.current_time_str();
-        if (simulation.stepCount < config.totalDays * config.stepsPerDay) {
+        if (simulation.stepCount < getTotalDays() * config.stepsPerDay) {
             simulation.animationId = requestAnimationFrame(() =>
                 simulationStep(version),
             );

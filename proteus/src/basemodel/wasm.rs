@@ -4,7 +4,7 @@ use crate::basemodel::simulation::{Simulation, SimulationConfig};
 use crate::basemodel::DataLoader;
 use crate::basemodel::LandMaskLoader;
 use crate::tracers::{OilTracer, TracerKind};
-use chrono::{Datelike, Days, NaiveDate};
+use chrono::{Datelike, Days, NaiveDateTime};
 use wasm_bindgen::prelude::*;
 
 macro_rules! log {
@@ -19,7 +19,7 @@ pub struct Proteus {
     loader: DataLoader,
     landmask: LandMaskLoader,
     days_since_start: f32,
-    start_date: NaiveDate,
+    start_date: NaiveDateTime,
     hour_count: u32,
     step_count: u32,
     steps_per_day: u32,
@@ -47,7 +47,7 @@ impl Proteus {
         tracer_json: &str
     ) -> Self {
         let start_date =
-            NaiveDate::parse_from_str(start_date_str, "%Y-%m-%d").expect("Invalid date format");
+            NaiveDateTime::parse_from_str(start_date_str, "%Y-%m-%d %H:%M").expect("Invalid date format");
         let release_type = if release_duration == 0.0 {
             Schedule::Instant
         } else {
