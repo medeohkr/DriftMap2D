@@ -7,7 +7,7 @@
     } from "../lib/visualization";
 </script>
 
-<div class="visualization-toggle-container">
+<!-- <div class="visualization-toggle-container">
     <button
         class="visualization-toggle"
         id="particle-toggle"
@@ -28,7 +28,7 @@
         />
         <span>Show Today's Currents</span>
     </div>
-</div>
+</div> -->
 
 <style>
     .visualization-toggle-container {

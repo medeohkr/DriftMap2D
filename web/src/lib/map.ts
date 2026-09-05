@@ -2,6 +2,7 @@
 import * as maplibregl from 'https://unpkg.com/maplibre-gl@^6.6.0/dist/maplibre-gl.mjs';
 import { simulation, config, visualization } from "./stores.svelte";
 import { preloader } from "./preloader";
+import { getTotalDays } from './utils';
 
 export let map: any;
 
@@ -14,7 +15,8 @@ export function initMap() {
                 "carto-dark": {
                     type: "raster",
                     tiles: [
-                        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png?key=cb1_2i6g_1_acb8c049139549a1b56e3610",
+                        // "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png?key=cb1_2i6g_1_acb8c049139549a1b56e3610",
+                        "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png"
                     ],
                     tileSize: 256,
                     attribution:
@@ -86,10 +88,10 @@ export async function updateMarker() {
 
 export function zoom() {
     if (!config.autoZoom) return;
-    if (map.getZoom() < 6 - config.totalDays / 100) {
+    if (map.getZoom() < 6 - getTotalDays() / 100) {
         map.flyTo({
             center: [config.lon, config.lat],
-            zoom: 6 - config.totalDays / 100,
+            zoom: 6 - getTotalDays() / 100,
             duration: 2000,
         });
     } else {

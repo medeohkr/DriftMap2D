@@ -14,3 +14,4 @@ web/node_modules/
 web/src/lib/assets/
 web/src/archive/
 web/dist
+scripts/test.py

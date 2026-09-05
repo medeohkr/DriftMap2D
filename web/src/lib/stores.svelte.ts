@@ -1,5 +1,6 @@
 import type { Proteus } from "../pkg/proteus";
 import { getOilById } from "./oils";
+import { dateOffset, getTotalDays } from "./utils";
 
 export interface Simulation {
     proteus: Proteus | null;
@@ -13,16 +14,19 @@ export interface Simulation {
 }
 
 export interface Config {
-    lon: number;
-    lat: number;
+    // lon: number;
+    // lat: number;
     csValue: number;
     particleCount: number;
-    spreadKm: number;
+    // spreadKm: number;
     stepsPerDay: number;
     startDate: string;
+    startTime: string;
+    endDate: string;
+    endTime: string;
     totalDays: number;
-    releaseAmount: number;
-    releaseDuration: number;
+    // releaseAmount: number;
+    // releaseDuration: number;
     tracerType: string;
     oilName: string;
     oilJson: string;
@@ -68,6 +72,10 @@ export interface OilOverrides {
     maxWaterFrac: string | null;
 }
 
+export interface SidebarState {
+    collapseStage: number;
+}
+
 export const simulation: Simulation = $state({
     proteus: null,
     simulationActive: false,
@@ -82,12 +90,15 @@ export const simulation: Simulation = $state({
 export const config: Config = $state({
     lon: 56.5,
     lat: 26.6,
-    csValue: 0.1,
-    particleCount: 10000,
+    csValue: 0.05,
+    particleCount: 25000,
     stepsPerDay: 96,
 
-    startDate: new Date().toISOString().split("T")[0],
-    totalDays: 7.0,
+    startDate: dateOffset(0),
+    startTime: "00:00",
+    endDate: dateOffset(7),
+    endTime: "00:00",
+    totalDays: 7,
 
     spreadKm: 1.0,
     releaseAmount: 1000.0,
@@ -134,11 +145,82 @@ export const stats: Stats = $state({
 });
 
 export const history: History = {
-    simulationHistory: []
-}
+    simulationHistory: [],
+};
 
 export const oilOverrides: OilOverrides = {
     api: null,
     bullwinkleFrac: null,
-    maxWaterFrac: null
-}
+    maxWaterFrac: null,
+};
+
+export const sidebarState: SidebarState = $state({
+    collapseStage: 0,
+});
+
+export const releaseConfig = $state({
+    releases: [
+        {
+            id: "release-1",
+            type: "point",
+            lat: 45.2,
+            lon: -124.1,
+            radius: 5,
+            schedule: [
+                {
+                    amount: 100,
+                    duration: 24,
+                },
+            ],
+        },
+    ],
+    activeReleaseIndex: 0,
+    activeIntervalIndex: 0,
+
+    get activeRelease() {
+        return this.releases[this.activeReleaseIndex];
+    },
+
+    get activeInterval() {
+        return this.activeRelease.schedule[this.activeIntervalIndex];
+    },
+
+    addRelease(release: any) {
+        this.releases.push({
+            id: `release-${Date.now()}`,
+            type: "point",
+            lat: 45.2,
+            lon: -124.1,
+            radius: 5,
+            amount: 100,
+            duration: 24,
+            scheduleType: "continuous",
+            schedule: [],
+            ...release,
+        });
+        this.activeReleaseIndex = this.releases.length - 1;
+    },
+
+    removeRelease(index: number) {
+        this.releases.splice(index, 1);
+        if (this.activeReleaseIndex >= this.releases.length) {
+            this.activeReleaseIndex = this.releases.length - 1;
+        }
+    },
+
+    addInterval(interval: any) {
+        this.activeRelease.schedule.push({
+            amount: 100,
+            duration: 24,
+            ...interval,
+        });
+        this.activeIntervalIndex = this.activeRelease.schedule.length - 1;
+    },
+
+    removeInterval(index: number) {
+        this.activeRelease.schedule.splice(index, 1);
+        if (this.activeIntervalIndex >= this.activeRelease.schedule.length) {
+            this.activeIntervalIndex = this.activeRelease.schedule.length - 1;
+        }
+    },
+});
