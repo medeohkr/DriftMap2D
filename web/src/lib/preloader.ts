@@ -31,67 +31,6 @@ export class TilePreloader {
         this.cache = window.__tileCache;
     }
 
-    preloadLandmask(lonIdx: number, latIdx: number): void {
-        const url = `${this.landmaskUrl}/landmask_${String(lonIdx).padStart(3, "0")}_${String(latIdx).padStart(3, "0")}.bin`;
-
-        if (this.completed.has(url) || this.pending.has(url)) return;
-
-        const promise = fetch(url)
-            .then((response) => response.arrayBuffer())
-            .then((buffer) => {
-                this.cache.set(url, new Uint8Array(buffer));
-                this.completed.add(url);
-                this.pending.delete(url);
-            })
-            .catch((err) => {
-                console.warn(`Landmask preload failed: ${url}`, err);
-                this.pending.delete(url);
-            });
-
-        this.pending.set(url, promise);
-    }
-
-    preloadLandmaskTiles(tileIndices: TileIndex[]): void {
-        for (const { lonIdx, latIdx } of tileIndices) {
-            this.preloadLandmask(lonIdx, latIdx);
-        }
-    }
-
-    getTileIndicesForLandmask(
-        positions: Float32Array,
-        bufferTiles: number = 0,
-    ): TileIndex[] {
-        const tiles = new Set<string>();
-
-        for (let i = 0; i < positions.length; i += 2) {
-            const lon = positions[i];
-            const lat = positions[i + 1];
-
-            const centerLonIdx = Math.floor((lon + 180) / 10);
-            const centerLatIdx = Math.floor((lat + 90) / 10);
-
-            for (let dx = -bufferTiles; dx <= bufferTiles; dx++) {
-                for (let dy = -bufferTiles; dy <= bufferTiles; dy++) {
-                    const lonIdx = centerLonIdx + dx;
-                    const latIdx = centerLatIdx + dy;
-                    if (
-                        lonIdx >= 0 &&
-                        lonIdx < 36 &&
-                        latIdx >= 0 &&
-                        latIdx < 18
-                    ) {
-                        tiles.add(`${lonIdx},${latIdx}`);
-                    }
-                }
-            }
-        }
-
-        return Array.from(tiles).map((key) => {
-            const [lonIdx, latIdx] = key.split(",").map(Number);
-            return { lonIdx, latIdx };
-        });
-    }
-
     getUrl(date: number, lonIdx: number, latIdx: number): string {
         const year = Math.floor(date / 10000);
         const month = Math.floor((date % 10000) / 100);

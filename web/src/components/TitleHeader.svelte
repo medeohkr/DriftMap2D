@@ -1,7 +1,5 @@
 <script lang="ts">
     import logo from "$lib/assets/images/DriftMap2D.webp";
-    import importSymbol from "$lib/assets/images/Import.webp"
-    import resetSymbol from "$lib/assets/images/ResetConfig.webp"
 </script>
 
 <div class="title-container">

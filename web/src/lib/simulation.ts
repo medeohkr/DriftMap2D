@@ -1,12 +1,13 @@
 import {
     simulation,
     config,
+    releaseConfig,
     visualization,
     timeline,
     stats,
     history,
 } from "./stores.svelte";
-import { map, updateMarker, normalizeLongitude, zoom } from "./map";
+import { map, updateMarker, zoom } from "./map";
 import { preloader } from "./preloader";
 import {
     updateHeatmapVisualization,
@@ -16,19 +17,15 @@ import {
     captureSnapshot,
 } from "./visualization";
 import { Proteus } from "../pkg/proteus";
-import { getTotalDays, startDateTime } from "./utils";
+import { getTotalDays, startDateTime, normalizeLongitude, releasesToJson} from "./utils";
 
 export function createProteus() {
     simulation.proteus = new Proteus(
-        normalizeLongitude(config.lon),
-        config.lat,
+        releasesToJson(),
         config.csValue,
         config.particleCount,
-        config.spreadKm,
         startDateTime(),
         config.stepsPerDay,
-        config.releaseAmount,
-        config.releaseDuration,
         config.tracerType,
         config.oilJson
     );
@@ -242,7 +239,7 @@ export async function resetSimulation() {
         });
     }
 
-    updateMarker();
+    updateMarker(releaseConfig.activeRelease.lon, releaseConfig.activeRelease.lat);
     updateConcentrationLayer();
 }
 

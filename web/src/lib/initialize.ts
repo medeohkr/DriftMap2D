@@ -1,9 +1,9 @@
-import { simulation, config } from "./stores.svelte";
-import { initMap, updateMarker, normalizeLongitude } from "./map";
+import { initMap, updateMarker } from "./map";
 import { initGridLayer } from "./visualization";
 import { loadOilCatalog} from "./oils";
 import { createProteus } from "./simulation";
-import init, { Proteus, setup_panic_hook } from "../pkg/proteus";
+import init, { setup_panic_hook } from "../pkg/proteus";
+import { releaseConfig } from "./stores.svelte";
 
 export async function initialize() {
     await init();
@@ -11,6 +11,6 @@ export async function initialize() {
     initMap();
     initGridLayer();
     loadOilCatalog();
+    updateMarker(releaseConfig.activeRelease.lon, releaseConfig.activeRelease.lat);
     createProteus();
-    updateMarker();
 }

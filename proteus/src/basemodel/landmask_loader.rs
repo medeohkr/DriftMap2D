@@ -2,13 +2,7 @@ use gloo_net::http::Request;
 use roaring::RoaringBitmap;
 use std::collections::{HashMap, HashSet};
 use wasm_bindgen::prelude::*;
-use super::Particles;
-
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_name = "getPreloadedTile")]
-    fn get_preloaded_tile(url: &str) -> Option<Vec<u8>>;
-}
+use super::normalize_lon;
 
 pub struct LandMaskLoader {
     min_lon: f32,
@@ -41,19 +35,49 @@ impl LandMaskLoader {
         }
     }
 
-    pub fn update_tiles(&mut self, particles: &Particles) -> HashSet<(usize, usize)> {
+    pub fn update_tiles(&mut self, positions: Vec<f32>) -> HashSet<(usize, usize)> {
         let mut needed = HashSet::new();
-        for i in 0..particles.len {
-            if particles.stranded[i] { continue; }
-            let lon_idx = ((particles.lons[i] + 180.0) / 10.0).floor() as i32;
-            let lat_idx = ((particles.lats[i] + 90.0) / 10.0).floor() as i32;
-            if lon_idx >= 0 && lon_idx < 36 && lat_idx >= 0 && lat_idx < 18 {
-                needed.insert((lon_idx as usize, lat_idx as usize));
+        let edge_threshold = 0.1;
+
+        for position in positions.chunks_exact(2) {
+            let lon = normalize_lon(position[0]) as f64;
+            let lat = position[1] as f64;
+
+            let lon_idx = ((lon - self.min_lon as f64) / self.tile_size as f64).floor() as i32;
+            let lat_idx = ((lat - self.min_lat as f64) / self.tile_size as f64).floor() as i32;
+
+            let mut add_tile = |lon_idx: i32, lat_idx: i32| {
+                if lon_idx >= 0 && lon_idx < 36 && lat_idx >= 0 && lat_idx < 17 {
+                    needed.insert((lon_idx as usize, lat_idx as usize));
+                }
+            };
+
+            add_tile(lon_idx, lat_idx);
+
+            let lon_mod = ((lon % 10.0) + 10.0) % 10.0;
+            let lat_mod = ((lat % 10.0) + 10.0) % 10.0;
+
+            if lon_mod < edge_threshold {
+                add_tile(lon_idx - 1, lat_idx);
+            } else if lon_mod > 10.0 - edge_threshold {
+                if lon_idx == 14 && lat_idx == 10 {
+                }
+                add_tile(lon_idx + 1, lat_idx);
+            }
+
+            if lat_mod < edge_threshold {
+                add_tile(lon_idx, lat_idx - 1);
+            } else if lat_mod > 10.0 - edge_threshold {
+                add_tile(lon_idx, lat_idx + 1);
+            }
+
+            if (lon_mod < edge_threshold || lon_mod > 10.0 - edge_threshold) &&
+            (lat_mod < edge_threshold || lat_mod > 10.0 - edge_threshold) {
+                let lon_dir = if lon_mod < edge_threshold { -1 } else { 1 };
+                let lat_dir = if lat_mod < edge_threshold { -1 } else { 1 };
+                add_tile(lon_idx + lon_dir, lat_idx + lat_dir);
             }
         }
-
-        self.loaded_tiles.retain(|t| needed.contains(t));
-
         needed.difference(&self.loaded_tiles).cloned().collect()
     }
 
@@ -63,23 +87,19 @@ impl LandMaskLoader {
             self.base_url, lon_idx, lat_idx
         );
 
-        let bytes = if let Some(preloaded) = get_preloaded_tile(&url) {
-            preloaded
-        } else {
-            let response = Request::get(&url)
-                .send()
-                .await
-                .map_err(|e| format!("Network error: {}", e))?;
+        let response = Request::get(&url)
+            .send()
+            .await
+            .map_err(|e| format!("Network error: {}", e))?;
 
-            if !response.ok() {
-                return Err(format!("HTTP {}", response.status()));
-            }
+        if !response.ok() {
+            return Err(format!("HTTP {}", response.status()));
+        }
 
-            response
-                .binary()
-                .await
-                .map_err(|e| format!("Binary error: {}", e))?
-        };
+        let bytes = response
+            .binary()
+            .await
+            .map_err(|e| format!("Binary error: {}", e))?;
 
         if bytes.len() < 8 {
             return Err("File too short".to_string());
@@ -93,6 +113,17 @@ impl LandMaskLoader {
         Ok(())
     }
 
+    pub async fn load_landmask_tiles(&mut self, positions: Vec<f32>) {
+        let needed_landmask_tiles = self.update_tiles(positions);
+
+        for (lon_idx, lat_idx) in needed_landmask_tiles {
+            if let Err(e) = self.load_tile(lon_idx, lat_idx).await {
+                web_sys::console::warn_1(
+                    &format!("Landmask tile load failed: {}_{}: {}", lon_idx, lat_idx, e).into(),
+                );
+            }
+        }
+    }
     pub fn is_on_land(&self, lon: f32, lat: f32) -> bool {
         // Check bounds
         if lat < self.min_lat || lat > self.max_lat {

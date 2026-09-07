@@ -34,7 +34,7 @@
             bind:value={query}
             onfocus={() => isFocused = true}
             onblur={() => isFocused = false}
-            placeholder="Search oil..."
+            placeholder="Search the ADIOS Oil Database..."
         />
     </div>
 
@@ -70,11 +70,9 @@
 .oil-results {
     position: absolute;
     top: 100%;
-    right: 0;
     overflow-y: auto;
-    width: calc(100% - var(--spacing-md));
+    width: 100%;
     max-height: var(--oil-results-height);
-    margin: 6px 0;
     padding: 0;
     background: var(--bg-tertiary);
     border-radius: var(--border-md);
