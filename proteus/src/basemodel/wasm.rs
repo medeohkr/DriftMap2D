@@ -73,7 +73,7 @@ impl Proteus {
             lon: lon,
             lat: lat,
             schedule: release_type,
-            total_mass_bq: release_amount,
+            mass_per_particle: release_amount as f32 / particle_count,
             particle_count: particle_count,
             spread_km: spread_km,
             depth_m: 0.0,
@@ -140,26 +140,8 @@ impl Proteus {
 
         self.simulation.release_particles(dt_days);
 
-        let needed_ocean_tiles = self.loader.update_tiles(&self.simulation.get_particles());
-
-        if let Err(e) = self
-            .loader
-            .load_by_date(current_date_int, &needed_ocean_tiles)
-            .await
-        {
-            web_sys::console::error_1(&format!("Failed to load ocean tiles: {:?}", e).into());
-            return Err(JsValue::from_str(&format!("{:?}", e)));
-        }
-
-        let needed_landmask_tiles = self.landmask.update_tiles(&self.simulation.get_particles());
-
-        for (lon_idx, lat_idx) in needed_landmask_tiles {
-            if let Err(e) = self.landmask.load_tile(lon_idx, lat_idx).await {
-                web_sys::console::warn_1(
-                    &format!("Landmask tile load failed: {}_{}: {}", lon_idx, lat_idx, e).into(),
-                );
-            }
-        }
+        self.loader.load_ocean_tiles(self.get_unstranded_positions(), current_date_int).await;
+        self.landmask.load_landmask_tiles(self.get_unstranded_positions()).await;
 
         self.simulation.update_particles_batch(
             dt_days,
@@ -172,6 +154,10 @@ impl Proteus {
         self.days_since_start = self.step_count as f32 / self.steps_per_day as f32;
         self.hour_count = hour as u32;
         Ok(())
+    }
+
+    pub async fn load_landmask_tiles(&mut self, positions: Vec<f32>) {
+        self.landmask.load_landmask_tiles(positions).await
     }
 
     pub fn get_positions(&self) -> Vec<f32> {

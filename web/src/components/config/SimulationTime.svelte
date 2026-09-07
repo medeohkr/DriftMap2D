@@ -15,7 +15,7 @@
     <span>Simulation Time Interval</span>
     
     <div class="simulation-time-container">
-        <div class="inline-container top">
+        <div class="inline-container light">
             <span class="inline-label">Start</span>
             <div class="date-time-container">
                 <input
@@ -34,7 +34,7 @@
             </div>
         </div>
         
-        <div class="inline-container bottom">
+        <div class="inline-container">
             <span class="inline-label">End</span>
             <div class="date-time-container">
                 <input
@@ -70,20 +70,11 @@
 .datetime-input {
     background: transparent;
     border: none;
-    color: var(--text-primary);
+    color: var(--text-secondary);
     font-family: var(--font-family);
     font-size: var(--font-size-xs);
     font-weight: var(--weight-secondary);
     text-align: right;
     cursor: pointer;
-}
-
-.inline-container.top {
-    border-radius: var(--border-md) var(--border-md) 0 0;
-}
-
-.inline-container.bottom {
-    border-radius: 0 0 var(--border-md) var(--border-md);
-    background-color: var(--bg-secondary)
 }
 </style>

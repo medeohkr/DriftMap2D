@@ -7,7 +7,7 @@
 
 <!-- model selector -->
 <div class="floating-container" id="model-selector-container-basic">
-    <span class="model-text">Select a Model</span>
+    <span>Select a Model</span>
     <select bind:value={selectorType} name="model-selector-basic" class="selector-primary" id="model-selector-basic">
     <option value="oil-weathering">Oil Weathering</option>
     <option value="plastic-drift">Plastic Drift</option>

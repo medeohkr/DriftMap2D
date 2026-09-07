@@ -7,8 +7,8 @@
     import ActionBar from './ActionBar.svelte';
     import TitleHeader from './TitleHeader.svelte';
 
-    let collapseTimeout = null;
-    let transitionTimeout = null;
+    let collapseTimeout: ReturnType<typeof setTimeout>;
+    let transitionTimeout: ReturnType<typeof setTimeout>;
     let isTransitioning = $state(false);
     
     function toggleSidebar() {
@@ -27,7 +27,7 @@
         clearTimeout(transitionTimeout);
         transitionTimeout = setTimeout(() => {
             isTransitioning = false;
-        }, 150);
+        }, 200);
     }
 
 </script>
@@ -56,6 +56,9 @@
 
         <SimulationTime />
         <ReleaseSettings />
+        <details class="floating-container">
+            <summary style="cursor: pointer">Advanced</summary>
+        </details>
     </div>
 </div>
 
@@ -112,7 +115,6 @@
     max-height: var(--height-action-btn);
 }
 
-/* Collapsed states */
 .sidebar.stage-2 .title-header {
     height: 0;
     opacity: 0;
@@ -144,7 +146,7 @@
     flex-direction: column;
     min-height: 0;
     padding: var(--spacing-md);
-    row-gap: var(--spacing-md);
+    row-gap: var(--spacing-lg);
     transition: all var(--transition-medium);
     opacity: 1;
 }

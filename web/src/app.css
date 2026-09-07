@@ -3,12 +3,10 @@
     --font-family: Montserrat;
 
     /* widths */
-    --width-sidebar: 320px;
-    --width-summary-text: 188px;
+    --width-sidebar: 300px;
     --oil-results-height: 150px;
-    --width-selector: 126px;
     --width-number: 90px;
-    --width-units: 28px;
+    --width-units: 21px;
     --height-action-btn: 40px;
     --width-timeline-btn: 50px;
     --height-timeline-btn: 30px;
@@ -41,11 +39,11 @@
     --spacing-sm: 12px;
     --spacing-md: 16px;
     --spacing-lg: 20px;
-    --font-size-xxs: 11px;
-    --font-size-xs: 12px;
-    --font-size-sm: 14px;
-    --font-size-md: 16px;
-    --font-size-lg: 20px;
+    --font-size-xxs: 10px;
+    --font-size-xs: 11px;
+    --font-size-sm: 13px;
+    --font-size-md: 15px;
+    --font-size-lg: 18px;
     --weight-bold: 600;
     --weight-primary: 500;
     --weight-secondary: 400;
@@ -94,18 +92,17 @@ body {
     font-size: var(--font-size-xs);
     font-weight: var(--weight-secondary);
     color: var(--text-secondary);
-    padding-left: var(--spacing-md);
     row-gap: var(--spacing-xs);
 }
-.floating-container::before {
+.main-label::before {
     content: '';
     position: absolute;
-    left: var(--spacing-xxs);
-    top: 2px;
+    left: 0;
     height: 1em;
     width: var(--border-md);
     background: var(--text-muted);
 }
+
 .container-secondary {
     display: flex;
     font-family: var(--font-family);
@@ -142,12 +139,18 @@ body {
     align-items: center;
     row-gap: var(--spacing-xs);
     padding: 0  var(--spacing-sm);
-    background: var(--bg-tertiary);
+    background: var(--bg-secondary);
     border-radius: var(--border-md);
     justify-content: space-between;
     font-size: var(--font-size-xxs);
     font-weight: var(--weight-secondary);
     color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.inline-container.light {
+    background-color: var(--bg-tertiary)
+
 }
 
 /* selectors */
@@ -174,23 +177,26 @@ body {
     background-color: var(--bg-tertiary);
 }
 
-/* input fields */
 .field-primary {
-    width: 40px;
     padding: 1px var(--spacing-xs);
     font-family: var(--font-family);
     font-size: var(--font-size-xs);
     font-weight: var(--weight-primary);
     text-align: center;
     color: var(--text-muted);
-    background: var(--bg-tertiary);
+    background-color: var(--bg-tertiary);
     border: none;
     border-radius: var(--border-md);
     cursor: pointer;
-
+    width: var(--width-number);
+    margin-left: auto;
+    margin-right: var(--spacing-xs);
     text-align-last: center;
 }
 
+.field-primary.transparent {
+    background-color: transparent;
+}
 .unit-text {
     width: var(--width-units);
     font-size: var(--font-size-xs);

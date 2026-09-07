@@ -1,6 +1,6 @@
 use super::{
     bilerp, find_depth_indices, meters_per_degree_lat, meters_per_degree_lon, normalize_lon,
-    ParticleView, Particles,
+    ParticleView
 };
 use gloo_net::http::Request;
 use half::f16;
@@ -82,39 +82,6 @@ impl DataLoader {
             cache: HashMap::new(),
             pending: HashSet::new(),
         }
-    }
-
-    pub fn update_tiles(&mut self, particles: &Particles) -> HashSet<TileKey> {
-        let needed = self.fetch_tiles(particles);
-        self.cache.retain(|k, _| needed.contains(k));
-        needed
-    }
-
-    pub async fn load_by_date(
-        &mut self,
-        date: usize,
-        tiles: &HashSet<TileKey>,
-    ) -> Result<(), LoaderError> {
-        for tile in tiles {
-            if self.cache.contains_key(tile) || self.pending.contains(tile) {
-                continue;
-            }
-
-            self.pending.insert(tile.clone());
-            let url = self.tile_url(date, tile);
-
-            match self.load_tile(&url).await {
-                Ok(data) => {
-                    self.cache.insert(tile.clone(), data);
-                }
-                Err(e) => {
-                    self.pending.remove(tile);
-                    return Err(e);
-                }
-            }
-            self.pending.remove(tile);
-        }
-        Ok(())
     }
 
     pub fn get_velocities_wind(
@@ -419,24 +386,20 @@ impl DataLoader {
         results
     }
 
-    fn fetch_tiles(&self, particles: &Particles) -> HashSet<TileKey> {
-        let mut tiles = HashSet::new();
+    pub fn update_tiles(&mut self, positions: Vec<f32>) -> HashSet<TileKey> {
+        let mut needed = HashSet::new();
         let edge_threshold = 0.1;
 
-        for i in 0..particles.len {
-            if particles.stranded[i] {
-                continue;
-            }
-
-            let lon = normalize_lon(particles.lons[i]) as f64;
-            let lat = particles.lats[i] as f64;
+        for position in positions.chunks_exact(2) {
+            let lon = normalize_lon(position[0]) as f64;
+            let lat = position[1] as f64;
 
             let lon_idx = ((lon - self.min_lon as f64) / self.tile_size as f64).floor() as i32;
             let lat_idx = ((lat - self.min_lat as f64) / self.tile_size as f64).floor() as i32;
 
             let mut add_tile = |lon_idx: i32, lat_idx: i32| {
                 if lon_idx >= 0 && lon_idx < 36 && lat_idx >= 0 && lat_idx < 17 {
-                    tiles.insert(TileKey {
+                    needed.insert(TileKey {
                         lon_idx: lon_idx as usize,
                         lat_idx: lat_idx as usize,
                         day: self.current_day,
@@ -470,9 +433,8 @@ impl DataLoader {
                 add_tile(lon_idx + lon_dir, lat_idx + lat_dir);
             }
         }
-
-        tiles
-
+        self.cache.retain(|k, _| needed.contains(k));
+        needed
     }
 
     fn tile_url(&self, date: usize, tile: &TileKey) -> String {
@@ -505,6 +467,44 @@ impl DataLoader {
             .map_err(|e| LoaderError::Network(e.to_string()))?;
 
         parse_tile_data(&bytes).map_err(LoaderError::Parse)
+    }
+
+    pub async fn load_by_date(
+        &mut self,
+        date: usize,
+        tiles: &HashSet<TileKey>,
+    ) -> Result<(), LoaderError> {
+        for tile in tiles {
+            if self.cache.contains_key(tile) || self.pending.contains(tile) {
+                continue;
+            }
+
+            self.pending.insert(tile.clone());
+            let url = self.tile_url(date, tile);
+
+            match self.load_tile(&url).await {
+                Ok(data) => {
+                    self.cache.insert(tile.clone(), data);
+                }
+                Err(e) => {
+                    self.pending.remove(tile);
+                    return Err(e);
+                }
+            }
+            self.pending.remove(tile);
+        }
+        Ok(())
+    }
+
+    pub async fn load_ocean_tiles(&mut self, positions: Vec<f32>, current_date_int: usize) {
+        let needed_ocean_tiles = self.update_tiles(positions);
+
+        if let Err(e) = self
+            .load_by_date(current_date_int, &needed_ocean_tiles)
+            .await
+        {
+            web_sys::console::error_1(&format!("Failed to load ocean tiles: {:?}", e).into());
+        }
     }
 
     pub fn get_tile_key(&self, lon: f32, lat: f32, day: usize) -> TileKey {

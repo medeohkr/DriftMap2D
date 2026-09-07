@@ -32,7 +32,7 @@ impl Simulation {
         let particles = Particles::new(config.release_config.particle_count, tracer);
         let diffusion = Diffusion::new(cs);
         let initial_mass_per_particle =
-            release_config.total_mass_bq as f32 * 1000.0 / release_config.particle_count as f32;
+            release_config.total_mass as f32 * 1000.0 / release_config.particle_count as f32;
 
         Self {
             particles,
