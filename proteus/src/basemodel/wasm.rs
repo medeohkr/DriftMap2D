@@ -1,9 +1,8 @@
 // wasm.rs
-use crate::basemodel::release_manager::{ReleaseConfig, Schedule};
-use crate::basemodel::simulation::{Simulation, SimulationConfig};
+use crate::basemodel::Simulation;
 use crate::basemodel::DataLoader;
 use crate::basemodel::LandMaskLoader;
-use crate::tracers::{OilTracer, TracerKind};
+use crate::tracers::TracerKind;
 use chrono::{Datelike, Days, NaiveDateTime};
 use wasm_bindgen::prelude::*;
 
@@ -34,57 +33,20 @@ pub fn setup_panic_hook() {
 impl Proteus {
     #[wasm_bindgen(constructor)]
     pub fn new(
-        lon: f32,
-        lat: f32,
-        cs_value: f32,
-        particle_count: usize,
-        spread_km: f32,
-        start_date_str: &str,
-        steps_per_day: u32,
-        release_amount: f64,
-        release_duration: f32,
         tracer_type: &str,
-        tracer_json: &str
+        tracer_json: &str,
+        start_date_str: &str,
+        releases_json: &str,
+        particle_count: usize,
+        steps_per_day: u32,
+        cs_value: f32,
+
     ) -> Self {
         let start_date =
             NaiveDateTime::parse_from_str(start_date_str, "%Y-%m-%d %H:%M").expect("Invalid date format");
-        let release_type = if release_duration == 0.0 {
-            Schedule::Instant
-        } else {
-            Schedule::Continuous {
-                total_days: release_duration,
-            }
-        };
 
-        let tracer = match tracer_type {
-            "oil" => TracerKind::Oil(OilTracer::new(
-                tracer_json,
-                particle_count,
-                release_amount as f32 / particle_count as f32,
-            )),
+        let simulation = Simulation::new(tracer_type, tracer_json, releases_json, particle_count, cs_value);
 
-            _ => TracerKind::Oil(OilTracer::new(
-                tracer_json,
-                particle_count,
-                release_amount as f32 / particle_count as f32,
-            )),
-        };
-        let release_config = ReleaseConfig {
-            lon: lon,
-            lat: lat,
-            schedule: release_type,
-            mass_per_particle: release_amount as f32 / particle_count,
-            particle_count: particle_count,
-            spread_km: spread_km,
-            depth_m: 0.0,
-        };
-
-        let sim_config = SimulationConfig {
-            release_config,
-            cs: cs_value,
-        };
-
-        let simulation = Simulation::new(sim_config, tracer);
         let loader = DataLoader::new("https://tiles.driftmap2d.com/tiles", -180.0, -80.0);
         let landmask = LandMaskLoader::new(
             "https://tiles.driftmap2d.com/roaring_landmask",
@@ -99,9 +61,9 @@ impl Proteus {
             landmask,
             days_since_start: 0.0,
             start_date,
-            steps_per_day,
             hour_count: 0,
             step_count: 0,
+            steps_per_day,
         }
     }
 
@@ -131,14 +93,14 @@ impl Proteus {
         let current_date_int = self.get_current_date_int();
 
         if step_count == 0 {
-            self.simulation.release_particles(dt_days);
+            self.simulation.release_particles(self.days_since_start, dt_days);
             return Ok(());
         }
         let hour = (24 * self.step_count / self.steps_per_day) % 24;
 
         self.loader.set_current_day(current_date_int, hour as usize);
 
-        self.simulation.release_particles(dt_days);
+        self.simulation.release_particles(self.days_since_start, dt_days);
 
         self.loader.load_ocean_tiles(self.get_unstranded_positions(), current_date_int).await;
         self.landmask.load_landmask_tiles(self.get_unstranded_positions()).await;
@@ -168,6 +130,10 @@ impl Proteus {
             positions.push(particles.lats[i]);
         }
         positions
+    }
+
+    pub fn get_total_mass(&self) -> f32 {
+        self.simulation.release_manager.total_mass
     }
 
     pub fn get_stranded_positions(&self) -> Vec<f32> {
@@ -235,7 +201,7 @@ impl Proteus {
             TracerKind::Oil(oil) => {
                 for i in 0..particles.len {
                     if !particles.stranded[i] {
-                        let initial_mass = self.simulation.initial_mass_per_particle;
+                        let initial_mass = self.simulation.release_manager.initial_mass_per_particle();
                         total_initial += initial_mass;
                         total_evaporated += initial_mass * oil.data.f_evap[i];
                     }
@@ -259,7 +225,7 @@ impl Proteus {
             TracerKind::Oil(oil) => {
                 for i in 0..particles.len {
                     if !particles.stranded[i] {
-                        let initial_mass = self.simulation.initial_mass_per_particle;
+                        let initial_mass = self.simulation.release_manager.initial_mass_per_particle();
                         total_initial += initial_mass;
                         total_emulsified += initial_mass * oil.data.y_w[i];
                     }

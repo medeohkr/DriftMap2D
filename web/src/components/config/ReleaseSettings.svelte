@@ -130,7 +130,7 @@
     </button>
 </div>
 <details class="floating-container">
-    <summary style="cursor: pointer">All Releases ({releaseConfig.releases.length})</summary>
+    <summary style="cursor: pointer">Manage Releases ({releaseConfig.releases.length})</summary>
         <div class="inline-rows-container">
         {#each releaseConfig.releases as release, index}
             <div
@@ -252,6 +252,6 @@
     .inline-rows-container {
         display: flex;
         flex-direction: column;
-        row-gap: var(--spacing-sm);
+        row-gap: var(--spacing-xs);
     }
 </style>

@@ -14,19 +14,14 @@ export interface Simulation {
 }
 
 export interface Config {
-    // lon: number;
-    // lat: number;
     csValue: number;
     particleCount: number;
-    // spreadKm: number;
     stepsPerDay: number;
     startDate: string;
     startTime: string;
     endDate: string;
     endTime: string;
     totalDays: number;
-    // releaseAmount: number;
-    // releaseDuration: number;
     tracerType: string;
     oilName: string;
     oilJson: string;
@@ -77,8 +72,6 @@ export interface SidebarState {
 }
 
 export interface Release {
-    id: string,
-    type: string,
     lat: number,
     lon: number,
     radius: number,
@@ -102,10 +95,8 @@ export const simulation: Simulation = $state({
 });
 
 export const config: Config = $state({
-    lon: 56.5,
-    lat: 26.6,
     csValue: 0.05,
-    particleCount: 25000,
+    particleCount: 10000,
     stepsPerDay: 96,
 
     startDate: dateOffset(0),
@@ -113,10 +104,6 @@ export const config: Config = $state({
     endDate: dateOffset(7),
     endTime: "00:00",
     totalDays: 7,
-
-    spreadKm: 1.0,
-    releaseAmount: 1000.0,
-    releaseDuration: 1.0,
 
     tracerType: "oil",
     oilName: "arabian-light",
@@ -175,8 +162,6 @@ export const sidebarState: SidebarState = $state({
 export const releaseConfig = $state({
     releases: [
         {
-            id: "release-1",
-            type: "point",
             lat: 26.58,
             lon: 56.25,
             radius: 5,
@@ -196,8 +181,6 @@ export const releaseConfig = $state({
 
     addRelease(release: any) {
         releaseConfig.releases.push({
-            id: `release-${Date.now()}`,
-            type: "point",
             lat: releaseConfig.activeRelease.lat + 0.02,
             lon: releaseConfig.activeRelease.lon + 0.02,
             radius: releaseConfig.activeRelease.radius,

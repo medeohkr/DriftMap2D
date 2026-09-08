@@ -28,17 +28,19 @@ export function getPositions() {
 }
 
 export function getAveragePosition() {
-    let totalLon = 0;
-    let totalLat = 0;
-    for (let index = 0; index < releaseConfig.releases.length; index++) {
-        totalLon += releaseConfig.releases[index].lon;
-        totalLat += releaseConfig.releases[index].lat;
-    }
-    let averageLon = totalLon / releaseConfig.releases.length;
-    let averageLat = totalLon / releaseConfig.releases.length;
-    return [averageLon, averageLat];
+    const totals = releaseConfig.releases.reduce(
+        (acc, release) => ({
+            lon: acc.lon + release.lon,
+            lat: acc.lat + release.lat,
+        }),
+        { lon: 0, lat: 0 }
+    );
+    
+    return [
+        totals.lon / releaseConfig.releases.length,
+        totals.lat / releaseConfig.releases.length,
+    ];
 }
-
 export function normalizeLongitude(lon: number) {
     return ((((lon + 180) % 360) + 360) % 360) - 180;
 }

@@ -94,6 +94,7 @@ body {
     color: var(--text-secondary);
     row-gap: var(--spacing-xs);
 }
+
 .main-label::before {
     content: '';
     position: absolute;
@@ -139,7 +140,7 @@ body {
     align-items: center;
     row-gap: var(--spacing-xs);
     padding: 0  var(--spacing-sm);
-    background: var(--bg-secondary);
+    background-color: var(--bg-secondary);
     border-radius: var(--border-md);
     justify-content: space-between;
     font-size: var(--font-size-xxs);
@@ -149,8 +150,7 @@ body {
 }
 
 .inline-container.light {
-    background-color: var(--bg-tertiary)
-
+    background-color: var(--bg-tertiary);
 }
 
 /* selectors */

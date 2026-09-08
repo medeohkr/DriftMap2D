@@ -21,80 +21,80 @@ import { getTotalDays, startDateTime, normalizeLongitude, releasesToJson} from "
 
 export function createProteus() {
     simulation.proteus = new Proteus(
-        releasesToJson(),
-        config.csValue,
-        config.particleCount,
-        startDateTime(),
-        config.stepsPerDay,
         config.tracerType,
-        config.oilJson
+        config.oilJson,
+        startDateTime(),
+        releasesToJson(),
+        config.particleCount,
+        config.stepsPerDay,
+        config.csValue,
     );
 }
 
 export function validateSimulation() {
-    const errors = [];
-    const lon = normalizeLongitude(config.lon);
-    const lat = config.lat;
+    const errors: any = [];
+    // const lon = normalizeLongitude(config.lon);
+    // const lat = config.lat;
 
-    if (!simulation.proteus) {
-        errors.push("Simulation not initialized. Please wait.");
-        return errors;
-    }
+    // if (!simulation.proteus) {
+    //     errors.push("Simulation not initialized. Please wait.");
+    //     return errors;
+    // }
 
-    if (simulation.proteus.is_on_land(lon, lat)) {
-        errors.push(
-            `Release point (${lat.toFixed(2)}°, ${lon.toFixed(2)}°) is on land. Oil spills must start in water.`,
-        );
-    }
+    // if (simulation.proteus.is_on_land(lon, lat)) {
+    //     errors.push(
+    //         `Release point (${lat.toFixed(2)}°, ${lon.toFixed(2)}°) is on land. Oil spills must start in water.`,
+    //     );
+    // }
 
-    const simStart = new Date(config.startDate);
-    simStart.setHours(0, 0, 0, 0);
+    // const simStart = new Date(config.startDate);
+    // simStart.setHours(0, 0, 0, 0);
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // const today = new Date();
+    // today.setHours(0, 0, 0, 0);
 
-    const maxDate = new Date(today);
-    const minDate = new Date(today);
+    // const maxDate = new Date(today);
+    // const minDate = new Date(today);
 
-    maxDate.setDate(today.getDate() + 10);
-    minDate.setDate(today.getDate() - 30);
-    if (simStart > maxDate) {
-        errors.push(
-            `Start date is beyond available forecast (max ${maxDate.toISOString().split("T")[0]})`,
-        );
-    }
-    if (simStart < minDate) {
-        errors.push(
-            `Start date is before available range (min ${minDate.toISOString().split("T")[0]})`,
-        );
-    }
+    // maxDate.setDate(today.getDate() + 10);
+    // minDate.setDate(today.getDate() - 30);
+    // if (simStart > maxDate) {
+    //     errors.push(
+    //         `Start date is beyond available forecast (max ${maxDate.toISOString().split("T")[0]})`,
+    //     );
+    // }
+    // if (simStart < minDate) {
+    //     errors.push(
+    //         `Start date is before available range (min ${minDate.toISOString().split("T")[0]})`,
+    //     );
+    // }
 
-    const simEnd = new Date(simStart);
-    simEnd.setDate(simEnd.getDate() + Math.ceil(getTotalDays()));
-    if (simEnd > maxDate) {
-        errors.push(
-            `Simulation would end beyond forecast range (${maxDate.toISOString().split("T")[0]})`,
-        );
-    }
+    // const simEnd = new Date(simStart);
+    // simEnd.setDate(simEnd.getDate() + Math.ceil(getTotalDays()));
+    // if (simEnd > maxDate) {
+    //     errors.push(
+    //         `Simulation would end beyond forecast range (${maxDate.toISOString().split("T")[0]})`,
+    //     );
+    // }
 
-    if (isNaN(getTotalDays()) || getTotalDays() <= 0)
-        errors.push(`Total days must be positive.`);
-    if (isNaN(config.releaseAmount) || config.releaseAmount <= 0)
-        errors.push(`Release amount must be positive.`);
-    if (
-        isNaN(config.particleCount) ||
-        config.particleCount <= 0 ||
-        config.particleCount > 50000
-    )
-        errors.push(`Particle count must be between 1 and 50000.`);
-    if (isNaN(config.spreadKm) || config.spreadKm < 0 || config.spreadKm > 50)
-        errors.push(`Spread radius must be between 0 and 50 km.`);
-    if (isNaN(config.releaseDuration) || config.releaseDuration < 0)
-        errors.push(`Release duration must be positive`);
-    if (isNaN(config.lon))
-        errors.push(`Release location must have a longitude value`);
-    if (isNaN(config.lat) || config.lat < -75 || config.lat > 85)
-        errors.push(`Latitude must be between -75° and 85°`);
+    // if (isNaN(getTotalDays()) || getTotalDays() <= 0)
+    //     errors.push(`Total days must be positive.`);
+    // if (isNaN(config.releaseAmount) || config.releaseAmount <= 0)
+    //     errors.push(`Release amount must be positive.`);
+    // if (
+    //     isNaN(config.particleCount) ||
+    //     config.particleCount <= 0 ||
+    //     config.particleCount > 50000
+    // )
+    //     errors.push(`Particle count must be between 1 and 50000.`);
+    // if (isNaN(config.spreadKm) || config.spreadKm < 0 || config.spreadKm > 50)
+    //     errors.push(`Spread radius must be between 0 and 50 km.`);
+    // if (isNaN(config.releaseDuration) || config.releaseDuration < 0)
+    //     errors.push(`Release duration must be positive`);
+    // if (isNaN(config.lon))
+    //     errors.push(`Release location must have a longitude value`);
+    // if (isNaN(config.lat) || config.lat < -75 || config.lat > 85)
+    //     errors.push(`Latitude must be between -75° and 85°`);
     return errors;
 }
 

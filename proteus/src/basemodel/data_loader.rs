@@ -386,6 +386,38 @@ impl DataLoader {
         results
     }
 
+    fn tile_url(&self, date: usize, tile: &TileKey) -> String {
+        let year = date / 10000;
+        let month = (date / 100) % 100;
+        let day = date % 100;
+        format!(
+            "{}/{:04}/{:02}/{:02}/{:03}_{:03}.bin",
+            self.base_url, year, month, day, tile.lon_idx, tile.lat_idx,
+        )
+    }
+
+    async fn load_tile(&self, url: &str) -> Result<TileData, LoaderError> {
+        if let Some(bytes) = get_preloaded_tile(url) {
+            return parse_tile_data(&bytes).map_err(LoaderError::Parse);
+        }
+
+        let response = Request::get(url)
+            .send()
+            .await
+            .map_err(|e| LoaderError::Network(e.to_string()))?;
+
+        if !response.ok() {
+            return Err(LoaderError::Http(response.status()));
+        }
+
+        let bytes = response
+            .binary()
+            .await
+            .map_err(|e| LoaderError::Network(e.to_string()))?;
+
+        parse_tile_data(&bytes).map_err(LoaderError::Parse)
+    }
+    
     pub fn update_tiles(&mut self, positions: Vec<f32>) -> HashSet<TileKey> {
         let mut needed = HashSet::new();
         let edge_threshold = 0.1;
@@ -435,38 +467,6 @@ impl DataLoader {
         }
         self.cache.retain(|k, _| needed.contains(k));
         needed
-    }
-
-    fn tile_url(&self, date: usize, tile: &TileKey) -> String {
-        let year = date / 10000;
-        let month = (date / 100) % 100;
-        let day = date % 100;
-        format!(
-            "{}/{:04}/{:02}/{:02}/{:03}_{:03}.bin",
-            self.base_url, year, month, day, tile.lon_idx, tile.lat_idx,
-        )
-    }
-
-    async fn load_tile(&self, url: &str) -> Result<TileData, LoaderError> {
-        if let Some(bytes) = get_preloaded_tile(url) {
-            return parse_tile_data(&bytes).map_err(LoaderError::Parse);
-        }
-
-        let response = Request::get(url)
-            .send()
-            .await
-            .map_err(|e| LoaderError::Network(e.to_string()))?;
-
-        if !response.ok() {
-            return Err(LoaderError::Http(response.status()));
-        }
-
-        let bytes = response
-            .binary()
-            .await
-            .map_err(|e| LoaderError::Network(e.to_string()))?;
-
-        parse_tile_data(&bytes).map_err(LoaderError::Parse)
     }
 
     pub async fn load_by_date(
