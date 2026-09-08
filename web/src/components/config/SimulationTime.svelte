@@ -59,7 +59,7 @@
 .simulation-time-container {
     display: flex;
     flex-direction: column;
-    row-gap: var(--spacing-sm);
+    row-gap: var(--spacing-xs);
 }
 
 .date-time-container {

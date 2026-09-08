@@ -1,9 +1,9 @@
 // simulation.rs
 use super::{
     integrators, meters_per_degree_lat, meters_per_degree_lon, normalize_lon, DataLoader,
-    Diffusion, LandMaskLoader, ParticleView, Particles, ReleaseConfig, ReleaseManager,
+    Diffusion, LandMaskLoader, ParticleView, Particles, ReleaseManager,
 };
-use crate::tracers::{Tracer, TracerKind};
+use crate::tracers::{Tracer, TracerKind, OilTracer};
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
@@ -13,40 +13,51 @@ macro_rules! log {
 
 pub struct Simulation {
     pub particles: Particles,
-    release_manager: ReleaseManager,
+    pub release_manager: ReleaseManager,
     diffusion: Diffusion,
-    pub initial_mass_per_particle: f32,
-}
-
-pub struct SimulationConfig {
-    pub release_config: ReleaseConfig,
+    pub total_particles: usize,
     pub cs: f32,
 }
 
 impl Simulation {
-    pub fn new(config: SimulationConfig, tracer: TracerKind) -> Self {
-        let release_config = config.release_config.clone();
-        let cs = config.cs;
+    pub fn new(
+        tracer_type: &str,
+        tracer_json: &str,
+        releases_json: &str,
+        total_particles: usize,
+        cs: f32,
+    ) -> Self {
 
-        let release_manager = ReleaseManager::new(release_config.clone());
-        let particles = Particles::new(config.release_config.particle_count, tracer);
+        let release_manager = ReleaseManager::new(releases_json, total_particles);
+        let tracer = match tracer_type {
+            "oil" => TracerKind::Oil(OilTracer::new(
+                tracer_json,
+                total_particles,
+                release_manager.initial_mass_per_particle()
+            )),
+
+            _ => TracerKind::Oil(OilTracer::new(
+                tracer_json,
+                total_particles,
+                release_manager.initial_mass_per_particle()
+            )),
+        };
+        let particles = Particles::new(total_particles, tracer);
         let diffusion = Diffusion::new(cs);
-        let initial_mass_per_particle =
-            release_config.total_mass as f32 * 1000.0 / release_config.particle_count as f32;
 
         Self {
             particles,
             release_manager,
             diffusion,
-            initial_mass_per_particle,
+            total_particles,
+            cs
         }
     }
 
-    pub fn release_particles(&mut self, dt_days: f32) {
-        if let Some(seeds) = self.release_manager.update(dt_days) {
-            for seed in seeds {
-                self.particles.add_particle(seed.lon, seed.lat, seed.depth);
-            }
+    pub fn release_particles(&mut self, days_since_start: f32, dt_days: f32) {
+        let seeds = self.release_manager.update(days_since_start * 24.0, dt_days * 24.0);
+        for seed in seeds {
+            self.particles.add_particle(seed.lon, seed.lat, seed.depth);
         }
     }
 
@@ -91,7 +102,7 @@ impl Simulation {
         landmask: &LandMaskLoader,
     ) {
         let dt = dt_days * 86400.0;
-        
+
         let (indices, (wind_speeds, sst_celsius)): (Vec<usize>, (Vec<f32>, Vec<f32>)) = {
             let temp_view = self.particles.view();
             let wind_sst = loader.get_wind_sst(&temp_view, loader.current_day, hour);

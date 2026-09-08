@@ -1,7 +1,7 @@
 import { map } from "./map";
 import { config, simulation, timeline, visualization, stats, history} from "./stores.svelte";
 import { HeatmapGenerator } from "../pkg/proteus";
-import { getStats } from "./simulation";
+import { getAveragePosition } from "./utils";
 
 const CONCENTRATIONS = [
     0.0002, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2,
@@ -125,13 +125,13 @@ const COLORS = [
 ];
 
 export function getScaledConcentrations() {
-    const scale = config.releaseAmount / 100.0;
+    const scale = simulation.proteus?.get_total_mass() ?? 0.0 / 100.0;
     return CONCENTRATIONS.map((c) => c * scale);
 }
 
 export function tonsPerKm2ToTonsPerCell(value: number) {
-    const kmPerDegreeLon = 111.0 * Math.cos((config.lat * Math.PI) / 180);
-    const kmPerDegreeLat = 111.0;
+    const kmPerDegreeLon = 111.12 * Math.cos((getAveragePosition()[1] * Math.PI) / 180);
+    const kmPerDegreeLat = 111.12;
     const cellAreaKm2 =
         kmPerDegreeLon *
         kmPerDegreeLat *
