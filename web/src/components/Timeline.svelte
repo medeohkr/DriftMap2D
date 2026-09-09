@@ -131,7 +131,7 @@
         padding: var(--spacing-md) var(--spacing-lg);
         transform: translateX(-45%);
         background: var(--bg-timeline);
-        border: var(--border-lg) solid var();
+        border: none;
         border-radius: var(--border-lg);
         box-shadow: var(--shadow-size-secondary) var(--shadow-secondary);
     }
