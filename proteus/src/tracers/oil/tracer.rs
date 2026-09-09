@@ -17,7 +17,7 @@ impl Tracer for OilTracer {
         self.data.age.push(0.0);
         self.data
             .total_mass
-            .push(self.properties.total_mass_per_particle);
+            .push(self.properties.mass_per_particle);
         self.data
             .mass_components
             .extend_from_slice(&self.properties.initial_mass_components);
@@ -48,13 +48,13 @@ impl Tracer for OilTracer {
 }
 
 impl OilTracer {
-    pub fn new(oil_json: &str, capacity: usize, total_mass_per_particle: f32) -> Self {
+    pub fn new(oil_json: &str, capacity: usize, mass_per_particle: f32) -> Self {
         let json: OilPropertiesJson =
-            serde_json::from_str(oil_json).expect("Failed to parse oil JSON");
+            serde_json::from_str(oil_json).expect("invalid JSON!");
 
         let mass_components: Vec<f32> = json.component_mass_fractions
             .iter()
-            .map(|&mass_frac| mass_frac * total_mass_per_particle)
+            .map(|&mass_frac| mass_frac * mass_per_particle)
             .collect();
         let boiling_points: Vec<f32> = json.boiling_points_c
             .iter()
@@ -65,7 +65,7 @@ impl OilTracer {
 
         Self {
             properties: OilProperties {
-                total_mass_per_particle,
+                mass_per_particle,
                 wind_factor: 0.03,
                 wind_deflection: None,
                 product_type: json.product_type,
@@ -81,7 +81,7 @@ impl OilTracer {
             },
             data: OilData {
                 age: Vec::with_capacity(capacity),
-                total_initial_mass: total_mass_per_particle,
+                total_initial_mass: mass_per_particle,
                 mass_components: Vec::with_capacity(capacity * n_components),
                 total_mass: Vec::with_capacity(capacity),
                 n_components,

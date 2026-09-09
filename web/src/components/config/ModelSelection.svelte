@@ -1,38 +1,23 @@
 <script lang="ts">
+    import { config } from "$lib/stores.svelte"
     import OilSearch from "./OilSearch.svelte";
 
-    let selectorType: 'oil-weathering' | 'plastic-drift' | 'search-and-rescue' = 'oil-weathering';
+    let selectorType: 'generic-drift' | 'oil-weathering' | 'search-and-rescue' = 'generic-drift';
 </script>
 
 
-<!-- model selector -->
 <div class="floating-container" id="model-selector-container-basic">
     <span>Select a Model</span>
     <select bind:value={selectorType} name="model-selector-basic" class="selector-primary" id="model-selector-basic">
-    <option value="oil-weathering">Oil Weathering</option>
-    <option value="plastic-drift">Plastic Drift</option>
-    <option value="search-and-rescue">Search & Rescue</option>
+    <option value="generic-drift" onclick={config.tracerType = "generic"}>Generic Drift</option>
+    <option value="oil-weathering" onclick={config.tracerType = "oil"}>Oil Weathering</option>
+    <option value="search-and-rescue" onclick={config.tracerType = "generic"}>Search & Rescue</option>
     </select>
 </div>
 
-<!-- oil selector -->
-    {#if selectorType === 'oil-weathering'}
-<!-- <div class="box-container"> -->
+{#if selectorType === 'oil-weathering'}
     <OilSearch />
-<!-- </div> -->
-{:else if selectorType === 'plastic-drift'}
-    <div class="floating-container" id="plastic-selector-container-basic">
-        <span>Plastic Type</span>
-        <select name="plastic-selector" class="selector-primary" id="plastic-selector-basic">
-            <option value="polyethylene" selected>Polyethylene (PE)</option>
-            <option value="polypropylene">Polypropylene (PP)</option>
-            <option value="polystyrene">Polystyrene (PS)</option>
-            <option value="nylon">Nylon (PA)</option>
-            <option value="polyester">Polyester (PET)</option>
-            <option value="pvc">PVC</option>
-            <option value="biodegradable">Biodegradable</option>
-        </select>
-    </div>
+
 {:else if selectorType === 'search-and-rescue'}
     <div class="floating-container" id="object-selector-container-basic">
         <span class="object-text">Object Type</span>

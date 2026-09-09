@@ -9,28 +9,7 @@ export let map: any;
 export function initMap() {
     map = new maplibregl.Map({
         container: "map",
-        style: {
-            version: 8,
-            sources: {
-                "carto-dark": {
-                    type: "raster",
-                    tiles: [
-                        // "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png?key=cb1_2i6g_1_acb8c049139549a1b56e3610",
-                        "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png?api_key=403dd43f-4ce7-4b77-8178-d605fda1e41f"
-                    ],
-                    tileSize: 256,
-                    attribution:
-                        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-                },
-            },
-            layers: [
-                {
-                    id: "carto-dark-layer",
-                    type: "raster",
-                    source: "carto-dark",
-                },
-            ],
-        },
+        style: "https://api.maptiler.com/maps/019da3a2-47a0-7f1b-b591-38d451a7c7c5/style.json?key=gkGR2Cprig9FAk9AfV3C",
         center: [0, 40],
         zoom: 1.5,
         maxBounds: [
@@ -58,12 +37,13 @@ export function initMap() {
 }
 
 export async function updateMarker(lon: number, lat: number) {
-    if (!simulation.simulationActive && visualization.currentMarker) {
+    if (visualization.currentMarker) {
         visualization.currentMarker.remove();
     }
+    
     if (!simulation.simulationActive) {
         visualization.currentMarker = new maplibregl.Marker({
-            color: "#244886",
+            color: "#37579b",
             scale: 0.9,
         })
             .setLngLat([lon, lat])

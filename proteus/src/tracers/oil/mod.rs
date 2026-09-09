@@ -4,6 +4,5 @@ mod tracer;
 mod weathering;
 
 pub use data::OilData;
-pub use properties::OilProperties;
-pub use properties::OilPropertiesJson;
+pub use properties::{OilProperties, OilPropertiesJson};
 pub use tracer::OilTracer;

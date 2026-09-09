@@ -11,6 +11,6 @@ export async function initialize() {
     initMap();
     initGridLayer();
     loadOilCatalog();
-    updateMarker(releaseConfig.activeRelease.lon, releaseConfig.activeRelease.lat);
     createProteus();
+    updateMarker(releaseConfig.activeRelease.lon, releaseConfig.activeRelease.lat);
 }

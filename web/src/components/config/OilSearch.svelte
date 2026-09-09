@@ -16,7 +16,7 @@
     });
 
     function selectOil(oil: OilRecord) {
-        config.oilJson = getOilJsonForRust(oil.oil_id);
+        config.tracerJson = getOilJsonForRust(oil.oil_id);
         query = oil.name || oil.oil_id;
         results = [];
         isFocused = false;
