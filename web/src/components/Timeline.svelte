@@ -44,12 +44,12 @@
     }
 
     function updatePlaybackSpeed() {
-        if (timeline.playbackSpeed === 100) {
-            timeline.playbackSpeed = 50;
-        } else if (timeline.playbackSpeed === 50) {
-            timeline.playbackSpeed = 25;
+        if (timeline.playbackSpeed === 60) {
+            timeline.playbackSpeed = 30;
+        } else if (timeline.playbackSpeed === 30) {
+            timeline.playbackSpeed = 15;
         } else {
-            timeline.playbackSpeed = 100;
+            timeline.playbackSpeed = 60;
         }
     }
 
@@ -101,7 +101,7 @@
             <button
                 onclick={updatePlaybackSpeed}
                 id="timeline-speed"
-                class="timeline-btn">{100 / timeline.playbackSpeed}x</button
+                class="timeline-btn">{60 / timeline.playbackSpeed}x</button
             >
         </div>
         <input
@@ -114,13 +114,7 @@
             value={timeline.timelineDay}
         />
         <div class="timeline-labels">
-            <span id="timeline-start">Day 0</span>
-            <span id="timeline-current">{timeline.timelineDate}</span>
-            <span id="timeline-end"
-                >Day {history.simulationHistory[
-                    history.simulationHistory.length - 1
-                ]?.day ?? 0}</span
-            >
+            <span>{timeline.timelineDate}</span>
         </div>
     </div>
 {/if}
@@ -136,8 +130,8 @@
         row-gap: var(--spacing-sm);
         padding: var(--spacing-md) var(--spacing-lg);
         transform: translateX(-45%);
-        background: var(--bg-primary);
-        border: var(--border-lg) solid var(--bg-secondary);
+        background: var(--bg-timeline);
+        border: var(--border-lg) solid var();
         border-radius: var(--border-lg);
         box-shadow: var(--shadow-size-secondary) var(--shadow-secondary);
     }
@@ -151,18 +145,19 @@
     .timeline-btn {
         width: var(--width-timeline-btn);
         height: var(--height-timeline-btn);
-        background-color: var(--bg-secondary);
+        background-color: var(--bg-tertiary);
         color: var(--text-primary);
         padding: var(--spacing-xxs) var(--spacing-md);
-        border: var(--border-sm) solid var(--import-border);
-        border-radius: var(--border-lg);
+        border: none;
+        border-radius: var(--border-md);
         font-family: var(--font-family);
         font-size: var(--font-size-md);
         cursor: pointer;
+        opacity: 0.8;
     }
 
     .timeline-btn:hover {
-        background-color: var(--timeline-slider);
+        opacity: 0.6;
     }
 
     .timeline-slider {
@@ -170,7 +165,7 @@
         height: var(--spacing-xxs);
         -webkit-appearance: none;
         appearance: none;
-        background: var(--timeline-slider);
+        background-color: var(--bg-tertiary);
         border-radius: var(--border-md);
         outline: none;
     }
@@ -187,7 +182,7 @@
 
     .timeline-labels {
         display: flex;
-        justify-content: space-between;
+        justify-content: center;
         color: var(--text-muted);
         font-family: var(--font-family);
         font-size: var(--font-size-sm);

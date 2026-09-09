@@ -23,7 +23,6 @@ export interface Config {
     endTime: string;
     totalDays: number;
     tracerType: string;
-    oilName: string;
     oilJson: string;
     autoZoom: boolean;
 }
@@ -106,7 +105,6 @@ export const config: Config = $state({
     totalDays: 7,
 
     tracerType: "oil",
-    oilName: "arabian-light",
     oilJson: "",
 
     autoZoom: true,
@@ -164,7 +162,7 @@ export const releaseConfig = $state({
         {
             lat: 26.58,
             lon: 56.25,
-            radius: 5,
+            radius: 2.5,
             schedule: [
                 {
                     amount: 100,

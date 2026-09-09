@@ -243,8 +243,8 @@ export function updateHeatmapVisualization() {
 }
 
 export function buildHeatmap() {
-    const data = simulation.proteus?.get_unstranded_positions_with_mass();
-    if (!data?.length) return;
+    const data = simulation.proteus?.get_unstranded_positions_with_mass() ?? new Float32Array;
+
     const { lonMin, lonMax, needsShift } = getShiftedBounds(data);
 
     const padding = visualization.gridSize * 2;

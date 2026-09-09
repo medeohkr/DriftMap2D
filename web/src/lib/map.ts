@@ -16,7 +16,7 @@ export function initMap() {
                     type: "raster",
                     tiles: [
                         // "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png?key=cb1_2i6g_1_acb8c049139549a1b56e3610",
-                        "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png"
+                        "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png?api_key=403dd43f-4ce7-4b77-8178-d605fda1e41f"
                     ],
                     tileSize: 256,
                     attribution:
