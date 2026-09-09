@@ -7,9 +7,39 @@ import { getTotalDays, getPositions, getAveragePosition, normalizeLongitude } fr
 export let map: any;
 
 export function initMap() {
+    // map = new maplibregl.Map({
+    //     container: "map",
+    //     style: "https://api.maptiler.com/maps/019da3a2-47a0-7f1b-b591-38d451a7c7c5/style.json?key=gkGR2Cprig9FAk9AfV3C",
+    //     center: [0, 40],
+    //     zoom: 1.5,
+    //     maxBounds: [
+    //         [-Infinity, -75.0],
+    //         [Infinity, 85.0],
+    //     ],
+    // });
     map = new maplibregl.Map({
         container: "map",
-        style: "https://api.maptiler.com/maps/019da3a2-47a0-7f1b-b591-38d451a7c7c5/style.json?key=gkGR2Cprig9FAk9AfV3C",
+        style: {
+            version: 8,
+            sources: {
+                "carto-dark": {
+                    type: "raster",
+                    tiles: [
+                        "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png?api_key=403dd43f-4ce7-4b77-8178-d605fda1e41f"
+                    ],
+                    tileSize: 256,
+                    attribution:
+                        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+                },
+            },
+            layers: [
+                {
+                    id: "carto-dark-layer",
+                    type: "raster",
+                    source: "carto-dark",
+                },
+            ],
+        },
         center: [0, 40],
         zoom: 1.5,
         maxBounds: [
