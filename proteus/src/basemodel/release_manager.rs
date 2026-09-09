@@ -123,8 +123,8 @@ fn seed(
                     break;
                 }
             }
-            let lat = release.lat + meters_per_degree_lat(dy);
-            let lon = release.lon + meters_per_degree_lon(dx, lat);
+            let lat = release.lat + meters_per_degree_lat(dy * 1000.0);
+            let lon = release.lon + meters_per_degree_lon(dx * 1000.0, lat);
 
             ParticleSeed {
                 lon,

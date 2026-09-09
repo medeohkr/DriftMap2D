@@ -3,6 +3,8 @@ use crate::basemodel::Simulation;
 use crate::basemodel::DataLoader;
 use crate::basemodel::LandMaskLoader;
 use crate::tracers::TracerKind;
+use chrono::Duration;
+use chrono::Timelike;
 use chrono::{Datelike, Days, NaiveDateTime};
 use wasm_bindgen::prelude::*;
 
@@ -112,8 +114,8 @@ impl Proteus {
             &self.landmask,
         );
 
-        self.step_count += 1;
         self.days_since_start = self.step_count as f32 / self.steps_per_day as f32;
+        self.step_count += 1;
         self.hour_count = hour as u32;
         Ok(())
     }
@@ -169,13 +171,18 @@ impl Proteus {
     }
 
     pub fn current_time_str(&self) -> String {
-        let current_date = self.start_date + Days::new(self.days_since_start as u64);
+        let current_date = self.start_date + Duration::seconds(
+            (self.days_since_start * 24.0 * 3600.0) as i64
+        );
+        
         let year = current_date.year();
         let month = current_date.month();
         let day = current_date.day();
+        let hour = current_date.hour();
+        let minute = current_date.minute();
         format!(
-            "{:04}-{:02}-{:02} {:02}:00",
-            year, month, day, self.hour_count
+            "{:04}-{:02}-{:02} {:02}:{:02}",
+            year, month, day, hour, minute
         )
     }
 

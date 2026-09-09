@@ -44,6 +44,7 @@
                 type="number"
                 class="field-primary"
                 value={releaseConfig.activeRelease.lat.toFixed(2)}
+                step="any"
             />
             <span class="unit-text">° N</span>
         </div>
@@ -56,6 +57,7 @@
                 value={normalizeLongitude(
                     releaseConfig.activeRelease.lon,
                 ).toFixed(2)}
+                step="any"
             />
             <span class="unit-text">° E</span>
         </div>
@@ -65,7 +67,7 @@
                 bind:value={releaseConfig.activeRelease.radius}
                 type="number"
                 class="field-primary"
-                step="1.0"
+                step="any"
             />
             <span class="unit-text">km</span>
         </div>
@@ -88,7 +90,7 @@
                     bind:value={interval.amount}
                     type="number"
                     class="field-primary transparent interval-field"
-                    step="50"
+                    step="any"
                     size="3"
                     oninput={(e) =>
                         (e.currentTarget.size = Math.max(
@@ -102,7 +104,7 @@
                     type="number"
                     class="field-primary transparent interval-field"
                     class:dark={index % 2 != 0}
-                    step="1.0"
+                    step="any"
                     size="2"
                     oninput={(e) =>
                         (e.currentTarget.size = Math.max(

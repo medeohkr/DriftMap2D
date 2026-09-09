@@ -135,9 +135,9 @@ export async function simulationStep(version: number) {
             }
         }
 
-        if (simulation.stepCount % (config.stepsPerDay / 24) === 0) {
+        if (simulation.stepCount % (config.stepsPerDay / 48) === 0) {
             updateStats();
-            captureSnapshot(Math.floor(simulation.proteus.current_day()));
+            captureSnapshot(simulation.proteus.current_day());
         }
 
         updateBoundingBox();

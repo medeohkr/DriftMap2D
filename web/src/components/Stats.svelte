@@ -22,7 +22,7 @@
                 >
             </div>
             <div class="container-secondary">
-                <span class="stats-primary-text">Total Floating Mass</span>
+                <span class="stats-primary-text">Floating Mass</span>
                 <span class="unit-text" id="total-mass"
                     >{stats.totalMass} t</span
                 >
@@ -39,16 +39,16 @@
         top: var(--spacing-md);
         padding: var(--spacing-xs) 0px var(--spacing-xs) var(--spacing-xs);
         row-gap: var(--spacing-xxs);
-        background-color: var(--bg-primary);
-        border: var(--border-lg) solid var(--bg-secondary);
-        border-radius: var(--border-lg);
+        background-color: var(--bg-secondary);
         box-shadow: var(--shadow-size-secondary) var(--shadow-secondary);
+        border-radius: var(--border-md);
     }
 
     .stats-primary-text {
         font-size: var(--font-size-sm);
         font-weight: var(--weight-primary);
         color: var(--text-secondary);
+        margin-right: 50px;
     }
 
     #stranded,
