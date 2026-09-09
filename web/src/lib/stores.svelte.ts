@@ -23,7 +23,7 @@ export interface Config {
     endTime: string;
     totalDays: number;
     tracerType: string;
-    oilJson: string;
+    tracerJson: string;
     autoZoom: boolean;
 }
 
@@ -104,8 +104,8 @@ export const config: Config = $state({
     endTime: "00:00",
     totalDays: 7,
 
-    tracerType: "oil",
-    oilJson: "",
+    tracerType: "generic",
+    tracerJson: "",
 
     autoZoom: true,
 });
@@ -132,7 +132,7 @@ export const timeline: Timeline = $state({
     timelineDate: "",
     timelinePlaying: false,
     timelineAnimationId: null,
-    playbackSpeed: 100,
+    playbackSpeed: 60,
     playbackMode: false,
 });
 

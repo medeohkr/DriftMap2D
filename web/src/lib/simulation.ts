@@ -22,7 +22,7 @@ import { getTotalDays, startDateTime, normalizeLongitude, releasesToJson} from "
 export function createProteus() {
     simulation.proteus = new Proteus(
         config.tracerType,
-        config.oilJson,
+        config.tracerJson,
         startDateTime(),
         releasesToJson(),
         config.particleCount,

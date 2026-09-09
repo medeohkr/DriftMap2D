@@ -3,7 +3,7 @@ use super::{
     integrators, meters_per_degree_lat, meters_per_degree_lon, normalize_lon, DataLoader,
     Diffusion, LandMaskLoader, ParticleView, Particles, ReleaseManager,
 };
-use crate::tracers::{Tracer, TracerKind, OilTracer};
+use crate::tracers::{GenericTracer, OilTracer, Tracer, TracerKind};
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
@@ -30,15 +30,19 @@ impl Simulation {
 
         let release_manager = ReleaseManager::new(releases_json, total_particles);
         let tracer = match tracer_type {
+            "generic"=> TracerKind::Generic(GenericTracer::new(
+                tracer_json,
+                release_manager.initial_mass_per_particle()
+            )),
+
             "oil" => TracerKind::Oil(OilTracer::new(
                 tracer_json,
                 total_particles,
                 release_manager.initial_mass_per_particle()
             )),
 
-            _ => TracerKind::Oil(OilTracer::new(
+            _ => TracerKind::Generic(GenericTracer::new(
                 tracer_json,
-                total_particles,
                 release_manager.initial_mass_per_particle()
             )),
         };
