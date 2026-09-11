@@ -18,7 +18,6 @@ Features —— Engine:
 TODO —— Engine:
 
 - Implement tracer-specific physics for plastic and SAR objects, currently only oil modeled
-- Update ReleaseManager to support multi-release points and even polygonal release areas, each with unique release schedules
 - Perform temporal interpolation on forcing data (especially important for 6hourly winds and sst)
 - Add full support for 3D forcing with 3D physics such as vertical diffusion, allowing for 3D tracer behaviours 
 
@@ -38,8 +37,7 @@ Features —— Frontend:
 
 TODO —— Frontend:
 
-- Add advanced configs such as oil overrides, multi-releases and polygonal releases, different integration schemes, etc
-- Figure out a good approach to dynamically scale sidebar based on viewport height
+- Add advanced configs such as oil overrides, polygonal releases, different integration schemes, etc
 - Make mobile UI usable
 
 DriftMap Engine is written in Rust compiled to WASM, frontend is Svelte/Typescript

@@ -109,15 +109,6 @@ export function searchOils(query: string): OilRecord[] {
         .slice(0, 100);
 }
 
-export function getOilById(id: string): OilRecord | null {
-    if (!catalog) {
-        console.warn('Oil catalog not loaded yet');
-        return null;
-    }
-
-    return catalog.oils.find((oil) => oil.oil_id === id) || null;
-}
-
 export function getGenericOils(): OilRecord[] {
     if (!catalog) {
         console.warn('Oil catalog not loaded yet');
@@ -144,7 +135,12 @@ export function getGenericOils(): OilRecord[] {
 }
 
 export function getOilJsonForRust(oilId: string): string {
-    const oil = getOilById(oilId);
+    if (!catalog) {
+        console.warn('Oil catalog not loaded yet');
+        return "";
+    }
+
+    const oil = catalog.oils.find((oil) => oil.oil_id === oilId) || null;
     if (!oil) {
         throw new Error(`Oil not found: ${oilId}`);
     }

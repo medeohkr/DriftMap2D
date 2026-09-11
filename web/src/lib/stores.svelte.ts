@@ -1,6 +1,5 @@
 import type { Proteus } from "../pkg/proteus";
-import { getOilById } from "./oils";
-import { dateOffset, getTotalDays } from "./utils";
+import { dateOffset } from "./utils";
 
 export interface Simulation {
     proteus: Proteus | null;
