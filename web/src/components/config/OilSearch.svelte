@@ -72,7 +72,7 @@
     top: 100%;
     overflow-y: auto;
     width: 100%;
-    max-height: var(--oil-results-height);
+    max-height: var(--search-results-height);
     padding: 0;
     background: var(--bg-tertiary);
     border-radius: var(--border-md);
@@ -80,6 +80,7 @@
     scrollbar-width: thin;
     list-style: none;
     z-index: 10;
+    margin-top: 3.5px;
 }
 
 .oil-results li {
