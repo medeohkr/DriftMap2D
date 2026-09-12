@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { config } from "$lib/stores.svelte";
+    import { config } from "$lib/stores/index.svelte";
 
     const today = new Date();
     const minDate = new Date(today);

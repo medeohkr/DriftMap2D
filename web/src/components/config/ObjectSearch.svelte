@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { config } from '$lib/stores.svelte';
+    import { config } from '$lib/stores/index.svelte';
     import { searchObjects, getObjectJsonForRust, getGenericObjects } from '$lib/objects';
     import { createProteus } from '$lib/simulation';
 

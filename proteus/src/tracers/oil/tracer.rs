@@ -38,12 +38,27 @@ impl Tracer for OilTracer {
         );
     }
 
-    fn wind_f(&self) -> f32 {
-        self.properties.wind_factor
-    }
+    fn windage(&self, wind_u: f32, wind_v: f32, lat: f32) -> (f32, f32) {
+            let w_factor = self.properties.wind_factor;
+            let wind_speed = (wind_u * wind_u + wind_v * wind_v).sqrt().max(0.1);
 
-    fn wind_deg(&self) -> Option<f32> {
-        self.properties.wind_deflection
+            let theta_deg = self
+                .properties
+                .wind_deflection
+                .unwrap_or_else(|| 25.0 * (-wind_speed.powi(3) / 1184.75).exp());
+            let theta = if lat >= 0.0 {
+                theta_deg.to_radians()
+            } else {
+                -theta_deg.to_radians()
+            };
+
+            let cos_t = theta.cos();
+            let sin_t = theta.sin();
+
+            let u_drift = w_factor * (wind_u * cos_t - wind_v * sin_t);
+            let v_drift = w_factor * (wind_u * sin_t + wind_v * cos_t);
+
+            (u_drift, v_drift)
     }
 }
 

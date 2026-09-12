@@ -1,4 +1,4 @@
-import { config, releaseConfig } from "./stores.svelte";
+import { config, releaseConfig } from "./stores/index.svelte";
 
 export function dateOffset(days: number) {
     const date = new Date();

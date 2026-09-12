@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { releaseConfig } from "$lib/stores.svelte";
+    import { releaseConfig } from "$lib/stores/index.svelte";
     import { updateMarker } from "$lib/map";
     import { normalizeLongitude } from "$lib/utils";
     import trash from "$lib/assets/images/TrashCan.webp";
@@ -131,7 +131,7 @@
         + &nbsp;Add Interval
     </button>
 </div>
-<details class="floating-container">
+<details class="floating-container" open>
     <summary style="cursor: pointer">Manage Releases ({releaseConfig.releases.length})</summary>
         <div class="inline-rows-container">
         {#each releaseConfig.releases as release, index}

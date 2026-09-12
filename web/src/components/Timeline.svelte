@@ -1,7 +1,7 @@
 <script lang="ts">
     import rewindBtn from "$lib/assets/images/RewindBtn.webp";
     import pauseBtn from "$lib/assets/images/PauseBtn.webp";
-    import { stats, timeline, history} from "$lib/stores.svelte";
+    import { stats, timeline, history} from "$lib/stores/index.svelte";
     import { map } from "$lib/map";
 
     $effect(() => {

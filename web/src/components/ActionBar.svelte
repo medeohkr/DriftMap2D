@@ -1,7 +1,7 @@
 <script lang="ts">
     import resetBtnImg from '$lib/assets/images/ResetBtn.webp';
     import { startSimulation, stopSimulation, resetSimulation, resumeSimulation } from '$lib/simulation';
-    import { timeline, sidebarState } from '$lib/stores.svelte';
+    import { timeline, sidebarState } from '$lib/stores/index.svelte';
 
     let simulationState: "inactive" | "running" | "paused" | "playback" = $state("inactive");
     let { toggleSidebar } = $props();

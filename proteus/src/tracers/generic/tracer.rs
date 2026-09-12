@@ -11,12 +11,23 @@ impl Tracer for GenericTracer {
 
     fn step(&mut self, _indices: &[usize], _wind_speeds: &[f32], _sst_celsius: &[f32], _dt: f32) {}
 
-    fn wind_f(&self) -> f32 {
-        self.properties.wind_factor
-    }
+    fn windage(&self, wind_u: f32, wind_v: f32, lat: f32) -> (f32, f32) {
+            let w_factor = self.properties.wind_factor;
 
-    fn wind_deg(&self) -> Option<f32> {
-        self.properties.wind_deflection
+            let theta_deg = self.properties.wind_deflection;
+            let theta = if lat >= 0.0 {
+                theta_deg.to_radians()
+            } else {
+                -theta_deg.to_radians()
+            };
+
+            let cos_t = theta.cos();
+            let sin_t = theta.sin();
+
+            let u_drift = w_factor * (wind_u * cos_t - wind_v * sin_t);
+            let v_drift = w_factor * (wind_u * sin_t + wind_v * cos_t);
+
+            (u_drift, v_drift)
     }
 }
 
@@ -27,7 +38,7 @@ impl GenericTracer {
         Self {
             properties: GenericProperties {
                 wind_factor: 0.03,
-                wind_deflection: None
+                wind_deflection: 20.0
             },
             data: GenericData {
                 mass_per_particle

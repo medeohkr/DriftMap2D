@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { visualization } from "$lib/stores.svelte";
+    import { visualization } from "$lib/stores/index.svelte";
 </script>
 
 <span id="coordinate-display"

@@ -1,4 +1,4 @@
-import { oilOverrides } from "./stores.svelte";
+import { oilOverrides } from "./stores/index.svelte";
 
 export interface OilRecord {
     oil_id: string;

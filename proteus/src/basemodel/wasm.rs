@@ -205,8 +205,6 @@ impl Proteus {
         let mut total_evaporated = 0.0;
 
         match &particles.tracer {
-            TracerKind::Generic(_) => return 0.0,
-
             TracerKind::Oil(oil) => {
                 for i in 0..particles.len {
                     if !particles.stranded[i] {
@@ -216,6 +214,8 @@ impl Proteus {
                     }
                 }
             }
+
+            _ => {}
         }
 
         if total_initial > 0.0 {
@@ -231,8 +231,6 @@ impl Proteus {
         let mut total_emulsified = 0.0;
 
         match &particles.tracer {
-            TracerKind::Generic(_) => return 0.0,
-
             TracerKind::Oil(oil) => {
                 for i in 0..particles.len {
                     if !particles.stranded[i] {
@@ -242,6 +240,8 @@ impl Proteus {
                     }
                 }
             }
+
+            _ => {}
         }
 
         if total_initial > 0.0 {
@@ -271,6 +271,8 @@ impl Proteus {
                     }
                 }
             }
+
+            _ => {}
         }
 
         total_mass
@@ -300,6 +302,8 @@ impl Proteus {
                     }
                 }
             }
+            
+            _ => {}
         }
 
         data

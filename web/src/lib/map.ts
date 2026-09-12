@@ -1,6 +1,6 @@
 // @ts-expect-error
 import * as maplibregl from 'https://unpkg.com/maplibre-gl@^6.6.0/dist/maplibre-gl.mjs';
-import { simulation, config, visualization, releaseConfig } from "./stores.svelte";
+import { simulation, config, visualization, releaseConfig } from "./stores/index.svelte";
 import { preloader } from "./preloader";
 import { getTotalDays, getPositions, getAveragePosition, normalizeLongitude } from './utils';
 

@@ -6,7 +6,7 @@ import {
     timeline,
     stats,
     history,
-} from "./stores.svelte";
+} from "./stores/index.svelte";
 import { map, updateMarker, zoom } from "./map";
 import { preloader } from "./preloader";
 import {

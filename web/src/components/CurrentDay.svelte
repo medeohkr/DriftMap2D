@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { simulation, timeline} from "$lib/stores.svelte";
+    import { simulation, timeline} from "$lib/stores/index.svelte";
 </script>
 
 {#if simulation.simulationActive && !timeline.playbackMode}
