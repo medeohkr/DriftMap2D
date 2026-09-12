@@ -3,7 +3,7 @@ use super::{
     integrators, meters_per_degree_lat, meters_per_degree_lon, normalize_lon, DataLoader,
     Diffusion, LandMaskLoader, ParticleView, Particles, ReleaseManager,
 };
-use crate::tracers::{GenericTracer, OilTracer, Tracer, TracerKind};
+use crate::tracers::{GenericTracer, LeewayTracer, OilTracer, Tracer, TracerKind};
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
@@ -27,23 +27,27 @@ impl Simulation {
         total_particles: usize,
         cs: f32,
     ) -> Self {
-
         let release_manager = ReleaseManager::new(releases_json, total_particles);
         let tracer = match tracer_type {
-            "generic"=> TracerKind::Generic(GenericTracer::new(
+            "generic" => TracerKind::Generic(GenericTracer::new(
                 tracer_json,
-                release_manager.initial_mass_per_particle()
+                release_manager.initial_mass_per_particle(),
             )),
 
             "oil" => TracerKind::Oil(OilTracer::new(
                 tracer_json,
                 total_particles,
-                release_manager.initial_mass_per_particle()
+                release_manager.initial_mass_per_particle(),
+            )),
+
+            "sar" => TracerKind::Leeway(LeewayTracer::new(
+                tracer_json,
+                total_particles
             )),
 
             _ => TracerKind::Generic(GenericTracer::new(
                 tracer_json,
-                release_manager.initial_mass_per_particle()
+                release_manager.initial_mass_per_particle(),
             )),
         };
         let particles = Particles::new(total_particles, tracer);
@@ -54,12 +58,14 @@ impl Simulation {
             release_manager,
             diffusion,
             total_particles,
-            cs
+            cs,
         }
     }
 
     pub fn release_particles(&mut self, days_since_start: f32, dt_days: f32) {
-        let seeds = self.release_manager.update(days_since_start * 24.0, dt_days * 24.0);
+        let seeds = self
+            .release_manager
+            .update(days_since_start * 24.0, dt_days * 24.0);
         for seed in seeds {
             self.particles.add_particle(seed.lon, seed.lat, seed.depth);
         }
@@ -67,17 +73,18 @@ impl Simulation {
 
     fn calculate_total_velocity(
         &self,
+        index: usize,
         lat: f32,
-        wind_u: f32,
-        wind_v: f32,
         current_u: f32,
         current_v: f32,
+        wind_u: f32,
+        wind_v: f32,
     ) -> (f32, f32) {
-        let u_drift = self.particles.tracer.windage(wind_u, wind_v, lat).0;
-        let v_drift = self.particles.tracer.windage(wind_u, wind_v, lat).1;
+        let windage = self.particles.tracer.windage(index, lat, wind_u, wind_v);
+
         (
-            current_u + meters_per_degree_lon(u_drift, lat),
-            current_v + meters_per_degree_lat(v_drift),
+            current_u + meters_per_degree_lon(windage.0, lat),
+            current_v + meters_per_degree_lat(windage.1),
         )
     }
 
@@ -122,6 +129,7 @@ impl Simulation {
                 .enumerate()
                 .map(|(i, (current_u, current_v, wind_u_m, wind_v_m))| {
                     self.calculate_total_velocity(
+                        unstranded_view.indices[i],
                         view.lat(i),
                         current_u,
                         current_v,
@@ -139,7 +147,12 @@ impl Simulation {
                 .enumerate()
                 .map(|(i, (current_u, current_v, wind_u_m, wind_v_m))| {
                     self.calculate_total_velocity(
-                        slice[i].1, current_u, current_v, wind_u_m, wind_v_m,
+                        unstranded_view.indices[i],
+                        slice[i].1,
+                        current_u,
+                        current_v,
+                        wind_u_m,
+                        wind_v_m,
                     )
                 })
                 .collect()

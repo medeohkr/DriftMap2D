@@ -31,9 +31,10 @@ pub trait Tracer {
 
     fn windage(
         &self,
+        index: usize,
+        lat: f32,
         wind_u: f32,
         wind_v: f32,
-        lat: f32
     ) -> (f32, f32);
 }
 
@@ -59,11 +60,11 @@ impl Tracer for TracerKind {
             TracerKind::Leeway(t) => t.step(&indices, wind_speeds, sst_celsius, dt),        }
     }
 
-    fn windage(&self, wind_u: f32, wind_v: f32, lat: f32) -> (f32, f32) {
+    fn windage(&self, index: usize, lat: f32, wind_u: f32, wind_v: f32) -> (f32, f32) {
         match self {
-            TracerKind::Generic(t) => t.windage(wind_u, wind_v, lat),
-            TracerKind::Oil(t) => t.windage(wind_u, wind_v, lat),
-            TracerKind::Leeway(t) => t.windage(wind_u, wind_v, lat)
+            TracerKind::Generic(t) => t.windage(index, lat, wind_u, wind_v),
+            TracerKind::Oil(t) => t.windage(index, lat, wind_u, wind_v),
+            TracerKind::Leeway(t) => t.windage(index, lat, wind_u, wind_v)
         }
     }
 }
