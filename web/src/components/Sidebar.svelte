@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { sidebarState } from '$lib/stores.svelte';
+    import { sidebarState } from '$lib/stores/index.svelte';
     import UtilityBar from './UtilityBar.svelte';
     import ModelSelection from './config/ModelSelection.svelte';
     import SimulationTime from './config/SimulationTime.svelte';

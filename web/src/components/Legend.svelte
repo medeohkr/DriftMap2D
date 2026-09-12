@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { simulation, config, visualization } from "$lib/stores.svelte";
+    import { simulation, config, visualization } from "$lib/stores/index.svelte";
     import { getScaledConcentrations } from "$lib/visualization";
 
     const COLORS = [

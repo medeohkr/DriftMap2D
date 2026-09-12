@@ -1,5 +1,5 @@
 import { map } from "./map";
-import { config, simulation, timeline, visualization, stats, history} from "./stores.svelte";
+import { config, simulation, timeline, visualization, stats, history} from "./stores/index.svelte";
 import { HeatmapGenerator } from "../pkg/proteus";
 import { getAveragePosition } from "./utils";
 

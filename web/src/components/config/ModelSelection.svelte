@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { config } from "$lib/stores.svelte"
+    import { config } from "$lib/stores/index.svelte"
     import ObjectSearch from "./ObjectSearch.svelte";
     import OilSearch from "./OilSearch.svelte";
 </script>

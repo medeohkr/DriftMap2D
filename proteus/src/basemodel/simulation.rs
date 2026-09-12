@@ -68,30 +68,13 @@ impl Simulation {
     fn calculate_total_velocity(
         &self,
         lat: f32,
+        wind_u: f32,
+        wind_v: f32,
         current_u: f32,
         current_v: f32,
-        wind_u_m: f32,
-        wind_v_m: f32,
     ) -> (f32, f32) {
-        let w_factor = self.particles.tracer.wind_f();
-        let wind_speed = (wind_u_m * wind_u_m + wind_v_m * wind_v_m).sqrt().max(0.1);
-
-        let theta_deg = self
-            .particles
-            .tracer
-            .wind_deg()
-            .unwrap_or_else(|| 25.0 * (-wind_speed.powi(3) / 1184.75).exp());
-        let theta = if lat >= 0.0 {
-            theta_deg.to_radians()
-        } else {
-            -theta_deg.to_radians()
-        };
-
-        let cos_t = theta.cos();
-        let sin_t = theta.sin();
-
-        let u_drift = w_factor * (wind_u_m * cos_t - wind_v_m * sin_t);
-        let v_drift = w_factor * (wind_u_m * sin_t + wind_v_m * cos_t);
+        let u_drift = self.particles.tracer.windage(wind_u, wind_v, lat).0;
+        let v_drift = self.particles.tracer.windage(wind_u, wind_v, lat).1;
         (
             current_u + meters_per_degree_lon(u_drift, lat),
             current_v + meters_per_degree_lat(v_drift),

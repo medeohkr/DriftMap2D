@@ -1,5 +1,5 @@
 import objectCatalog from "./assets/object_catalog.json"
-
+import { objectOverrides } from "./stores/index.svelte";
 
 export interface ObjectCatalog {
     objects: Record<string, SarObject>;
@@ -27,5 +27,15 @@ export function getGenericObjects() {
 }
 
 export function getObjectJsonForRust(objectName: string) {
-    return JSON.stringify(catalog.objects[objectName]);
+    const object = catalog.objects[objectName];
+    return JSON.stringify({
+        downwind: objectOverrides.downwind ?? object.downwind,
+        right: objectOverrides.right ?? object.right,
+        left: objectOverrides.left ?? object.left,
+        jibe_probabiliy: objectOverrides.jibeProbability,
+        capsizing: objectOverrides.capsizing,
+        capsize_threshold: objectOverrides.capsizeThreshold,
+        capsize_fraction: objectOverrides.capsizeFraction,     
+        capsize_sigma: objectOverrides.capsizeSigma,
+    });
 }

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { simulation, config, stats } from "$lib/stores.svelte";
+    import { simulation, config, stats } from "$lib/stores/index.svelte";
 </script>
 
 {#if simulation.simulationActive}
