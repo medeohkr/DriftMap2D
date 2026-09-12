@@ -32,7 +32,7 @@ export function getObjectJsonForRust(objectName: string) {
         downwind: objectOverrides.downwind ?? object.downwind,
         right: objectOverrides.right ?? object.right,
         left: objectOverrides.left ?? object.left,
-        jibe_probabiliy: objectOverrides.jibeProbability,
+        jibe_probability: objectOverrides.jibeProbability,
         capsizing: objectOverrides.capsizing,
         capsize_threshold: objectOverrides.capsizeThreshold,
         capsize_fraction: objectOverrides.capsizeFraction,     

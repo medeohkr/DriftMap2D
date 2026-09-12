@@ -7,7 +7,6 @@ macro_rules! log {
     }
 }
 
-const CP_TO_PAS: f32 = 1e-3; // 1000 cP = PaS
 const K0Y: f32 = 2.024e-6; // 0.000002024
 const DROP_MIN: f32 = 1.0e-6;
 const DROP_MAX: f32 = 1.0e-5;

@@ -11,7 +11,7 @@ impl Tracer for GenericTracer {
 
     fn step(&mut self, _indices: &[usize], _wind_speeds: &[f32], _sst_celsius: &[f32], _dt: f32) {}
 
-    fn windage(&self, wind_u: f32, wind_v: f32, lat: f32) -> (f32, f32) {
+    fn windage(&self, _index: usize, lat: f32, wind_u: f32, wind_v: f32) -> (f32, f32) {
             let w_factor = self.properties.wind_factor;
 
             let theta_deg = self.properties.wind_deflection;

@@ -38,7 +38,7 @@ impl Tracer for OilTracer {
         );
     }
 
-    fn windage(&self, wind_u: f32, wind_v: f32, lat: f32) -> (f32, f32) {
+    fn windage(&self, _index: usize, lat: f32, wind_u: f32, wind_v: f32) -> (f32, f32) {
             let w_factor = self.properties.wind_factor;
             let wind_speed = (wind_u * wind_u + wind_v * wind_v).sqrt().max(0.1);
 
