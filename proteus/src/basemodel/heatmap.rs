@@ -273,8 +273,8 @@ impl EulerianGrid {
 
                     3 => vec![p0, p1, mr, ml],
                     6 => vec![p1, p2, mt, mb],
-                    12 => vec![p2, p3, ml, mr],
                     9 => vec![p0, p3, mt, mb],
+                    12 => vec![p2, p3, ml, mr],
 
                     5 => vec![p0, mb, mr, p2, mt, ml],
                     10 => vec![mb, p1, mr, mt, p3, ml],
