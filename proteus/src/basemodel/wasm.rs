@@ -21,8 +21,6 @@ pub struct Proteus {
     landmask: LandMaskLoader,
     days_since_start: f32,
     start_date: NaiveDateTime,
-    hour_count: u32,
-    step_count: u32,
     steps_per_day: u32,
 }
 
@@ -47,7 +45,7 @@ impl Proteus {
         let start_date =
             NaiveDateTime::parse_from_str(start_date_str, "%Y-%m-%d %H:%M").expect("Invalid date format");
 
-        let simulation = Simulation::new(tracer_type, tracer_json, releases_json, particle_count, cs_value);
+        let simulation = Simulation::new(tracer_type, tracer_json, releases_json, particle_count, steps_per_day, cs_value);
 
         let loader = DataLoader::new("https://tiles.driftmap2d.com/tiles", -180.0, -80.0);
         let landmask = LandMaskLoader::new(
@@ -63,8 +61,6 @@ impl Proteus {
             landmask,
             days_since_start: 0.0,
             start_date,
-            hour_count: 0,
-            step_count: 0,
             steps_per_day,
         }
     }
@@ -77,32 +73,18 @@ impl Proteus {
         (year as usize * 10000) + (month as usize * 100) + day as usize
     }
 
-    pub async fn init_landmask(&mut self, lon: f32, lat: f32) -> Result<(), JsValue> {
-        let lon_idx = ((lon + 180.0) / 10.0).floor() as usize;
-        let lat_idx = ((lat + 90.0) / 10.0).floor() as usize;
-
-        // Load ONLY the exact tile containing the release point
-        if let Err(e) = self.landmask.load_tile(lon_idx, lat_idx).await {
-            web_sys::console::warn_1(&format!("Landmask tile load failed: {}", e).into());
-        }
-
-        Ok(())
-    }
-
     pub async fn step(&mut self, step_count: u32) -> Result<(), JsValue> {
         let dt_days = 1.0 / self.steps_per_day as f32;
-        self.step_count = step_count;
         let current_date_int = self.get_current_date_int();
 
         if step_count == 0 {
-            self.simulation.release_particles(self.days_since_start, dt_days);
+            self.simulation.release_particles(step_count);
             return Ok(());
         }
-        let hour = (24 * self.step_count / self.steps_per_day) % 24;
+        self.simulation.release_particles(step_count);
 
+        let hour = (24 * step_count / self.steps_per_day) % 24;
         self.loader.set_current_day(current_date_int, hour as usize);
-
-        self.simulation.release_particles(self.days_since_start, dt_days);
 
         self.loader.load_ocean_tiles(self.get_unstranded_positions(), current_date_int).await;
         self.landmask.load_landmask_tiles(self.get_unstranded_positions()).await;
@@ -114,9 +96,8 @@ impl Proteus {
             &self.landmask,
         );
 
-        self.days_since_start = self.step_count as f32 / self.steps_per_day as f32;
-        self.step_count += 1;
-        self.hour_count = hour as u32;
+        self.days_since_start = step_count as f32 / self.steps_per_day as f32;
+
         Ok(())
     }
 

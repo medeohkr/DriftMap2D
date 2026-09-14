@@ -15,7 +15,7 @@ export interface Config {
 }
 
 export const config: Config = $state({
-    csValue: 0.05,
+    csValue: 0.005,
     particleCount: 10000,
     stepsPerDay: 96,
 

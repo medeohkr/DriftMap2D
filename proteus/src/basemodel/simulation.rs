@@ -7,7 +7,7 @@ use crate::tracers::{GenericTracer, LeewayTracer, OilTracer, Tracer, TracerKind}
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
-        web_sys::console::log_1(&format!( $( $t )* ).into());
+        web_sys::console::log_1(&format!( $( $t )* ).into())
     }
 }
 
@@ -25,9 +25,10 @@ impl Simulation {
         tracer_json: &str,
         releases_json: &str,
         total_particles: usize,
+        step_count: u32,
         cs: f32,
     ) -> Self {
-        let release_manager = ReleaseManager::new(releases_json, total_particles);
+        let release_manager = ReleaseManager::new(releases_json, total_particles, step_count);
         let tracer = match tracer_type {
             "generic" => TracerKind::Generic(GenericTracer::new(
                 tracer_json,
@@ -62,13 +63,14 @@ impl Simulation {
         }
     }
 
-    pub fn release_particles(&mut self, days_since_start: f32, dt_days: f32) {
+    pub fn release_particles(&mut self, step_count: u32) {
         let seeds = self
             .release_manager
-            .update(days_since_start * 24.0, dt_days * 24.0);
+            .update(step_count);
         for seed in seeds {
             self.particles.add_particle(seed.lon, seed.lat, seed.depth);
         }
+        log!("{}", self.particles.len)
     }
 
     fn calculate_total_velocity(

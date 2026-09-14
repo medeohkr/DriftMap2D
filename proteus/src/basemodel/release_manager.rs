@@ -3,17 +3,6 @@ use rand::{rngs::ThreadRng, thread_rng};
 use rand_distr::{Distribution, Normal};
 use serde::Deserialize;
 
-const EPSILON: f32 = 1e-6;
-
-pub struct ReleaseManager {
-    total_particles: usize,
-    pub total_mass: f32,
-    total_released: usize,
-    accumulated_fraction: f32,
-    releases: Vec<Release>,
-    rng: ThreadRng,
-}
-
 #[derive(Debug, Clone)]
 pub struct ParticleSeed {
     pub lon: f32,
@@ -31,77 +20,147 @@ struct Release {
 }
 
 #[derive(Debug, Deserialize)]
-
 struct Schedule {
     amount: f32,
     duration: f32,
 }
 
+pub struct ReleaseManager {
+    total_particles: usize,
+    pub total_mass: f32,
+    hours_per_step: f32,
+    releases: Vec<Release>,
+    particles_released_per_release: Vec<usize>,
+    total_released: usize,
+    rng: ThreadRng,
+}
+
 impl ReleaseManager {
-    pub fn new(releases_json: &str, total_particles: usize) -> Self {
-        let releases: Vec<Release> = serde_json::from_str(releases_json).expect("invalid JSON!");
+    pub fn new(releases_json: &str, total_particles: usize, steps_per_day: u32) -> Self {
+        let releases: Vec<Release> =
+            serde_json::from_str(releases_json).expect("invalid JSON!");
+
         let total_mass: f32 = releases
             .iter()
             .flat_map(|release| release.schedule.iter())
             .map(|interval| interval.amount)
             .sum();
 
+        let hours_per_step = 24.0 / steps_per_day as f32;
+        let num_releases = releases.len();
+
         Self {
             total_particles,
             total_mass,
-            total_released: 0,
+            hours_per_step,
             releases,
-            accumulated_fraction: 0.0,
+            particles_released_per_release: vec![0; num_releases],
+            total_released: 0,
             rng: thread_rng(),
         }
     }
 
-    pub fn update(&mut self, hours_since_start: f32, dt_hours: f32) -> Vec<ParticleSeed> {
-        let mut seeds = Vec::with_capacity(self.total_particles);
-        for release in self.releases.iter() {
-            let hour_index = match release
-                .schedule
-                .iter()
-                .scan(0.0, |acc, interval| {
-                    *acc += interval.duration;
-                    Some(*acc)
-                })
-                .position(|hours| hours_since_start < hours)
-            {
-                Some(index) => index,
-                None => continue
-            };
+    pub fn update(&mut self, step_count: u32) -> Vec<ParticleSeed> {
+        let hours = self.hours_per_step * step_count as f32;
 
-            let amount = release.schedule[hour_index].amount;
-            let duration = release.schedule[hour_index].duration;
-            let rate = if duration > 0.0 { amount / duration } else { amount };
+        let targets = self.compute_targets(hours);
 
-            let seed_mass = rate * dt_hours;
-            let mut seed_particles = seed_mass * self.total_particles as f32 / self.total_mass;
-            
-            self.accumulated_fraction += seed_particles - seed_particles.floor();
-            if self.accumulated_fraction >= 1.0 - EPSILON {
-                seed_particles += 1.0;
-                self.accumulated_fraction -= 1.0;
+        let mut seeds = Vec::new();
+
+        for (i, (release, &target)) in
+            self.releases.iter().zip(&targets).enumerate()
+        {
+            let to_release = target.saturating_sub(self.particles_released_per_release[i]);
+
+            if to_release == 0 {
+                continue;
             }
-            
-            let normal = Normal::new(0.0, release.radius).unwrap();
+
+            let normal = Normal::new(0.0, release.radius)
+                .expect("invalid radius for normal distribution");
+
             let release_seeds = seed(
-                seed_particles as usize,
+                to_release,
                 release,
                 normal,
                 &mut self.rng,
                 self.total_mass / self.total_particles as f32,
             );
-            self.total_released += seed_particles as usize;
+
             seeds.extend(release_seeds);
+            self.particles_released_per_release[i] = target;
         }
+
+        self.total_released = targets.iter().sum();
         seeds
+    }
+
+    fn compute_targets(&self, hours: f32) -> Vec<usize> {
+        let fractions: Vec<f32> = self
+            .releases
+            .iter()
+            .map(|release| {
+                let mass = mass_released_by_time(release, hours);
+                mass / self.total_mass * self.total_particles as f32
+            })
+            .collect();
+
+        let floors: Vec<usize> = fractions.iter().map(|&f| f.floor() as usize).collect();
+        let remainders: Vec<f32> = fractions
+            .iter()
+            .zip(&floors)
+            .map(|(&f, &fl)| f - fl as f32)
+            .collect();
+
+        let total_floor: usize = floors.iter().sum();
+
+        let mut to_distribute = self.total_particles.saturating_sub(total_floor);
+
+        let mut indices: Vec<usize> = (0..self.releases.len()).collect();
+        indices.sort_by(|&a, &b| {
+            remainders[b]
+                .partial_cmp(&remainders[a])
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        let mut targets = floors;
+        for &i in &indices {
+            if to_distribute == 0 {
+                break;
+            }
+            targets[i] += 1;
+            to_distribute -= 1;
+        }
+
+        targets
     }
 
     pub fn initial_mass_per_particle(&self) -> f32 {
         self.total_mass / self.total_particles as f32
     }
+}
+
+fn mass_released_by_time(release: &Release, hours: f32) -> f32 {
+    let mut cumulative = 0.0;
+    let mut elapsed = 0.0;
+
+    for interval in &release.schedule {
+        if hours <= elapsed {
+            break;
+        }
+
+        let time_in_interval = (hours - elapsed).min(interval.duration);
+
+        if interval.duration > 0.0 {
+            cumulative += interval.amount * time_in_interval / interval.duration;
+        } else {
+            cumulative += interval.amount;
+        }
+
+        elapsed += interval.duration;
+    }
+
+    cumulative
 }
 
 fn seed(
@@ -123,6 +182,7 @@ fn seed(
                     break;
                 }
             }
+
             let lat = release.lat + meters_per_degree_lat(dy * 1000.0);
             let lon = release.lon + meters_per_degree_lon(dx * 1000.0, lat);
 
