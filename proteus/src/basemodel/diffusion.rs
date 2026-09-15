@@ -29,7 +29,7 @@ impl Diffusion {
         positions: &[(f32, f32, f32)],
         day: usize,
         dt_days: f32,
-        hour: usize,
+        hour: f32,
     ) -> Vec<(f32, f32)> {
         let dx = 0.01;
         let dy = 0.01;

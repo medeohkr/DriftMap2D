@@ -1,5 +1,5 @@
 use super::{
-    bilerp, find_depth_indices, meters_per_degree_lat, meters_per_degree_lon, normalize_lon,
+    lerp, bilerp, find_depth_indices, meters_per_degree_lat, meters_per_degree_lon, normalize_lon,
     ParticleView
 };
 use gloo_net::http::Request;
@@ -50,8 +50,6 @@ pub struct DataLoader {
     tile_size: f32,
     base_url: String,
 
-    pub current_day: usize,
-    pub current_hour: usize,
     pub cache: HashMap<TileKey, TileData>,
     pending: HashSet<TileKey>,
 }
@@ -77,18 +75,16 @@ impl DataLoader {
             step_wind: 1.0 / 4.0,
             tile_size: 10.0,
             base_url: base_url.to_string(),
-            current_day: 0,
-            current_hour: 0,
             cache: HashMap::new(),
             pending: HashSet::new(),
         }
     }
-    // pub fn velocity();
+
     pub fn get_velocities_wind(
         &self,
         view: &ParticleView,
         day: usize,
-        hour: usize,
+        hour: f32,
     ) -> Vec<(f32, f32, f32, f32)> {
         let mut groups: HashMap<TileKey, Vec<(usize, f32, f32, f32)>> = HashMap::new();
         for (i, lon, lat, depth) in view.iter() {
@@ -104,18 +100,21 @@ impl DataLoader {
 
         for (key, group) in groups {
             if let Some(tile) = self.cache.get(&key) {
-                let wind_step = hour / 6;
-
                 let cells_per_hour = tile.n_lon * tile.n_lat;
-                let hour_offset = hour * cells_per_hour;
+                let hour_offset_0 = hour as usize * cells_per_hour;
+                let hour_offset_1 = (hour + 1.0) as usize * cells_per_hour;
+                let hour_frac = hour - hour.floor();
 
+                let wind_step = hour as usize / 6;
                 let cells_per_wind_step = tile.n_lon_wind * tile.n_lat_wind;
-                let wind_step_offset = wind_step * cells_per_wind_step;
-
+                let wind_step_offset_0 = wind_step * cells_per_wind_step;
+                let wind_step_offset_1 = (wind_step + 1) * cells_per_wind_step;
+                let wind_frac = hour / 6.0 - (hour / 6.0).floor();
+                
                 let tile_min_lon = self.min_lon + (key.lon_idx as f32) * self.tile_size;
                 let tile_min_lat = self.min_lat + (key.lat_idx as f32) * self.tile_size;
 
-                for (idx, lon, lat, depth) in group {
+                for (idx, lon, lat, _depth) in group {
                     let (lon_cell, lat_cell) = self.get_cell_index(
                         lon,
                         lat,
@@ -132,13 +131,31 @@ impl DataLoader {
                     let frac_lon = (lon - cell_lon_min) / self.step;
                     let frac_lat = (lat - cell_lat_min) / self.step;
 
-                    let (depth_idx, _t) = find_depth_indices(&tile.depths, depth);
-                    let stride = cells_per_hour;
-                    let idx_bot =
-                        hour_offset + depth_idx * stride + lat_cell * tile.n_lon + lon_cell;
+                    // let (depth_idx, _t) = find_depth_indices(&tile.depths, depth);
+                    let idx_0 =
+                        hour_offset_0 + lat_cell * tile.n_lon + lon_cell;
 
-                    let current_u_m = bilerp(&tile.u, frac_lon, frac_lat, idx_bot, tile.n_lon);
-                    let current_v_m = bilerp(&tile.v, frac_lon, frac_lat, idx_bot, tile.n_lon);
+                    let idx_1 =
+                        hour_offset_1 + lat_cell * tile.n_lon + lon_cell;
+
+                    let current_u_m: f32;
+                    let current_v_m: f32;
+
+                    if hour < 23.0 {
+                        current_u_m = lerp(
+                            bilerp(&tile.u, frac_lon, frac_lat, idx_0, tile.n_lon),
+                            bilerp(&tile.u, frac_lon, frac_lat, idx_1, tile.n_lon),
+                            hour_frac
+                        );
+                        current_v_m = lerp(
+                            bilerp(&tile.v, frac_lon, frac_lat, idx_0, tile.n_lon),
+                            bilerp(&tile.v, frac_lon, frac_lat, idx_1, tile.n_lon),
+                            hour_frac
+                        );
+                    } else {
+                        current_u_m = bilerp(&tile.u, frac_lon, frac_lat, idx_0, tile.n_lon);
+                        current_v_m = bilerp(&tile.v, frac_lon, frac_lat, idx_0, tile.n_lon);
+                    }
 
                     let (wlon_cell, wlat_cell) = self.get_cell_index(
                         lon,
@@ -155,12 +172,28 @@ impl DataLoader {
 
                     let wfrac_lon = (lon - wcell_lon_min) / self.step_wind;
                     let wfrac_lat = (lat - wcell_lat_min) / self.step_wind;
-                    let widx = wind_step_offset + wlat_cell * tile.n_lon_wind + wlon_cell;
 
-                    let wind_u_m =
-                        bilerp(&tile.wind_u, wfrac_lon, wfrac_lat, widx, tile.n_lon_wind);
-                    let wind_v_m =
-                        bilerp(&tile.wind_v, wfrac_lon, wfrac_lat, widx, tile.n_lon_wind);
+                    let widx_0 = wind_step_offset_0 + wlat_cell * tile.n_lon_wind + wlon_cell;
+                    let widx_1 = wind_step_offset_1 + wlat_cell * tile.n_lon_wind + wlon_cell;
+
+                    let wind_u_m: f32;
+                    let wind_v_m: f32;
+
+                    if wind_step < 3 {
+                        wind_u_m = lerp(
+                            bilerp(&tile.wind_u, wfrac_lon, wfrac_lat, widx_0, tile.n_lon_wind),
+                            bilerp(&tile.wind_u, wfrac_lon, wfrac_lat, widx_1, tile.n_lon_wind),
+                            wind_frac
+                        );
+                        wind_v_m = lerp(
+                            bilerp(&tile.wind_v, wfrac_lon, wfrac_lat, widx_0, tile.n_lon_wind),
+                            bilerp(&tile.wind_v, wfrac_lon, wfrac_lat, widx_1, tile.n_lon_wind),
+                            wind_frac
+                        );
+                    } else {
+                        wind_u_m = bilerp(&tile.wind_u, wfrac_lon, wfrac_lat, widx_0, tile.n_lon_wind);
+                        wind_v_m = bilerp(&tile.wind_v, wfrac_lon, wfrac_lat, widx_0, tile.n_lon_wind);
+                    }
 
                     results[idx] = (
                         meters_per_degree_lon(current_u_m, lat),
@@ -178,7 +211,7 @@ impl DataLoader {
         &self,
         positions: &[(f32, f32, f32)],
         day: usize,
-        hour: usize,
+        hour: f32,
     ) -> Vec<(f32, f32, f32, f32)> {
         let mut groups: HashMap<TileKey, Vec<(usize, f32, f32, f32)>> = HashMap::new();
         for (i, &(lon, lat, depth)) in positions.iter().enumerate() {
@@ -194,18 +227,21 @@ impl DataLoader {
 
         for (key, group) in groups {
             if let Some(tile) = self.cache.get(&key) {
-                let wind_step = hour / 6;
-
                 let cells_per_hour = tile.n_lon * tile.n_lat;
-                let hour_offset = hour * cells_per_hour;
+                let hour_offset_0 = hour as usize * cells_per_hour;
+                let hour_offset_1 = (hour + 1.0) as usize * cells_per_hour;
+                let hour_frac = hour - hour.floor();
 
+                let wind_step = hour as usize / 6;
                 let cells_per_wind_step = tile.n_lon_wind * tile.n_lat_wind;
-                let wind_step_offset = wind_step * cells_per_wind_step;
-
+                let wind_step_offset_0 = wind_step * cells_per_wind_step;
+                let wind_step_offset_1 = (wind_step + 1) * cells_per_wind_step;
+                let wind_frac = hour / 6.0 - (hour / 6.0).floor();
+                
                 let tile_min_lon = self.min_lon + (key.lon_idx as f32) * self.tile_size;
                 let tile_min_lat = self.min_lat + (key.lat_idx as f32) * self.tile_size;
 
-                for (idx, lon, lat, depth) in group {
+                for (idx, lon, lat, _depth) in group {
                     let (lon_cell, lat_cell) = self.get_cell_index(
                         lon,
                         lat,
@@ -222,13 +258,31 @@ impl DataLoader {
                     let frac_lon = (lon - cell_lon_min) / self.step;
                     let frac_lat = (lat - cell_lat_min) / self.step;
 
-                    let (depth_idx, _t) = find_depth_indices(&tile.depths, depth);
-                    let stride = cells_per_hour;
-                    let idx_bot =
-                        hour_offset + depth_idx * stride + lat_cell * tile.n_lon + lon_cell;
+                    // let (depth_idx, _t) = find_depth_indices(&tile.depths, depth);
+                    let idx_0 =
+                        hour_offset_0 + lat_cell * tile.n_lon + lon_cell;
 
-                    let current_u_m = bilerp(&tile.u, frac_lon, frac_lat, idx_bot, tile.n_lon);
-                    let current_v_m = bilerp(&tile.v, frac_lon, frac_lat, idx_bot, tile.n_lon);
+                    let idx_1 =
+                        hour_offset_1 + lat_cell * tile.n_lon + lon_cell;
+
+                    let current_u_m: f32;
+                    let current_v_m: f32;
+
+                    if hour < 23.0 {
+                        current_u_m = lerp(
+                            bilerp(&tile.u, frac_lon, frac_lat, idx_0, tile.n_lon),
+                            bilerp(&tile.u, frac_lon, frac_lat, idx_1, tile.n_lon),
+                            hour_frac
+                        );
+                        current_v_m = lerp(
+                            bilerp(&tile.v, frac_lon, frac_lat, idx_0, tile.n_lon),
+                            bilerp(&tile.v, frac_lon, frac_lat, idx_1, tile.n_lon),
+                            hour_frac
+                        );
+                    } else {
+                        current_u_m = bilerp(&tile.u, frac_lon, frac_lat, idx_0, tile.n_lon);
+                        current_v_m = bilerp(&tile.v, frac_lon, frac_lat, idx_0, tile.n_lon);
+                    }
 
                     let (wlon_cell, wlat_cell) = self.get_cell_index(
                         lon,
@@ -245,13 +299,29 @@ impl DataLoader {
 
                     let wfrac_lon = (lon - wcell_lon_min) / self.step_wind;
                     let wfrac_lat = (lat - wcell_lat_min) / self.step_wind;
-                    let widx = wind_step_offset + wlat_cell * tile.n_lon_wind + wlon_cell;
 
-                    let wind_u_m =
-                        bilerp(&tile.wind_u, wfrac_lon, wfrac_lat, widx, tile.n_lon_wind);
-                    let wind_v_m =
-                        bilerp(&tile.wind_v, wfrac_lon, wfrac_lat, widx, tile.n_lon_wind);
+                    let widx_0 = wind_step_offset_0 + wlat_cell * tile.n_lon_wind + wlon_cell;
+                    let widx_1 = wind_step_offset_1 + wlat_cell * tile.n_lon_wind + wlon_cell;
 
+                    let wind_u_m: f32;
+                    let wind_v_m: f32;
+
+                    if wind_step < 3 {
+                        wind_u_m = lerp(
+                            bilerp(&tile.wind_u, wfrac_lon, wfrac_lat, widx_0, tile.n_lon_wind),
+                            bilerp(&tile.wind_u, wfrac_lon, wfrac_lat, widx_1, tile.n_lon_wind),
+                            wind_frac
+                        );
+                        wind_v_m = lerp(
+                            bilerp(&tile.wind_v, wfrac_lon, wfrac_lat, widx_0, tile.n_lon_wind),
+                            bilerp(&tile.wind_v, wfrac_lon, wfrac_lat, widx_1, tile.n_lon_wind),
+                            wind_frac
+                        );
+                    } else {
+                        wind_u_m = bilerp(&tile.wind_u, wfrac_lon, wfrac_lat, widx_0, tile.n_lon_wind);
+                        wind_v_m = bilerp(&tile.wind_v, wfrac_lon, wfrac_lat, widx_0, tile.n_lon_wind);
+                    }
+                    
                     results[idx] = (
                         meters_per_degree_lon(current_u_m, lat),
                         meters_per_degree_lat(current_v_m),
@@ -269,7 +339,7 @@ impl DataLoader {
         &self,
         positions: &[(f32, f32, f32)],
         day: usize,
-        hour: usize,
+        hour: f32,
     ) -> Vec<(f32, f32)> {
         let mut groups: HashMap<TileKey, Vec<(usize, f32, f32, f32)>> = HashMap::new();
         for (i, &(lon, lat, depth)) in positions.iter().enumerate() {
@@ -286,12 +356,14 @@ impl DataLoader {
         for (key, group) in groups {
             if let Some(tile) = self.cache.get(&key) {
                 let cells_per_hour = tile.n_lon * tile.n_lat;
-                let hour_offset = hour * cells_per_hour;
-
+                let hour_offset_0 = hour as usize * cells_per_hour;
+                let hour_offset_1 = (hour + 1.0) as usize * cells_per_hour;
+                let hour_frac = hour - hour.floor();
+                
                 let tile_min_lon = self.min_lon + (key.lon_idx as f32) * self.tile_size;
                 let tile_min_lat = self.min_lat + (key.lat_idx as f32) * self.tile_size;
 
-                for (idx, lon, lat, depth) in group {
+                for (idx, lon, lat, _depth) in group {
                     let (lon_cell, lat_cell) = self.get_cell_index(
                         lon,
                         lat,
@@ -308,13 +380,31 @@ impl DataLoader {
                     let frac_lon = (lon - cell_lon_min) / self.step;
                     let frac_lat = (lat - cell_lat_min) / self.step;
 
-                    let (depth_idx, _t) = find_depth_indices(&tile.depths, depth);
-                    let stride = cells_per_hour;
-                    let idx_bot =
-                        hour_offset + depth_idx * stride + lat_cell * tile.n_lon + lon_cell;
+                    // let (depth_idx, _t) = find_depth_indices(&tile.depths, depth);
+                    let idx_0 =
+                        hour_offset_0 + lat_cell * tile.n_lon + lon_cell;
 
-                    let current_u_m = bilerp(&tile.u, frac_lon, frac_lat, idx_bot, tile.n_lon);
-                    let current_v_m = bilerp(&tile.v, frac_lon, frac_lat, idx_bot, tile.n_lon);
+                    let idx_1 =
+                        hour_offset_1 + lat_cell * tile.n_lon + lon_cell;
+
+                    let current_u_m: f32;
+                    let current_v_m: f32;
+
+                    if hour < 23.0 {
+                        current_u_m = lerp(
+                            bilerp(&tile.u, frac_lon, frac_lat, idx_0, tile.n_lon),
+                            bilerp(&tile.u, frac_lon, frac_lat, idx_1, tile.n_lon),
+                            hour_frac
+                        );
+                        current_v_m = lerp(
+                            bilerp(&tile.v, frac_lon, frac_lat, idx_0, tile.n_lon),
+                            bilerp(&tile.v, frac_lon, frac_lat, idx_1, tile.n_lon),
+                            hour_frac
+                        );
+                    } else {
+                        current_u_m = bilerp(&tile.u, frac_lon, frac_lat, idx_0, tile.n_lon);
+                        current_v_m = bilerp(&tile.v, frac_lon, frac_lat, idx_0, tile.n_lon);
+                    }
 
                     results[idx] = (
                         meters_per_degree_lon(current_u_m, lat),
@@ -331,7 +421,7 @@ impl DataLoader {
         &self,
         view: &ParticleView,
         day: usize,
-        hour: usize,
+        hour: f32,
     ) -> Vec<(f32, f32, f32)> {
         let mut groups: HashMap<TileKey, Vec<(usize, f32, f32)>> = HashMap::new();
         for (i, lon, lat, _) in view.iter() {
@@ -346,10 +436,11 @@ impl DataLoader {
         let mut results = vec![(0.0, 0.0, 0.0); view.indices.len()];
         for (key, group) in groups {
             if let Some(tile) = self.cache.get(&key) {
-                let wind_step = hour / 6;
-
+                let wind_step = hour as usize / 6;
                 let cells_per_wind_step = tile.n_lon_wind * tile.n_lat_wind;
-                let wind_step_offset = wind_step * cells_per_wind_step;
+                let wind_step_offset_0 = wind_step * cells_per_wind_step;
+                let wind_step_offset_1 = (wind_step + 1) * cells_per_wind_step;
+                let wind_frac = hour / 6.0 - (hour / 6.0).floor();
 
                 let tile_min_lon = self.min_lon + (key.lon_idx as f32) * self.tile_size;
                 let tile_min_lat = self.min_lat + (key.lat_idx as f32) * self.tile_size;
@@ -370,14 +461,35 @@ impl DataLoader {
 
                     let wfrac_lon = (lon - wcell_lon_min) / self.step_wind;
                     let wfrac_lat = (lat - wcell_lat_min) / self.step_wind;
-                    let widx = wind_step_offset + wlat_cell * tile.n_lon_wind + wlon_cell;
+                    let widx_0 = wind_step_offset_0 + wlat_cell * tile.n_lon_wind + wlon_cell;
+                    let widx_1 = wind_step_offset_1 + wlat_cell * tile.n_lon_wind + wlon_cell;
 
-                    let wind_u_m =
-                        bilerp(&tile.wind_u, wfrac_lon, wfrac_lat, widx, tile.n_lon_wind);
-                    let wind_v_m =
-                        bilerp(&tile.wind_v, wfrac_lon, wfrac_lat, widx, tile.n_lon_wind);
-                    let sst_k = bilerp(&tile.sst_k, wfrac_lon, wfrac_lat, widx, tile.n_lon_wind);
+                    let wind_u_m: f32;
+                    let wind_v_m: f32;
+                    let sst_k: f32;
 
+                    if wind_step < 3 {
+                        wind_u_m = lerp(
+                            bilerp(&tile.wind_u, wfrac_lon, wfrac_lat, widx_0, tile.n_lon_wind),
+                            bilerp(&tile.wind_u, wfrac_lon, wfrac_lat, widx_1, tile.n_lon_wind),
+                            wind_frac
+                        );
+                        wind_v_m = lerp(
+                            bilerp(&tile.wind_v, wfrac_lon, wfrac_lat, widx_0, tile.n_lon_wind),
+                            bilerp(&tile.wind_v, wfrac_lon, wfrac_lat, widx_1, tile.n_lon_wind),
+                            wind_frac
+                        );
+                        sst_k = lerp(
+                            bilerp(&tile.sst_k, wfrac_lon, wfrac_lat, widx_0, tile.n_lon_wind),
+                            bilerp(&tile.sst_k, wfrac_lon, wfrac_lat, widx_1, tile.n_lon_wind),
+                            wind_frac
+                        );
+                    } else {
+                        wind_u_m = bilerp(&tile.wind_u, wfrac_lon, wfrac_lat, widx_0, tile.n_lon_wind);
+                        wind_v_m = bilerp(&tile.wind_v, wfrac_lon, wfrac_lat, widx_0, tile.n_lon_wind);
+                        sst_k = bilerp(&tile.sst_k, wfrac_lon, wfrac_lat, widx_0, tile.n_lon_wind);
+                    }
+                    
                     results[idx] = (wind_u_m, wind_v_m, sst_k);
                 }
             }
@@ -418,7 +530,7 @@ impl DataLoader {
         parse_tile_data(&bytes).map_err(LoaderError::Parse)
     }
     
-    pub fn update_tiles(&mut self, positions: Vec<f32>) -> HashSet<TileKey> {
+    pub fn update_tiles(&mut self, positions: Vec<f32>, current_day: usize) -> HashSet<TileKey> {
         let mut needed = HashSet::new();
         let edge_threshold = 0.1;
 
@@ -434,7 +546,7 @@ impl DataLoader {
                     needed.insert(TileKey {
                         lon_idx: lon_idx as usize,
                         lat_idx: lat_idx as usize,
-                        day: self.current_day,
+                        day: current_day
                     });
                 }
             };
@@ -497,7 +609,7 @@ impl DataLoader {
     }
 
     pub async fn load_ocean_tiles(&mut self, positions: Vec<f32>, current_date_int: usize) {
-        let needed_ocean_tiles = self.update_tiles(positions);
+        let needed_ocean_tiles = self.update_tiles(positions, current_date_int);
 
         if let Err(e) = self
             .load_by_date(current_date_int, &needed_ocean_tiles)
@@ -537,11 +649,6 @@ impl DataLoader {
         let lat_cell = lat_cell.max(0).min(n_lat as i32 - 2) as usize;
 
         (lon_cell, lat_cell)
-    }
-
-    pub fn set_current_day(&mut self, day: usize, hour: usize) {
-        self.current_day = day;
-        self.current_hour = hour;
     }
 }
 

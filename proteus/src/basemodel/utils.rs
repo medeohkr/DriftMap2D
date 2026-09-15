@@ -21,11 +21,11 @@ pub fn lerp(a: f32, b: f32, frac: f32) -> f32 {
     a + frac * (b - a)
 }
 
-pub fn bilerp(data: &[f32], frac_lon: f32, frac_lat: f32, idx: usize, next_row: usize) -> f32 {
+pub fn bilerp(data: &[f32], frac_lon: f32, frac_lat: f32, idx: usize, row_stride: usize) -> f32 {
     let a0 = data[idx];
     let b0 = data[idx + 1];
-    let a1 = data[idx + next_row];
-    let b1 = data[idx + next_row + 1];
+    let a1 = data[idx + row_stride];
+    let b1 = data[idx + row_stride + 1];
 
     lerp(lerp(a0, b0, frac_lon), lerp(a1, b1, frac_lon), frac_lat)
 }

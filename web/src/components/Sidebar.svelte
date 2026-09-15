@@ -145,7 +145,7 @@
     flex: 1;
     flex-direction: column;
     min-height: 0;
-    padding: var(--spacing-md);
+    padding: 14px;
     row-gap: var(--spacing-lg);
     transition: all var(--transition-medium);
     opacity: 1;
