@@ -1,3 +1,5 @@
+use std::thread::current;
+
 // wasm.rs
 use crate::basemodel::Simulation;
 use crate::basemodel::DataLoader;
@@ -79,12 +81,12 @@ impl Proteus {
 
         if step_count == 0 {
             self.simulation.release_particles(step_count);
+            log!("{}", self.simulation.particles.len);
             return Ok(());
         }
         self.simulation.release_particles(step_count);
 
-        let hour = (24 * step_count / self.steps_per_day) % 24;
-        self.loader.set_current_day(current_date_int, hour as usize);
+        let hour = (24.0 * step_count as f32 / self.steps_per_day as f32) % 24.0;
 
         self.loader.load_ocean_tiles(self.get_unstranded_positions(), current_date_int).await;
         self.landmask.load_landmask_tiles(self.get_unstranded_positions()).await;
@@ -92,7 +94,8 @@ impl Proteus {
         self.simulation.update_particles_batch(
             dt_days,
             &self.loader,
-            hour as usize,
+            current_date_int,
+            hour,
             &self.landmask,
         );
 
