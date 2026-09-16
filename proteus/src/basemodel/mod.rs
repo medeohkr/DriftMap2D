@@ -18,3 +18,4 @@ pub use simulation::Simulation;
 pub use utils::{
     bilerp, find_depth_indices, lerp, meters_per_degree_lat, meters_per_degree_lon, normalize_lon,
 };
+pub use integrators::Integrator;

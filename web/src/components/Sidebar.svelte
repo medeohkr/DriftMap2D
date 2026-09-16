@@ -6,6 +6,7 @@
     import ReleaseSettings from './config/ReleaseSettings.svelte';
     import ActionBar from './ActionBar.svelte';
     import TitleHeader from './TitleHeader.svelte';
+    import AdvancedConfig from './config/AdvancedConfig.svelte';
 
     let collapseTimeout: ReturnType<typeof setTimeout>;
     let transitionTimeout: ReturnType<typeof setTimeout>;
@@ -57,7 +58,7 @@
         <SimulationTime />
         <ReleaseSettings />
         <details class="floating-container">
-            <summary style="cursor: pointer">Advanced</summary>
+            <AdvancedConfig />
         </details>
     </div>
 </div>

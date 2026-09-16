@@ -26,7 +26,8 @@ export function createProteus() {
         startDateTime(),
         releasesToJson(),
         config.particleCount,
-        config.stepsPerDay,
+        config.timeStepMin,
+        config.advectionScheme,
         config.csValue,
     );
 }
@@ -110,7 +111,7 @@ export async function simulationStep(version: number) {
 
     try {
         const todayDateInt = simulation.proteus.get_current_date_int();
-        if (simulation.stepCount % config.stepsPerDay === 0) {
+        if (simulation.stepCount % Math.floor(1440 / config.timeStepMin) === 0) {
             const oceanTiles = preloader.getTileIndicesForOcean(
                 simulation.proteus.get_positions(),
             );
@@ -135,7 +136,7 @@ export async function simulationStep(version: number) {
             }
         }
 
-        if (simulation.stepCount % (config.stepsPerDay / 48) === 0) {
+        if (simulation.stepCount % 2 === 0) {
             updateStats();
             captureSnapshot(simulation.proteus.current_day());
         }
@@ -154,7 +155,7 @@ export async function simulationStep(version: number) {
         }
 
         simulation.currentTime = simulation.proteus.current_time_str();
-        if (simulation.stepCount < getTotalDays() * config.stepsPerDay) {
+        if (simulation.stepCount < getTotalDays() * Math.floor(1440 / config.timeStepMin)) {
             simulation.animationId = requestAnimationFrame(() =>
                 simulationStep(version),
             );

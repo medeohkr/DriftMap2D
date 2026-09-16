@@ -105,7 +105,6 @@ impl ReleaseManager {
             );
             self.total_released += seed_particles as usize;
             seeds.extend(release_seeds);
-            // log!("seeds: {}", seeds.len())
         }
         seeds
     }

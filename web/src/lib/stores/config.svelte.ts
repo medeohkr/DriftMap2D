@@ -3,7 +3,8 @@ import { dateOffset } from "../utils";
 export interface Config {
     csValue: number;
     particleCount: number;
-    stepsPerDay: number;
+    timeStepMin: number;
+    advectionScheme: string;
     startDate: string;
     startTime: string;
     endDate: string;
@@ -16,8 +17,9 @@ export interface Config {
 
 export const config: Config = $state({
     csValue: 0.005,
-    particleCount: 10000,
-    stepsPerDay: 96,
+    particleCount: 20000,
+    timeStepMin: 15,
+    advectionScheme: "rk4",
 
     startDate: dateOffset(0),
     startTime: "00:00",
