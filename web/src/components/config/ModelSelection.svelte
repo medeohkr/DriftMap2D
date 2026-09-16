@@ -8,9 +8,9 @@
 <div class="floating-container" id="model-selector-container-basic">
     <span>Select a Model</span>
     <select bind:value={config.tracerType} name="model-selector-basic" class="selector-primary" id="model-selector-basic">
-    <option value="generic" onclick={() => config.tracerType = "generic"}>Generic Drift</option>
-    <option value="oil" onclick={() => config.tracerType = "oil"}>Oil Weathering</option>
-    <option value="sar" onclick={() => config.tracerType = "sar"}>Search & Rescue</option>
+        <option value="generic">Generic Drift</option>
+        <option value="oil">Oil Weathering</option>
+        <option value="sar">Search & Rescue</option>
     </select>
 </div>
 

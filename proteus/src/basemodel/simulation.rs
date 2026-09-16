@@ -1,9 +1,9 @@
 // simulation.rs
 use super::{
-    integrators, meters_per_degree_lat, meters_per_degree_lon, normalize_lon, DataLoader,
+    Integrator, meters_per_degree_lat, meters_per_degree_lon, normalize_lon, DataLoader,
     Diffusion, LandMaskLoader, ParticleView, Particles, ReleaseManager,
 };
-use crate::tracers::{GenericTracer, LeewayTracer, OilTracer, Tracer, TracerKind};
+use crate::{basemodel::integrators, tracers::{GenericTracer, LeewayTracer, OilTracer, Tracer, TracerKind}};
 
 macro_rules! log {
     ( $( $t:tt )* ) => {
@@ -16,6 +16,7 @@ pub struct Simulation {
     pub release_manager: ReleaseManager,
     diffusion: Diffusion,
     pub total_particles: usize,
+    pub integrator: Integrator,
     pub cs: f32,
 }
 
@@ -26,6 +27,7 @@ impl Simulation {
         releases_json: &str,
         total_particles: usize,
         step_count: u32,
+        advection_scheme: &str,
         cs: f32,
     ) -> Self {
         let release_manager = ReleaseManager::new(releases_json, total_particles, step_count);
@@ -52,6 +54,12 @@ impl Simulation {
             )),
         };
         let particles = Particles::new(total_particles, tracer);
+        let integrator = match advection_scheme {
+            "euler" => Integrator::Euler,
+            "rk2" => Integrator::Midpoint,
+            "rk4" => Integrator::RK4,
+            _ => Integrator::RK4,
+        };
         let diffusion = Diffusion::new(cs);
 
         Self {
@@ -59,6 +67,7 @@ impl Simulation {
             release_manager,
             diffusion,
             total_particles,
+            integrator,
             cs,
         }
     }
@@ -159,7 +168,7 @@ impl Simulation {
                 })
                 .collect()
         };
-        let advected_positions = integrators::rk4_step(
+        let advected_positions = self.integrator.integrate(
             &unstranded_view,
             dt,
             &get_velocities_view,

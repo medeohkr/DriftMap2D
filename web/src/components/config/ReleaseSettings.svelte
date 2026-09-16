@@ -38,7 +38,7 @@
     </span>
     <div class="box-container">
         <div class="container-secondary">
-            <span class="release-text">Latitude</span>
+            <span class="release-text">Latitude (°N)</span>
             <input
                 onblur={updateReleaseLat}
                 type="number"
@@ -46,10 +46,9 @@
                 value={releaseConfig.activeRelease.lat.toFixed(2)}
                 step="any"
             />
-            <span class="unit-text">° N</span>
         </div>
         <div class="container-secondary">
-            <span class="release-text">Longitude</span>
+            <span class="release-text">Longitude (°E)</span>
             <input
                 onblur={updateReleaseLon}
                 type="number"
@@ -59,17 +58,15 @@
                 ).toFixed(2)}
                 step="any"
             />
-            <span class="unit-text">° E</span>
         </div>
         <div class="container-secondary">
-            <span class="release-radius-text">Radius</span>
+            <span class="release-radius-text">Radius (km)</span>
             <input
                 bind:value={releaseConfig.activeRelease.radius}
                 type="number"
                 class="field-primary"
                 step="any"
             />
-            <span class="unit-text">km</span>
         </div>
     </div>
 </div>
@@ -133,127 +130,127 @@
 </div>
 <details class="floating-container" open>
     <summary style="cursor: pointer">Manage Releases ({releaseConfig.releases.length})</summary>
-        <div class="inline-rows-container">
-        {#each releaseConfig.releases as release, index}
-            <div
-                class="inline-container"
-                class:light={index % 2 == 0}
-                onclick={() => (releaseConfig.activeReleaseIndex = index)}
-                role="button"
-                tabindex="0"
-                onkeydown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
+    <div class="inline-rows-container">
+    {#each releaseConfig.releases as release, index}
+        <div
+            class="inline-container"
+            class:light={index % 2 == 0}
+            onclick={() => (releaseConfig.activeReleaseIndex = index)}
+            role="button"
+            tabindex="0"
+            onkeydown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    releaseConfig.activeReleaseIndex = index;
+                }
+            }}
+        >
+            <div class="releases-container">
+                <input
+                    type="radio"
+                    class="release-toggle"
+                    onclick={(e) => {
                         releaseConfig.activeReleaseIndex = index;
-                    }
-                }}
-            >
-                <div class="releases-container">
-                    <input
-                        type="radio"
-                        class="release-toggle"
-                        onclick={(e) => {
-                            releaseConfig.activeReleaseIndex = index;
-                        }}
-                        checked={index == releaseConfig.activeReleaseIndex}
-                    />
-                    <span style="width: 44px; white-space: nowrap">
-                        Release {index + 1}&nbsp;:
-                    </span>
-                </div>
-                <span class="interval-text">{release.lat.toFixed(2)}° N, {release.lon.toFixed(2)}° E</span>
-                {#if releaseConfig.releases.length > 1}
-                    <button
-                        style="background-color: transparent; border: none; cursor: pointer"
-                        onclick={(e) => {
-                            e.stopPropagation();
-                            releaseConfig.removeRelease(index);
-                        }}
-                    >
-                        <img src={trash} alt="Remove Release" class="trash-logo" />
-                    </button>
-                {/if}
+                    }}
+                    checked={index == releaseConfig.activeReleaseIndex}
+                />
+                <span style="width: 44px; white-space: nowrap">
+                    Release {index + 1}&nbsp;:
+                </span>
             </div>
-        {/each}
+            <span class="interval-text">{release.lat.toFixed(2)}° N, {release.lon.toFixed(2)}° E</span>
+            {#if releaseConfig.releases.length > 1}
+                <button
+                    style="background-color: transparent; border: none; cursor: pointer"
+                    onclick={(e) => {
+                        e.stopPropagation();
+                        releaseConfig.removeRelease(index);
+                    }}
+                >
+                    <img src={trash} alt="Remove Release" class="trash-logo" />
+                </button>
+            {/if}
         </div>
+    {/each}
+    </div>
     <button class="release-btn" onclick={releaseConfig.addRelease}>
         + &nbsp;Add Release
     </button>
 </details>
 
 <style>
-    .interval-btn,
-    .release-btn {
-        background: none;
-        border: none;
-        color: var(--text-secondary);
-        font-family: var(--font-family);
-        font-weight: var(--weight-secondary);
-        font-size: var(--font-size-xs);
-        cursor: pointer;
-        transition: opacity var(--transition-fast);
-    }
+.interval-btn,
+.release-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-family: var(--font-family);
+    font-weight: var(--weight-secondary);
+    font-size: var(--font-size-xs);
+    cursor: pointer;
+    transition: opacity var(--transition-fast);
+}
 
-    .release-btn {
-        width: 100%;
-        margin-top: var(--spacing-xs);
-    }
+.release-btn {
+    width: 100%;
+    margin-top: var(--spacing-xs);
+}
 
-    .interval-btn:hover,
-    .release-btn:hover,
-    .release-toggle:hover {
-        opacity: 0.6;
-    }
+.interval-btn:hover,
+.release-btn:hover,
+.release-toggle:hover {
+    opacity: 0.6;
+}
 
-    .release-toggle {
-        appearance: none;
-        width: 12px;
-        height: 12px;
-        background-color: var(--text-muted);
-        border-radius: var(--border-xl);
-        transition: opacity var(--transition-fast);
-        cursor: pointer;
-    }
+.release-toggle {
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background-color: var(--text-muted);
+    border-radius: var(--border-xl);
+    transition: opacity var(--transition-fast);
+    cursor: pointer;
+}
 
-    .release-toggle:checked {
-        border: var(--border-md) solid var(--text-primary);
-    }
+.release-toggle:checked {
+    border: var(--border-md) solid var(--text-primary);
+}
 
-    .releases-container {
-        display: flex;
-        column-gap: var(--spacing-sm);
-    }
+.releases-container {
+    display: flex;
+    column-gap: var(--spacing-sm);
+}
 
-    .trash-logo {
-        width: 9px;
-        opacity: 0.4;
-    }
+.trash-logo {
+    width: 9px;
+    opacity: 0.4;
+}
 
-    .interval-field {
-        width: auto;
-        box-sizing: content-box;
-        padding: 0;
-        margin: 0;
-    }
+.interval-field {
+    width: auto;
+    box-sizing: content-box;
+    padding: 0;
+    margin: 0;
+}
 
-    .interval-container {
-        display: flex;
-        align-items: center;
-        min-width: 0;
-    }
+.interval-container {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
 
-    .interval-text {
-        display: inline-block;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        padding-right: var(--spacing-xxs);
-        min-width: 0;
-    }
+.interval-text {
+    display: inline-block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: var(--spacing-xxs);
+    min-width: 0;
+}
 
-    .inline-rows-container {
-        display: flex;
-        flex-direction: column;
-        row-gap: var(--spacing-xs);
-    }
+.inline-rows-container {
+    display: flex;
+    flex-direction: column;
+    row-gap: var(--spacing-xs);
+}
 </style>

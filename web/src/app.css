@@ -5,8 +5,7 @@
     /* widths */
     --width-sidebar: 300px;
     --search-results-height: 140px;
-    --width-number: 90px;
-    --width-units: 21px;
+    --width-number: 108px;
     --height-action-btn: 40px;
     --width-timeline-btn: 50px;
     --height-timeline-btn: 30px;
@@ -188,7 +187,7 @@ body {
     cursor: pointer;
     width: var(--width-number);
     margin-left: auto;
-    margin-right: var(--spacing-xs);
+    margin-right: var(--spacing-xxs);
     text-align-last: center;
 }
 

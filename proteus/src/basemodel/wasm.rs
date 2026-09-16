@@ -1,9 +1,6 @@
-use std::thread::current;
-
-// wasm.rs
-use crate::basemodel::Simulation;
 use crate::basemodel::DataLoader;
 use crate::basemodel::LandMaskLoader;
+use crate::basemodel::Simulation;
 use crate::tracers::TracerKind;
 use chrono::Duration;
 use chrono::Timelike;
@@ -40,14 +37,23 @@ impl Proteus {
         start_date_str: &str,
         releases_json: &str,
         particle_count: usize,
-        steps_per_day: u32,
+        time_step_minutes: f32,
+        advection_scheme: &str,
         cs_value: f32,
-
     ) -> Self {
-        let start_date =
-            NaiveDateTime::parse_from_str(start_date_str, "%Y-%m-%d %H:%M").expect("Invalid date format");
+        let start_date = NaiveDateTime::parse_from_str(start_date_str, "%Y-%m-%d %H:%M")
+            .expect("Invalid date format");
+        let steps_per_day = (1440.0 / time_step_minutes) as u32;
 
-        let simulation = Simulation::new(tracer_type, tracer_json, releases_json, particle_count, steps_per_day, cs_value);
+        let simulation = Simulation::new(
+            tracer_type,
+            tracer_json,
+            releases_json,
+            particle_count,
+            steps_per_day,
+            advection_scheme,
+            cs_value,
+        );
 
         let loader = DataLoader::new("https://tiles.driftmap2d.com/tiles", -180.0, -80.0);
         let landmask = LandMaskLoader::new(
@@ -81,15 +87,18 @@ impl Proteus {
 
         if step_count == 0 {
             self.simulation.release_particles(step_count);
-            log!("{}", self.simulation.particles.len);
             return Ok(());
         }
         self.simulation.release_particles(step_count);
 
         let hour = (24.0 * step_count as f32 / self.steps_per_day as f32) % 24.0;
 
-        self.loader.load_ocean_tiles(self.get_unstranded_positions(), current_date_int).await;
-        self.landmask.load_landmask_tiles(self.get_unstranded_positions()).await;
+        self.loader
+            .load_ocean_tiles(self.get_unstranded_positions(), current_date_int)
+            .await;
+        self.landmask
+            .load_landmask_tiles(self.get_unstranded_positions())
+            .await;
 
         self.simulation.update_particles_batch(
             dt_days,
@@ -155,10 +164,9 @@ impl Proteus {
     }
 
     pub fn current_time_str(&self) -> String {
-        let current_date = self.start_date + Duration::seconds(
-            (self.days_since_start * 24.0 * 3600.0) as i64
-        );
-        
+        let current_date =
+            self.start_date + Duration::seconds((self.days_since_start * 24.0 * 3600.0) as i64);
+
         let year = current_date.year();
         let month = current_date.month();
         let day = current_date.day();
@@ -192,7 +200,8 @@ impl Proteus {
             TracerKind::Oil(oil) => {
                 for i in 0..particles.len {
                     if !particles.stranded[i] {
-                        let initial_mass = self.simulation.release_manager.initial_mass_per_particle();
+                        let initial_mass =
+                            self.simulation.release_manager.initial_mass_per_particle();
                         total_initial += initial_mass;
                         total_evaporated += initial_mass * oil.data.f_evap[i];
                     }
@@ -218,7 +227,8 @@ impl Proteus {
             TracerKind::Oil(oil) => {
                 for i in 0..particles.len {
                     if !particles.stranded[i] {
-                        let initial_mass = self.simulation.release_manager.initial_mass_per_particle();
+                        let initial_mass =
+                            self.simulation.release_manager.initial_mass_per_particle();
                         total_initial += initial_mass;
                         total_emulsified += initial_mass * oil.data.y_w[i];
                     }
@@ -286,7 +296,7 @@ impl Proteus {
                     }
                 }
             }
-            
+
             _ => {}
         }
 
