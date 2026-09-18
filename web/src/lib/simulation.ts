@@ -28,7 +28,8 @@ export function createProteus() {
         config.particleCount,
         config.timeStepMin,
         config.advectionScheme,
-        config.csValue,
+        config.diffusionScheme,
+        new Float32Array(config.diffusionCoeffs)
     );
 }
 

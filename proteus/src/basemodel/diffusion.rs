@@ -8,18 +8,69 @@ macro_rules! log {
 }
 const METERS_PER_DEGREE: f32 = 111_120.0;
 const CELL_AREA_DEG2: f32 = 1.0 / 144.0;
-
+pub enum DiffusionScheme {
+    Constant(f32),
+    Smagorinsky(f32)
+}
 pub struct Diffusion {
-    cs: f32,
+    diffusion_scheme: DiffusionScheme,
     normal: Normal<f32>,
     rng: ThreadRng,
 }
 
 impl Diffusion {
-    pub fn new(cs: f32) -> Self {
+    pub fn new(scheme: &str, diffusion_coeffs: Vec<f32>) -> Self {
         let normal = Normal::new(0.0, 1.0).unwrap();
         let rng = rand::thread_rng();
-        Self { cs, normal, rng }
+        let diffusion_scheme = match scheme {
+            "constant" => DiffusionScheme::Constant(diffusion_coeffs[0]),
+            "smagorinsky" => DiffusionScheme::Smagorinsky(diffusion_coeffs[1]),
+            _ => DiffusionScheme::Constant(diffusion_coeffs[0]),
+        };
+
+        Self { 
+            diffusion_scheme,
+            normal,
+            rng
+        }
+    }
+
+    pub fn diffusion_step(
+        &mut self,
+        loader: &DataLoader,
+        old_view: &ParticleView,
+        positions: &[(f32, f32, f32)],
+        day: usize,
+        dt_days: f32,
+        hour: f32,
+    ) -> Vec<(f32, f32)> {
+        match self.diffusion_scheme {
+            DiffusionScheme::Constant(k) => self.constant_diffusion_step(positions, dt_days, k),
+            DiffusionScheme::Smagorinsky(cs) => self.smagorinsky_step(loader, old_view, positions, day, dt_days, hour, cs)
+        }
+    }
+    pub fn constant_diffusion_step(
+        &mut self,
+        positions: &[(f32, f32, f32)],
+        dt_days: f32,
+        k: f32
+    ) -> Vec<(f32, f32)> {
+        let dt_seconds = dt_days * 86400.0;
+        let sigma = (2.0 * k * dt_seconds).sqrt();
+        let mut final_positions = Vec::with_capacity(positions.len());
+            
+        for (_, &(lon, lat, _)) in positions.iter().enumerate() {
+            let dx_meters = self.normal.sample(&mut self.rng) * sigma;
+            let dy_meters = self.normal.sample(&mut self.rng) * sigma;
+
+            let meters_per_degree_lon = METERS_PER_DEGREE * lat.to_radians().cos();
+
+            final_positions.push((
+                lon + dx_meters / meters_per_degree_lon,
+                lat + dy_meters / METERS_PER_DEGREE,
+            ))
+        }
+        final_positions
     }
 
     pub fn smagorinsky_step(
@@ -30,6 +81,7 @@ impl Diffusion {
         day: usize,
         dt_days: f32,
         hour: f32,
+        cs: f32
     ) -> Vec<(f32, f32)> {
         let dx = 0.01;
         let dy = 0.01;
@@ -80,7 +132,7 @@ impl Diffusion {
 
             let deg2_to_m2 = METERS_PER_DEGREE.powi(2) * lat.to_radians().cos();
             let cell_area_m2 = CELL_AREA_DEG2 * deg2_to_m2;
-            let k = self.cs * cell_area_m2 * strain;
+            let k = cs * cell_area_m2 * strain;
             let dt_seconds = dt_days * 86400.0;
             let sigma = (2.0 * k * dt_seconds).sqrt();
 
