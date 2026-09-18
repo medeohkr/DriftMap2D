@@ -39,7 +39,8 @@ impl Proteus {
         particle_count: usize,
         time_step_minutes: f32,
         advection_scheme: &str,
-        cs_value: f32,
+        diffusion_scheme: &str,
+        diffusion_coeffs: Vec<f32>
     ) -> Self {
         let start_date = NaiveDateTime::parse_from_str(start_date_str, "%Y-%m-%d %H:%M")
             .expect("Invalid date format");
@@ -52,7 +53,8 @@ impl Proteus {
             particle_count,
             steps_per_day,
             advection_scheme,
-            cs_value,
+            diffusion_scheme,
+            diffusion_coeffs
         );
 
         let loader = DataLoader::new("https://tiles.driftmap2d.com/tiles", -180.0, -80.0);

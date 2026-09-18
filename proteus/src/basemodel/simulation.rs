@@ -17,7 +17,6 @@ pub struct Simulation {
     diffusion: Diffusion,
     pub total_particles: usize,
     pub integrator: Integrator,
-    pub cs: f32,
 }
 
 impl Simulation {
@@ -28,7 +27,8 @@ impl Simulation {
         total_particles: usize,
         step_count: u32,
         advection_scheme: &str,
-        cs: f32,
+        diffusion_scheme: &str,
+        diffusion_coeffs: Vec<f32>
     ) -> Self {
         let release_manager = ReleaseManager::new(releases_json, total_particles, step_count);
         let tracer = match tracer_type {
@@ -60,7 +60,7 @@ impl Simulation {
             "rk4" => Integrator::RK4,
             _ => Integrator::RK4,
         };
-        let diffusion = Diffusion::new(cs);
+        let diffusion = Diffusion::new(diffusion_scheme, diffusion_coeffs);
 
         Self {
             particles,
@@ -68,7 +68,6 @@ impl Simulation {
             diffusion,
             total_particles,
             integrator,
-            cs,
         }
     }
 
@@ -174,7 +173,7 @@ impl Simulation {
             &get_velocities_view,
             &get_velocities_slice,
         );
-        let final_positions = self.diffusion.smagorinsky_step(
+        let final_positions = self.diffusion.diffusion_step(
             loader,
             &unstranded_view,
             &advected_positions,

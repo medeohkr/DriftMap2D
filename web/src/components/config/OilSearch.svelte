@@ -20,8 +20,6 @@
         query = oil.name || oil.oil_id;
         results = [];
         isFocused = false;
-
-        createProteus();
     }
 </script>
 

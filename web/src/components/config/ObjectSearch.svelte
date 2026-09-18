@@ -27,8 +27,6 @@
         query = obj.name;
         results = [];
         isFocused = false;
-
-        createProteus();
     }
 </script>
 
