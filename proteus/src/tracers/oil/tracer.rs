@@ -92,7 +92,7 @@ impl OilTracer {
                 boiling_points: boiling_points,
                 initial_mass_components: mass_components,
                 molecular_weights: json.molecular_weights_kg_mol,
-                bullwinkle_fraction: json.bullwinkle_fraction,
+                bullwinkle_fraction: 0.0
             },
             data: OilData {
                 age: Vec::with_capacity(capacity),

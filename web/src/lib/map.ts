@@ -2,44 +2,14 @@
 import * as maplibregl from 'https://unpkg.com/maplibre-gl@^6.6.0/dist/maplibre-gl.mjs';
 import { simulation, config, visualization, releaseConfig } from "./stores/index.svelte";
 import { preloader } from "./preloader";
-import { getTotalDays, getPositions, getAveragePosition, normalizeLongitude } from './utils';
+import { getTotalDays, getReleasePositions, getAverageReleasePosition, normalizeLongitude } from './utils';
 
 export let map: any;
 
 export function initMap() {
-    // map = new maplibregl.Map({
-    //     container: "map",
-    //     style: "https://api.maptiler.com/maps/019da3a2-47a0-7f1b-b591-38d451a7c7c5/style.json?key=gkGR2Cprig9FAk9AfV3C",
-    //     center: [0, 40],
-    //     zoom: 1.5,
-    //     maxBounds: [
-    //         [-Infinity, -75.0],
-    //         [Infinity, 85.0],
-    //     ],
-    // });
     map = new maplibregl.Map({
         container: "map",
-        style: {
-            version: 8,
-            sources: {
-                "carto-dark": {
-                    type: "raster",
-                    tiles: [
-                        "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png?api_key=403dd43f-4ce7-4b77-8178-d605fda1e41f"
-                    ],
-                    tileSize: 256,
-                    attribution:
-                        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-                },
-            },
-            layers: [
-                {
-                    id: "carto-dark-layer",
-                    type: "raster",
-                    source: "carto-dark",
-                },
-            ],
-        },
+        style: "https://api.maptiler.com/maps/019da3a2-47a0-7f1b-b591-38d451a7c7c5/style.json?key=gkGR2Cprig9FAk9AfV3C",
         center: [0, 40],
         zoom: 1.5,
         maxBounds: [
@@ -47,6 +17,36 @@ export function initMap() {
             [Infinity, 85.0],
         ],
     });
+    // map = new maplibregl.Map({
+    //     container: "map",
+    //     style: {
+    //         version: 8,
+    //         sources: {
+    //             "carto-dark": {
+    //                 type: "raster",
+    //                 tiles: [
+    //                     "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}.png?api_key=403dd43f-4ce7-4b77-8178-d605fda1e41f"
+    //                 ],
+    //                 tileSize: 256,
+    //                 attribution:
+    //                     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    //             },
+    //         },
+    //         layers: [
+    //             {
+    //                 id: "carto-dark-layer",
+    //                 type: "raster",
+    //                 source: "carto-dark",
+    //             },
+    //         ],
+    //     },
+    //     center: [0, 40],
+    //     zoom: 1.5,
+    //     maxBounds: [
+    //         [-Infinity, -75.0],
+    //         [Infinity, 85.0],
+    //     ],
+    // });
 
     map.addControl(
         new maplibregl.ScaleControl({ maxWidth: 100, unit: "metric" }),
@@ -80,7 +80,7 @@ export async function updateMarker(lon: number, lat: number) {
             .addTo(map);
     }
     const currentDate = parseInt(config.startDate.replace(/-/g, ""));
-    const positions = new Float32Array(getPositions());
+    const positions = new Float32Array(getReleasePositions());
     const oceanTile = preloader.getTileIndicesForOcean(positions);
     preloader.preloadTiles(currentDate, oceanTile);
     simulation.landmaskPromise =
@@ -93,13 +93,13 @@ export function zoom() {
     if (!config.autoZoom) return;
     if (map.getZoom() < 6 - getTotalDays() / 100) {
         map.flyTo({
-            center: [getAveragePosition()[0], getAveragePosition()[1]],
+            center: [getAverageReleasePosition()[0], getAverageReleasePosition()[1]],
             zoom: 6 - getTotalDays() / 100,
             duration: 2000,
         });
     } else {
         map.flyTo({
-            center: [getAveragePosition()[0], getAveragePosition()[1]],
+            center: [getAverageReleasePosition()[0], getAverageReleasePosition()[1]],
             zoom: map.getZoom(),
             duration: 2000,
         });

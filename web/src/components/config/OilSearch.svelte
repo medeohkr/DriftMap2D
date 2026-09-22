@@ -1,7 +1,6 @@
 <script lang="ts">
     import { config } from '$lib/stores/index.svelte';
     import { searchOils, type OilRecord, getOilJsonForRust, getGenericOils } from '$lib/oils';
-    import { createProteus } from '$lib/simulation';
 
     let query = $state('');
     let results: OilRecord[] = $state([]);

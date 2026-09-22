@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { releaseConfig } from "$lib/stores/index.svelte";
+    import { config, releaseConfig } from "$lib/stores/index.svelte";
     import { updateMarker } from "$lib/map";
     import { normalizeLongitude } from "$lib/utils";
     import trash from "$lib/assets/images/TrashCan.webp";
@@ -11,6 +11,10 @@
         untrack(() => {
             updateMarker(lon, lat);
         });
+    })
+
+    $effect(() => {
+        
     })
 
     function updateReleaseLat(e: Event) {
@@ -70,66 +74,68 @@
         </div>
     </div>
 </div>
-<div class="floating-container">
-    <span>Schedule</span>
+{#if config.tracerType != "sar"}
+    <div class="floating-container">
+        <span>Schedule</span>
 
-    <div class="inline-rows-container">
-    {#each releaseConfig.activeRelease.schedule as interval, index}
-        <div
-            class="inline-container"
-            class:light={index % 2 == 0}
-        >
-            <span style="width: 34px; white-space: nowrap"
-                >Interval {index + 1}:
-            </span>
-            <div class="interval-container">
-                <input
-                    bind:value={interval.amount}
-                    type="number"
-                    class="field-primary transparent interval-field"
-                    step="any"
-                    size="3"
-                    oninput={(e) =>
-                        (e.currentTarget.size = Math.max(
-                            1,
-                            e.currentTarget.value.length,
-                        ))}
-                />
-                <span>tons &nbsp;for</span>
-                <input
-                    bind:value={interval.duration}
-                    type="number"
-                    class="field-primary transparent interval-field"
-                    class:dark={index % 2 != 0}
-                    step="any"
-                    size="2"
-                    oninput={(e) =>
-                        (e.currentTarget.size = Math.max(
-                            1,
-                            e.currentTarget.value.length,
-                        ))}
-                />
-                <span class="interval-text">hours</span>
+        <div class="inline-rows-container">
+        {#each releaseConfig.activeRelease.schedule as interval, index}
+            <div
+                class="inline-container"
+                class:light={index % 2 == 0}
+            >
+                <span style="width: 34px; white-space: nowrap"
+                    >Interval {index + 1}:
+                </span>
+                <div class="interval-container">
+                    <input
+                        bind:value={interval.amount}
+                        type="number"
+                        class="field-primary transparent interval-field"
+                        step="any"
+                        size="3"
+                        oninput={(e) =>
+                            (e.currentTarget.size = Math.max(
+                                1,
+                                e.currentTarget.value.length,
+                            ))}
+                    />
+                    <span>tons &nbsp;for</span>
+                    <input
+                        bind:value={interval.duration}
+                        type="number"
+                        class="field-primary transparent interval-field"
+                        class:dark={index % 2 != 0}
+                        step="any"
+                        size="2"
+                        oninput={(e) =>
+                            (e.currentTarget.size = Math.max(
+                                1,
+                                e.currentTarget.value.length,
+                            ))}
+                    />
+                    <span class="interval-text">hours</span>
+                </div>
+                {#if releaseConfig.activeRelease.schedule.length > 1}
+                    <button
+                        style="background-color: transparent; border: none; cursor: pointer"
+                        onclick={(e) => {
+                            releaseConfig.removeInterval(index);
+                        }}
+                    >
+                        <img src={trash} alt="Remove Release" class="trash-logo" />
+                    </button>
+                {/if}
             </div>
-            {#if releaseConfig.activeRelease.schedule.length > 1}
-                <button
-                    style="background-color: transparent; border: none; cursor: pointer"
-                    onclick={(e) => {
-                        releaseConfig.removeInterval(index);
-                    }}
-                >
-                    <img src={trash} alt="Remove Release" class="trash-logo" />
-                </button>
-            {/if}
+        {/each}
         </div>
-    {/each}
+        <button class="interval-btn" onclick={releaseConfig.addInterval}>
+            + &nbsp;Add Interval
+        </button>
     </div>
-    <button class="interval-btn" onclick={releaseConfig.addInterval}>
-        + &nbsp;Add Interval
-    </button>
-</div>
+{/if}
 <details class="floating-container" open>
-    <summary style="cursor: pointer">Manage Releases ({releaseConfig.releases.length})</summary>
+    <summary style="cursor: pointer; user-select: none;">Manage Releases ({releaseConfig.releases.length})</summary>
     <div class="inline-rows-container">
     {#each releaseConfig.releases as release, index}
         <div

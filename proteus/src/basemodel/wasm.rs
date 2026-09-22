@@ -299,7 +299,15 @@ impl Proteus {
                 }
             }
 
-            _ => {}
+            _ => {
+                for i in 0..particles.len {
+                    if !particles.stranded[i] {
+                        data.push(particles.lons[i]);
+                        data.push(particles.lats[i]);
+                        data.push(1.0);
+                    }
+                }
+            }
         }
 
         data

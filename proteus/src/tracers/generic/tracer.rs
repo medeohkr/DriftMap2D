@@ -37,8 +37,8 @@ impl GenericTracer {
 
         Self {
             properties: GenericProperties {
-                wind_factor: 0.03,
-                wind_deflection: 20.0
+                wind_factor: 0.02,
+                wind_deflection: 0.0
             },
             data: GenericData {
                 mass_per_particle

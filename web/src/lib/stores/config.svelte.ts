@@ -20,7 +20,7 @@ export const config: Config = $state({
     particleCount: 20000,
     timeStepMin: 15,
     advectionScheme: "rk4",
-    diffusionScheme: "smagorinsky",
+    diffusionScheme: "constant",
     diffusionCoeffs: [50, 0.1],
 
     startDate: dateOffset(0),
