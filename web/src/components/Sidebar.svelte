@@ -7,6 +7,7 @@
     import ActionBar from './ActionBar.svelte';
     import TitleHeader from './TitleHeader.svelte';
     import AdvancedConfig from './config/AdvancedConfig.svelte';
+    import TracerConfig from './config/TracerConfig.svelte';
 
     let collapseTimeout: ReturnType<typeof setTimeout>;
     let transitionTimeout: ReturnType<typeof setTimeout>;
@@ -55,10 +56,15 @@
         <div class="sidebar-content">
                 <div class="model-selection">
                     <ModelSelection />
+                    <details class="floating-container">
+                        <TracerConfig />
+                    </details>
                 </div>
 
                 <SimulationTime />
+
                 <ReleaseSettings />
+
                 <details class="floating-container">
                     <AdvancedConfig />
                 </details>
