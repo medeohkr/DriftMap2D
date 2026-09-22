@@ -123,17 +123,10 @@ fn seed(
 ) -> Vec<ParticleSeed> {
     (0..count)
         .map(|_| {
-            let mut dx: f32;
-            let mut dy: f32;
-            loop {
-                dx = normal.sample(rng);
-                dy = normal.sample(rng);
-                let r = (dx * dx + dy * dy).sqrt();
-                if r <= release.radius {
-                    break;
-                }
-            }
-            let lat = release.lat + meters_per_degree_lat(dy * 1000.0);
+            let dx = normal.sample(rng);
+            let dy = normal.sample(rng);
+
+            let lat = release.lat + meters_per_degree_lat(dy * 1000.0, release.lat);
             let lon = release.lon + meters_per_degree_lon(dx * 1000.0, lat);
 
             ParticleSeed {

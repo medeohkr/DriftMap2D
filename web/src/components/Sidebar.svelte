@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { sidebarState } from '$lib/stores/index.svelte';
+    import { sidebarState, simulation } from '$lib/stores/index.svelte';
     import UtilityBar from './UtilityBar.svelte';
     import ModelSelection from './config/ModelSelection.svelte';
     import SimulationTime from './config/SimulationTime.svelte';
@@ -50,17 +50,20 @@
     <div class="utility-bar">
         <UtilityBar />
     </div>
-    <div class="sidebar-content">
-        <div class="model-selection">
-            <ModelSelection />
-        </div>
 
-        <SimulationTime />
-        <ReleaseSettings />
-        <details class="floating-container">
-            <AdvancedConfig />
-        </details>
-    </div>
+    <fieldset disabled={simulation.simulationActive}>
+        <div class="sidebar-content">
+                <div class="model-selection">
+                    <ModelSelection />
+                </div>
+
+                <SimulationTime />
+                <ReleaseSettings />
+                <details class="floating-container">
+                    <AdvancedConfig />
+                </details>
+        </div>
+    </fieldset>
 </div>
 
 
@@ -159,5 +162,23 @@
     display: flex;
     flex-direction: column;
     row-gap: var(--spacing-sm);
+}
+
+fieldset {
+    border: none;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+    
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0; 
+    
+    transition: all var(--transition-medium);
+}
+
+fieldset[disabled] {
+    opacity: 0.6;
 }
 </style>

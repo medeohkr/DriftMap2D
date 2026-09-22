@@ -1,25 +1,12 @@
 <script lang="ts">
     import { simulation, config, visualization } from "$lib/stores/index.svelte";
-    import { getScaledConcentrations } from "$lib/visualization";
+    import { getScaledConcentrations, COLORS, PROBABILTIES} from "$lib/visualization";
 
-    const COLORS = [
-        "rgb(65, 85, 185)",
-        "rgb(60, 150, 130)",
-        "rgb(70, 180, 120)",
-        "rgb(150, 200, 90)",
-        "rgb(195, 210, 100)",
-        "rgb(240, 180, 60)",
-        "rgb(240, 140, 40)",
-        "rgb(220, 80, 40)",
-        "rgb(190, 30, 50)",
-        "rgb(140, 15, 100)",
-    ];
-
-    let scaled = $state(getScaledConcentrations());
+    let oilScaling = $state(getScaledConcentrations());
 
     $effect(() => {
         if (!simulation.simulationActive) {
-            scaled = getScaledConcentrations();
+            oilScaling = getScaledConcentrations();
         }
     });
 </script>
@@ -32,9 +19,15 @@
             {/each}
         </div>
         <div class="legend-labels">
-            {#each scaled.slice().reverse() as value, i}
-                <div>{value.toFixed(4)} tons/km²</div>
-            {/each}
+            {#if config.tracerType === "sar"}
+                {#each PROBABILTIES.slice() as value}
+                    <div>{value * 100}% Confidence</div>
+                {/each}
+            {:else}
+                {#each oilScaling.slice().reverse() as value}
+                    <div>{value} tons/km²</div>
+                {/each}
+            {/if}
         </div>
     </div>
 {/if}
@@ -48,7 +41,7 @@
         padding: var(--spacing-xs) var(--spacing-sm);
         column-gap: var(--spacing-sm);
         font-family: monospace;
-        background-color: var(--bg-header);
+        background-color: var(--bg-timeline);
         border: var(--border-lg) solid var(--bg-primary);
         border-radius: var(--border-lg);
         box-shadow: var(--shadow-size-secondary) var(--shadow-secondary);
@@ -63,7 +56,7 @@
 
     .legend-bars div {
         height: var(--spacing-lg);
-        width: var(--width-units);
+        width: 30px;
     }
 
     .legend-labels {

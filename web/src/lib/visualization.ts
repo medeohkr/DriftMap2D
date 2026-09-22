@@ -1,11 +1,22 @@
 import { map } from "./map";
 import { config, simulation, timeline, visualization, stats, history} from "./stores/index.svelte";
 import { HeatmapGenerator } from "../pkg/proteus";
-import { getAveragePosition } from "./utils";
+import { getAverageReleasePosition } from "./utils";
+
+export const COLORS = [
+    "rgb(255, 255, 255)",
+    "rgb(123, 218, 255)",
+    "rgb(84, 152, 254)",
+    "rgb(69, 97, 255)",
+];
 
 const CONCENTRATIONS = [
-    0.0002, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2,
+    0.0001, 0.001, 0.01, 0.1,
 ];
+
+export const PROBABILTIES = [
+    0.25, 0.5, 0.75, 0.95
+]
 
 export function initGridLayer() {
     map.on("load", () => {
@@ -20,36 +31,20 @@ export function initGridLayer() {
             type: "fill",
             source: "concentration",
             paint: {
-                "fill-color": [
-                    "interpolate",
-                    ["linear"],
-                    ["get", "concentration"],
-                    CONCENTRATIONS[0],
-                    "rgb(60, 90, 190)",
-                    CONCENTRATIONS[1],
-                    "rgb(80, 140, 200)",
-                    CONCENTRATIONS[2],
-                    "rgb(90, 175, 195)",
-                    CONCENTRATIONS[3],
-                    "rgb(100, 190, 160)",
-                    CONCENTRATIONS[4],
-                    "rgb(140, 200, 120)",
-                    CONCENTRATIONS[5],
-                    "rgb(200, 210, 100)",
-                    CONCENTRATIONS[6],
-                    "rgb(225, 210, 100)",
-                    CONCENTRATIONS[7],
-                    "rgb(225, 170, 90)",
-                    CONCENTRATIONS[8],
-                    "rgb(215, 135, 80)",
-                    CONCENTRATIONS[9],
-                    "rgb(200, 100, 80)",
-                ],
                 "fill-opacity": 1.0,
                 "fill-antialias": false,
             },
         });
-
+        map.addSource("sar-probability", {
+            type: "geojson",
+            data: {
+                type: "FeatureCollection",
+                features: [],
+            },
+            tolerance: 0,
+            maxzoom: 24,
+        });
+        
         map.addSource("particles-unstranded", {
             type: "geojson",
             data: { type: "FeatureCollection", features: [] },
@@ -83,7 +78,6 @@ export function initGridLayer() {
         map.addSource("overlay-png", {
             type: "image",
             url: "https://tiles.driftmap2d.com/currents.png",
-            // url: 'images/currents.png',
             coordinates: [
                 [-199.71, 85.05],
                 [199.71, 85.05],
@@ -111,26 +105,13 @@ export function updateOverlay(checked: boolean) {
     );
 }
 
-const COLORS = [
-    "rgb(65, 85, 185)",
-    "rgb(60, 150, 130)",
-    "rgb(70, 180, 120)",
-    "rgb(150, 200, 90)",
-    "rgb(195, 210, 100)",
-    "rgb(240, 180, 60)",
-    "rgb(240, 140, 40)",
-    "rgb(220, 80, 40)",
-    "rgb(190, 30, 50)",
-    "rgb(140, 15, 100)",
-];
-
 export function getScaledConcentrations() {
-    const scale = simulation.proteus?.get_total_mass() ?? 0.0 / 100.0;
+    const scale = (simulation.proteus?.get_total_mass() ?? 0.0) / 100.0;
     return CONCENTRATIONS.map((c) => c * scale);
 }
 
 export function tonsPerKm2ToTonsPerCell(value: number) {
-    const kmPerDegreeLon = 111.12 * Math.cos((getAveragePosition()[1] * Math.PI) / 180);
+    const kmPerDegreeLon = 111.12 * Math.cos((getAverageReleasePosition()[1] * Math.PI) / 180);
     const kmPerDegreeLat = 111.12;
     const cellAreaKm2 =
         kmPerDegreeLon *
@@ -142,11 +123,15 @@ export function tonsPerKm2ToTonsPerCell(value: number) {
 }
 
 export function updateConcentrationLayer() {
-    const thresholds = getScaledConcentrations().map(tonsPerKm2ToTonsPerCell);
+    const thresholds = config.tracerType === "sar" ? PROBABILTIES : getScaledConcentrations().map(tonsPerKm2ToTonsPerCell);
     const stops = [];
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 4; i++) {
         stops.push(thresholds[i]);
-        stops.push(COLORS[i]);
+        if (config.tracerType === "sar") {
+            stops.push(COLORS[3 - i]); 
+        } else {
+            stops.push(COLORS[i]);
+        }
     }
     map.setPaintProperty("concentration-fill", "fill-color", [
         "interpolate",
@@ -156,7 +141,6 @@ export function updateConcentrationLayer() {
     ]);
 }
 
-// ========== VISUALIZATION ==========
 export function toggleVisualizationMode() {
     const isHeatmap = visualization.visualizationMode === "heatmap";
     map.setLayoutProperty(
@@ -233,12 +217,7 @@ export function updateParticleVisualization() {
 }
 
 export function updateHeatmapVisualization() {
-    buildHeatmap();
-    const geojson = JSON.parse(
-        visualization.heatmap.to_contour_geojson(
-            getScaledConcentrations().map(tonsPerKm2ToTonsPerCell),
-        ),
-    );
+    const geojson = getHeatmapGeojson();
     map.getSource("concentration").setData(geojson);
 }
 
@@ -247,7 +226,7 @@ export function buildHeatmap() {
 
     const { lonMin, lonMax, needsShift } = getShiftedBounds(data);
 
-    const padding = visualization.gridSize * 2;
+    const padding = visualization.gridSize * 3;
     visualization.heatmap = new HeatmapGenerator(
         lonMin - padding,
         lonMax + padding,
@@ -269,7 +248,11 @@ export function buildHeatmap() {
 
     visualization.heatmap.clear();
     visualization.heatmap.add_particles(lons, lats, masses);
-    visualization.heatmap.smooth();
+    visualization.heatmap.smooth(2);
+    
+    if (config.tracerType === "sar") {
+        visualization.heatmap.normalize_probability();
+    }
 }
 
 export function captureSnapshot(day: Number) {
@@ -320,11 +303,21 @@ export function getStrandedGeojson() {
 
 export function getHeatmapGeojson() {
     buildHeatmap();
-    return JSON.parse(
-        visualization.heatmap.to_contour_geojson(
-            getScaledConcentrations().map(tonsPerKm2ToTonsPerCell),
-        ),
-    );
+    if (config.tracerType === "sar") {
+        console.log(visualization.heatmap.to_probability_contour_geojson(new Float32Array(PROBABILTIES)))
+        return JSON.parse(
+            visualization.heatmap.to_probability_contour_geojson(new Float32Array(PROBABILTIES))
+        )
+    } else {
+        console.log(visualization.heatmap.to_contour_geojson(
+                getScaledConcentrations().map(tonsPerKm2ToTonsPerCell),
+            ))
+        return JSON.parse(
+            visualization.heatmap.to_contour_geojson(
+                getScaledConcentrations().map(tonsPerKm2ToTonsPerCell),
+            ),
+        );
+    }
 }
 
 export function getShiftedBounds(positions: Float32Array) {

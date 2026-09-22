@@ -93,7 +93,7 @@ impl Simulation {
 
         (
             current_u + meters_per_degree_lon(windage.0, lat),
-            current_v + meters_per_degree_lat(windage.1),
+            current_v + meters_per_degree_lat(windage.1, lat),
         )
     }
 

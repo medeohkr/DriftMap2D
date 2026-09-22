@@ -197,7 +197,7 @@ impl DataLoader {
 
                     results[idx] = (
                         meters_per_degree_lon(current_u_m, lat),
-                        meters_per_degree_lat(current_v_m),
+                        meters_per_degree_lat(current_v_m, lat),
                         wind_u_m,
                         wind_v_m,
                     );
@@ -324,7 +324,7 @@ impl DataLoader {
                     
                     results[idx] = (
                         meters_per_degree_lon(current_u_m, lat),
-                        meters_per_degree_lat(current_v_m),
+                        meters_per_degree_lat(current_v_m, lat),
                         wind_u_m,
                         wind_v_m,
                     );
@@ -408,7 +408,7 @@ impl DataLoader {
 
                     results[idx] = (
                         meters_per_degree_lon(current_u_m, lat),
-                        meters_per_degree_lat(current_v_m),
+                        meters_per_degree_lat(current_v_m, lat),
                     )
                 }
             }
@@ -559,8 +559,6 @@ impl DataLoader {
             if lon_mod < edge_threshold {
                 add_tile(lon_idx - 1, lat_idx);
             } else if lon_mod > 10.0 - edge_threshold {
-                if lon_idx == 14 && lat_idx == 10 {
-                }
                 add_tile(lon_idx + 1, lat_idx);
             }
 

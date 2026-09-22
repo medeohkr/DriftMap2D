@@ -15,9 +15,10 @@ import {
     updateBoundingBox,
     updateConcentrationLayer,
     captureSnapshot,
+    getScaledConcentrations,
 } from "./visualization";
 import { Proteus } from "../pkg/proteus";
-import { getTotalDays, startDateTime, normalizeLongitude, releasesToJson} from "./utils";
+import { getTotalDays, startDateTime, normalizeLongitude, releasesToJson, getAveragePosition} from "./utils";
 
 export function createProteus() {
     simulation.proteus = new Proteus(
@@ -108,7 +109,9 @@ export async function simulationStep(version: number) {
     )
         return;
 
+    const t0 = performance.now();
     await simulation.proteus?.step(simulation.stepCount);
+    const t1 = performance.now();
 
     try {
         const todayDateInt = simulation.proteus.get_current_date_int();
@@ -136,13 +139,12 @@ export async function simulationStep(version: number) {
                 }
             }
         }
+        updateBoundingBox();
 
         if (simulation.stepCount % 2 === 0) {
             updateStats();
             captureSnapshot(simulation.proteus.current_day());
         }
-
-        updateBoundingBox();
 
         if (
             visualization.visualizationMode === "heatmap" &&
@@ -156,15 +158,21 @@ export async function simulationStep(version: number) {
         }
 
         simulation.currentTime = simulation.proteus.current_time_str();
-        if (simulation.stepCount < getTotalDays() * Math.floor(1440 / config.timeStepMin)) {
+        if (simulation.stepCount < getTotalDays() * Math.floor(1440 / config.timeStepMin)
+            && simulation.proteus.total_floating_mass_tons() > 0.0
+        ) {
             simulation.animationId = requestAnimationFrame(() =>
-                simulationStep(version),
+                simulationStep(version)
             );
+            console.log(simulation.proteus.total_floating_mass_tons())
         } else {
             simulation.simulationRunning = false;
             timeline.playbackMode = true;
         }
     } finally {
+        const t2 = performance.now()
+        console.log(`${t1 - t0}ms per step, ${t2 - t0}ms total`)
+        console.log(`centroid: ${getAveragePosition()}`)
         simulation.stepCount++;
     }
 }
@@ -190,6 +198,7 @@ export async function startSimulation() {
 
     map.setPaintProperty("overlay-layer", "raster-opacity", 0.05);
 
+    getScaledConcentrations();
     updateConcentrationLayer();
     zoom();
 

@@ -1,4 +1,4 @@
-import { config, releaseConfig } from "./stores/index.svelte";
+import { simulation, config, releaseConfig } from "./stores/index.svelte";
 
 export function dateOffset(days: number) {
     const date = new Date();
@@ -18,7 +18,7 @@ export function startDateTime() {
     return `${config.startDate} ${config.startTime}`
 }
 
-export function getPositions() {
+export function getReleasePositions() {
     let positions = [];
     for (let index = 0; index < releaseConfig.releases.length; index++) {
         positions.push(releaseConfig.releases[index].lon);
@@ -27,7 +27,7 @@ export function getPositions() {
     return positions;
 }
 
-export function getAveragePosition() {
+export function getAverageReleasePosition() {
     const totals = releaseConfig.releases.reduce(
         (acc, release) => ({
             lon: acc.lon + release.lon,
@@ -41,6 +41,24 @@ export function getAveragePosition() {
         totals.lat / releaseConfig.releases.length,
     ];
 }
+
+export function getAveragePosition(): [number, number] | undefined {
+    if (!simulation.proteus) return;
+
+    const positions = simulation.proteus.get_positions();
+    const n = positions.length / 2;
+    if (n === 0) return;
+
+    let sumLon = 0;
+    let sumLat = 0;
+    for (let i = 0; i < positions.length; i += 2) {
+        sumLon += positions[i];
+        sumLat += positions[i + 1];
+    }
+
+    return [sumLon / n, sumLat / n];
+}
+
 export function normalizeLongitude(lon: number) {
     return ((((lon + 180) % 360) + 360) % 360) - 180;
 }
@@ -51,8 +69,8 @@ export function releasesToJson() {
         lat: release.lat,
         radius: release.radius,
         schedule: release.schedule.map(interval => ({
-            amount: interval.amount,
-            duration: interval.duration
+            amount: config.tracerType == "sar" ? 1 : interval.amount,
+            duration: config.tracerType == "sar" ? 0 : interval.duration,
         }))
     }));
 

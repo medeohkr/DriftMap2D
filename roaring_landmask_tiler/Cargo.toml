@@ -1,0 +1,13 @@
+[package]
+name = "roaring_landmask_tiler"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+[dependencies]
+roaring = "0.10"
+memmap2 = "0.9"
+anyhow = "1.0"
+image = "0.24"
+clap = { version = "4", features = ["derive", "env"] }

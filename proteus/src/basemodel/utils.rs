@@ -1,4 +1,4 @@
-pub fn meters_per_degree_lat(value: f32) -> f32 {
+pub fn meters_per_degree_lat(value: f32, _lat: f32) -> f32 {
     value / 111_120.0
 }
 

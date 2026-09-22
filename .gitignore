@@ -6,7 +6,6 @@ data/
 wrangler.toml
 web/.wrangler/
 .wrangler/
-roaring_landmask/
 web/images/
 scripts/archive/
 .continue/
@@ -16,3 +15,4 @@ web/src/archive/
 web/dist
 scripts/
 TODO.md
+tests/
