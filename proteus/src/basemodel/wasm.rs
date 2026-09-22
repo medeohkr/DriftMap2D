@@ -268,7 +268,13 @@ impl Proteus {
                 }
             }
 
-            _ => {}
+            _ => {
+                for i in 0..particles.len {
+                    if !particles.stranded[i] {
+                        total_mass += 1.0;
+                    }
+                }
+            }
         }
 
         total_mass
