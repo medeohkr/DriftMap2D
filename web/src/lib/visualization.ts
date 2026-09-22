@@ -139,6 +139,7 @@ export function updateConcentrationLayer() {
         ["get", "concentration"],
         ...stops,
     ]);
+    getScaledConcentrations();
 }
 
 export function toggleVisualizationMode() {
@@ -304,14 +305,10 @@ export function getStrandedGeojson() {
 export function getHeatmapGeojson() {
     buildHeatmap();
     if (config.tracerType === "sar") {
-        console.log(visualization.heatmap.to_probability_contour_geojson(new Float32Array(PROBABILTIES)))
         return JSON.parse(
             visualization.heatmap.to_probability_contour_geojson(new Float32Array(PROBABILTIES))
         )
     } else {
-        console.log(visualization.heatmap.to_contour_geojson(
-                getScaledConcentrations().map(tonsPerKm2ToTonsPerCell),
-            ))
         return JSON.parse(
             visualization.heatmap.to_contour_geojson(
                 getScaledConcentrations().map(tonsPerKm2ToTonsPerCell),

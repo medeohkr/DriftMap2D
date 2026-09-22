@@ -164,7 +164,6 @@ export async function simulationStep(version: number) {
             simulation.animationId = requestAnimationFrame(() =>
                 simulationStep(version)
             );
-            console.log(simulation.proteus.total_floating_mass_tons())
         } else {
             simulation.simulationRunning = false;
             timeline.playbackMode = true;
@@ -198,8 +197,8 @@ export async function startSimulation() {
 
     map.setPaintProperty("overlay-layer", "raster-opacity", 0.05);
 
-    getScaledConcentrations();
     updateConcentrationLayer();
+    getScaledConcentrations();
     zoom();
 
     if (visualization.currentMarker) visualization.currentMarker.remove();
