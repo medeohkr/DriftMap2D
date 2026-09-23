@@ -15,10 +15,13 @@ pub struct OilProperties {
     pub molecular_weights: Vec<f32>,
     pub initial_mass_components: Vec<f32>,
     pub bullwinkle_fraction: f32,
+    pub bulltime: f32,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct OilPropertiesJson {
+    pub wind_factor: f32,
+    pub wind_deflection: Option<f32>,
     pub product_type: String,
     pub api: f32,
     pub density_kgm3: Vec<(f32, f32)>,
@@ -30,6 +33,7 @@ pub struct OilPropertiesJson {
     pub molecular_weights_kg_mol: Vec<f32>,
     pub component_mass_fractions: Vec<f32>,
     pub bullwinkle_fraction: f32,
+    pub bulltime: f32,
 }
 
 #[derive(Debug, Deserialize)]

@@ -18,12 +18,12 @@ import {
     getScaledConcentrations,
 } from "./visualization";
 import { Proteus } from "../pkg/proteus";
-import { getTotalDays, startDateTime, normalizeLongitude, releasesToJson, getAveragePosition} from "./utils";
+import { getTotalDays, startDateTime, normalizeLongitude, releasesToJson, getAveragePosition, getTracerJson} from "./utils";
 
 export function createProteus() {
     simulation.proteus = new Proteus(
         config.tracerType,
-        config.tracerJson,
+        getTracerJson(),
         startDateTime(),
         releasesToJson(),
         config.particleCount,

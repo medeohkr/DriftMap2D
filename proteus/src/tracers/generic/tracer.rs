@@ -33,12 +33,12 @@ impl Tracer for GenericTracer {
 
 impl GenericTracer {
     pub fn new(generic_json: &str, mass_per_particle: f32) -> Self {
-        // let json: GenericProperties = serde_json::from_str(generic_json).expect("invalid JSON!");
+        let json: GenericProperties = serde_json::from_str(generic_json).expect("invalid JSON!");
 
         Self {
             properties: GenericProperties {
-                wind_factor: 0.02,
-                wind_deflection: 0.0
+                wind_factor: json.wind_factor,
+                wind_deflection: json.wind_deflection
             },
             data: GenericData {
                 mass_per_particle

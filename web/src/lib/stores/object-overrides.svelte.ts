@@ -1,7 +1,6 @@
 export interface ObjectOverrides {
-    downwind: number[] | null;
-    right: number[] | null;
-    left: number[] | null;
+    query: string;
+    id: string;
     jibeProbability: number;
     capsizing: boolean;
     capsizeThreshold: number;
@@ -10,13 +9,12 @@ export interface ObjectOverrides {
 
 }
 
-export const objectOverrides: ObjectOverrides = {
-    downwind: null,
-    right: null,
-    left: null,
-    jibeProbability: 0.04,
+export const objectOverrides: ObjectOverrides = $state({
+    query: "",
+    id: "",
+    jibeProbability: 4,
     capsizing: false,
     capsizeThreshold: 30,
-    capsizeFraction: 0.4,
+    capsizeFraction: 40,
     capsizeSigma: 5
-};
+});

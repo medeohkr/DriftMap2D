@@ -65,19 +65,21 @@ export async function loadOilCatalog(): Promise<OilCatalog> {
 
     catalogPromise = (async (): Promise<OilCatalog> => {
         try {
-            const url = 'https://tiles.driftmap2d.com/oil_catalog.json.gz';
+            const url = "https://tiles.driftmap2d.com/oil_catalog.json.gz";
             const response = await fetch(url);
-            
+
             if (!response.ok) {
-                throw new Error(`Failed to load oil catalog: ${response.status}`);
+                throw new Error(
+                    `Failed to load oil catalog: ${response.status}`,
+                );
             }
 
             const blob = await response.blob();
-            const ds = new DecompressionStream('gzip');
+            const ds = new DecompressionStream("gzip");
             const decompressedStream = blob.stream().pipeThrough(ds);
             const resp = new Response(decompressedStream);
             const text = await resp.text();
-            
+
             catalog = JSON.parse(text);
             return catalog!;
         } finally {
@@ -90,7 +92,7 @@ export async function loadOilCatalog(): Promise<OilCatalog> {
 
 export function searchOils(query: string): OilRecord[] {
     if (!catalog) {
-        console.warn('Oil catalog not loaded yet');
+        console.warn("Oil catalog not loaded yet");
         return [];
     }
 
@@ -102,8 +104,8 @@ export function searchOils(query: string): OilRecord[] {
 
     return catalog.oils
         .filter((oil) => {
-            const name = oil.name?.toLowerCase() || '';
-            const id = oil.oil_id?.toLowerCase() || '';
+            const name = oil.name?.toLowerCase() || "";
+            const id = oil.oil_id?.toLowerCase() || "";
             return name.includes(q) || id.includes(q);
         })
         .slice(0, 100);
@@ -111,43 +113,48 @@ export function searchOils(query: string): OilRecord[] {
 
 export function getGenericOils(): OilRecord[] {
     if (!catalog) {
-        console.warn('Oil catalog not loaded yet');
+        console.warn("Oil catalog not loaded yet");
         return [];
     }
 
     const genericIds = [
-        'Generic Condensate',
-        'Generic Diesel',
-        'Generic Gasoline',
-        'Generic Heavy Crude',
-        'Generic Heavy Fuel Oil',
-        'Generic IFO',
-        'Generic Jet Fuel',
-        'Generic Light Crude',
-        'Generic Medium Crude',
+        "Generic Condensate",
+        "Generic Diesel",
+        "Generic Gasoline",
+        "Generic Heavy Crude",
+        "Generic Heavy Fuel Oil",
+        "Generic IFO",
+        "Generic Jet Fuel",
+        "Generic Light Crude",
+        "Generic Medium Crude",
     ];
 
-    return catalog.oils
-        .filter((oil) => {
-            const name = oil.name.toLowerCase() || '';
-            return genericIds.some((id) => name.includes(id.toLowerCase()));
-        });
+    return catalog.oils.filter((oil) => {
+        const name = oil.name.toLowerCase() || "";
+        return genericIds.some((id) => name.includes(id.toLowerCase()));
+    });
 }
 
-export function getOilJsonForRust(oilId: string): string {
+export function getOilJson() {
     if (!catalog) {
-        console.warn('Oil catalog not loaded yet');
+        console.warn("Oil catalog not loaded yet");
         return "";
     }
-
+    
+    const oilId = oilOverrides.id;
     const oil = catalog.oils.find((oil) => oil.oil_id === oilId) || null;
     if (!oil) {
         throw new Error(`Oil not found: ${oilId}`);
     }
 
-    const oilProperties = {
+    return JSON.stringify({
+        wind_factor: oilOverrides.windFactor / 100,
+        wind_deflection:
+            oilOverrides.deflectionScheme === "constant"
+                ? oilOverrides.windDeflection
+                : null,
         product_type: oil.name,
-        api: oilOverrides.api ?? oil.api_gravity,
+        api: oil.api_gravity,
         density_kgm3: oil.density_kgm3,
         dynamic_viscosity_cp: oil.dynamic_viscosity_cp,
         interfacial_tension_n_m: oil.interfacial_tension_n_m,
@@ -156,8 +163,7 @@ export function getOilJsonForRust(oilId: string): string {
         boiling_points_c: oil.boiling_points_c,
         molecular_weights_kg_mol: oil.molecular_weights_kg_mol,
         component_mass_fractions: oil.component_mass_fractions,
-        bullwinkle_fraction: oilOverrides.bullwinkleFrac ?? oil.bullwinkle_fraction,
-    };
-
-    return JSON.stringify(oilProperties);
+        bullwinkle_fraction: oilOverrides.emulOnset === "fraction" ? oilOverrides.bullwinkleFrac / 100 : 1,
+        bulltime: oilOverrides.emulOnset === "time" ? oilOverrides.bulltime * 3600 : -1,
+    });
 }

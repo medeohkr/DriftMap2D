@@ -1,22 +1,21 @@
 <script lang="ts">
-    import { config } from '$lib/stores/index.svelte';
-    import { searchOils, type OilRecord, getOilJsonForRust, getGenericOils } from '$lib/oils';
+    import { oilOverrides} from '$lib/stores/index.svelte';
+    import { searchOils, type OilRecord, getGenericOils} from '$lib/oils';
 
-    let query = $state('');
     let results: OilRecord[] = $state([]);
     let isFocused = $state(false);
 
     $effect(() => {
-        if (query.length > 0) {
-            results = searchOils(query);
+        if (oilOverrides.query.length > 0) {
+            results = searchOils(oilOverrides.query);
         } else if (isFocused) {
             results = getGenericOils();
         }
     });
 
     function selectOil(oil: OilRecord) {
-        config.tracerJson = getOilJsonForRust(oil.oil_id);
-        query = oil.name || oil.oil_id;
+        oilOverrides.id = oil.oil_id;
+        oilOverrides.query = oil.name;
         results = [];
         isFocused = false;
     }
@@ -28,7 +27,7 @@
         <input
             class="selector-primary oil-search"
             type="text"
-            bind:value={query}
+            bind:value={oilOverrides.query}
             onfocus={() => isFocused = true}
             onblur={() => isFocused = false}
             placeholder="Search the ADIOS Oil Database..."

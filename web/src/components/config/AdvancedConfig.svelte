@@ -35,7 +35,7 @@
     </div>
     <div class="container-secondary">
         <span>Advection Scheme</span>
-        <select bind:value={config.advectionScheme} class="selector-primary" id="scheme-selector">
+        <select bind:value={config.advectionScheme} class="scheme-selector">
             <option value="euler">Euler</option>
             <option value="rk2">RK2</option>
             <option value="rk4">RK4</option>
@@ -44,7 +44,7 @@
     {#if config.tracerType != "sar"}
         <div class="container-secondary">
             <span>Diffusion Scheme</span>
-            <select bind:value={config.diffusionScheme} class="selector-primary" id="scheme-selector">
+            <select bind:value={config.diffusionScheme} class="scheme-selector">
                 <option value="constant">Constant</option>
                 <option value="smagorinsky">Smagorinsky</option>
             </select>
@@ -74,16 +74,3 @@
         {/if}
     {/if}
 </div>
-
-<style>
-#scheme-selector {
-    height: auto;
-    width: var(--width-number);
-    background-color: var(--bg-tertiary);
-    margin-right: var(--spacing-xxs);
-}
-
-#scheme-selector:hover {
-    opacity: 0.6;
-}
-</style>

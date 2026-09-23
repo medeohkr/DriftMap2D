@@ -171,7 +171,8 @@ pub fn update_evaporation(
 
     for (i, (_, idx)) in evaporating_indices.iter().enumerate() {
         for j in 0..n_components {
-            let new_component =  mass_components[idx * n_components + j] * (decay[i * n_components + j] * dt).exp();
+            let new_component =
+                mass_components[idx * n_components + j] * (decay[i * n_components + j] * dt).exp();
             mass_components[idx * n_components + j] = new_component;
         }
     }
@@ -279,7 +280,9 @@ pub fn step_particle_weathering(
 
     for (pos, &idx) in indices.iter().enumerate() {
         let mut emulsifying = false;
-        if particles.f_evap[idx] >= oil.bullwinkle_fraction {
+        if particles.f_evap[idx] >= oil.bullwinkle_fraction
+            || (particles.age[idx] > oil.bulltime && oil.bulltime >= 0.0)
+        {
             if particles.emulsification_start_age[idx] == -1.0 {
                 particles.emulsification_start_age[idx] = particles.age[idx];
             }

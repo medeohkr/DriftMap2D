@@ -81,8 +81,8 @@ impl OilTracer {
         Self {
             properties: OilProperties {
                 mass_per_particle,
-                wind_factor: 0.03,
-                wind_deflection: None,
+                wind_factor: json.wind_factor,
+                wind_deflection: json.wind_deflection,
                 product_type: json.product_type,
                 api: json.api,
                 density_kgm3: json.density_kgm3,
@@ -92,7 +92,8 @@ impl OilTracer {
                 boiling_points: boiling_points,
                 initial_mass_components: mass_components,
                 molecular_weights: json.molecular_weights_kg_mol,
-                bullwinkle_fraction: 0.0
+                bullwinkle_fraction: json.bullwinkle_fraction,
+                bulltime: json.bulltime,
             },
             data: OilData {
                 age: Vec::with_capacity(capacity),

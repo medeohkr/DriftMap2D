@@ -26,12 +26,12 @@ export function getGenericObjects() {
         .map(([name, data]) => ({ name, ...data }))
 }
 
-export function getObjectJsonForRust(objectName: string) {
-    const object = catalog.objects[objectName];
+export function getObjectJson() {
+    const object = catalog.objects[objectOverrides.id];
     return JSON.stringify({
-        downwind: objectOverrides.downwind ?? object.downwind,
-        right: objectOverrides.right ?? object.right,
-        left: objectOverrides.left ?? object.left,
+        downwind: object.downwind,
+        right: object.right,
+        left: object.left,
         jibe_probability: objectOverrides.jibeProbability,
         capsizing: objectOverrides.capsizing,
         capsize_threshold: objectOverrides.capsizeThreshold,
