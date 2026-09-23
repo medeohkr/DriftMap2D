@@ -1,5 +1,12 @@
 import { map } from "./map";
-import { config, simulation, timeline, visualization, stats, history} from "./stores/index.svelte";
+import {
+    config,
+    simulation,
+    timeline,
+    visualization,
+    stats,
+    history,
+} from "./stores/index.svelte";
 import { HeatmapGenerator } from "../pkg/proteus";
 import { getAverageReleasePosition } from "./utils";
 
@@ -10,13 +17,9 @@ export const COLORS = [
     "rgb(69, 97, 255)",
 ];
 
-const CONCENTRATIONS = [
-    0.0001, 0.001, 0.01, 0.1,
-];
+const CONCENTRATIONS = [0.0001, 0.001, 0.01, 0.1];
 
-export const PROBABILTIES = [
-    0.25, 0.5, 0.75, 0.95
-]
+export const PROBABILTIES = [0.25, 0.5, 0.75, 0.95];
 
 export function initGridLayer() {
     map.on("load", () => {
@@ -44,7 +47,7 @@ export function initGridLayer() {
             tolerance: 0,
             maxzoom: 24,
         });
-        
+
         map.addSource("particles-unstranded", {
             type: "geojson",
             data: { type: "FeatureCollection", features: [] },
@@ -111,7 +114,8 @@ export function getScaledConcentrations() {
 }
 
 export function tonsPerKm2ToTonsPerCell(value: number) {
-    const kmPerDegreeLon = 111.12 * Math.cos((getAverageReleasePosition()[1] * Math.PI) / 180);
+    const kmPerDegreeLon =
+        111.12 * Math.cos((getAverageReleasePosition()[1] * Math.PI) / 180);
     const kmPerDegreeLat = 111.12;
     const cellAreaKm2 =
         kmPerDegreeLon *
@@ -123,12 +127,15 @@ export function tonsPerKm2ToTonsPerCell(value: number) {
 }
 
 export function updateConcentrationLayer() {
-    const thresholds = config.tracerType === "sar" ? PROBABILTIES : getScaledConcentrations().map(tonsPerKm2ToTonsPerCell);
+    const thresholds =
+        config.tracerType === "sar"
+            ? PROBABILTIES
+            : getScaledConcentrations().map(tonsPerKm2ToTonsPerCell);
     const stops = [];
     for (let i = 0; i < 4; i++) {
         stops.push(thresholds[i]);
         if (config.tracerType === "sar") {
-            stops.push(COLORS[3 - i]); 
+            stops.push(COLORS[3 - i]);
         } else {
             stops.push(COLORS[i]);
         }
@@ -165,14 +172,16 @@ export function toggleParticleMode() {
     if (visualization.visualizationMode === "particles") return;
     visualization.visualizationMode = "particles";
     toggleVisualizationMode();
-    if (!timeline.playbackMode && simulation.simulationActive) updateParticleVisualization();
+    if (!timeline.playbackMode && simulation.simulationActive)
+        updateParticleVisualization();
 }
 
 export function toggleHeatmapMode() {
     if (visualization.visualizationMode === "heatmap") return;
     visualization.visualizationMode = "heatmap";
     toggleVisualizationMode();
-    if (!timeline.playbackMode && simulation.simulationActive) updateHeatmapVisualization();
+    if (!timeline.playbackMode && simulation.simulationActive)
+        updateHeatmapVisualization();
 }
 
 export function updateParticleVisualization() {
@@ -209,12 +218,8 @@ export function updateParticleVisualization() {
         }
     }
 
-    map.getSource("particles-unstranded").setData(
-        geojsonUnstranded,
-    );
-    map.getSource("particles-stranded").setData(
-        geojsonStranded,
-    );
+    map.getSource("particles-unstranded").setData(geojsonUnstranded);
+    map.getSource("particles-stranded").setData(geojsonStranded);
 }
 
 export function updateHeatmapVisualization() {
@@ -223,7 +228,9 @@ export function updateHeatmapVisualization() {
 }
 
 export function buildHeatmap() {
-    const data = simulation.proteus?.get_unstranded_positions_with_mass() ?? new Float32Array;
+    const data =
+        simulation.proteus?.get_unstranded_positions_with_mass() ??
+        new Float32Array();
 
     const { lonMin, lonMax, needsShift } = getShiftedBounds(data);
 
@@ -250,7 +257,7 @@ export function buildHeatmap() {
     visualization.heatmap.clear();
     visualization.heatmap.add_particles(lons, lats, masses);
     visualization.heatmap.smooth(2);
-    
+
     if (config.tracerType === "sar") {
         visualization.heatmap.normalize_probability();
     }
@@ -266,7 +273,7 @@ export function captureSnapshot(day: Number) {
         stranded: stats.stranded,
         emulsified: stats.emulsified,
         evaporated: stats.evaporated,
-        totalMass: stats.totalMass
+        totalMass: stats.totalMass,
     });
 }
 
@@ -306,8 +313,10 @@ export function getHeatmapGeojson() {
     buildHeatmap();
     if (config.tracerType === "sar") {
         return JSON.parse(
-            visualization.heatmap.to_probability_contour_geojson(new Float32Array(PROBABILTIES))
-        )
+            visualization.heatmap.to_probability_contour_geojson(
+                new Float32Array(PROBABILTIES),
+            ),
+        );
     } else {
         return JSON.parse(
             visualization.heatmap.to_contour_geojson(

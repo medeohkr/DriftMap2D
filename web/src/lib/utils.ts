@@ -1,4 +1,6 @@
-import { simulation, config, releaseConfig } from "./stores/index.svelte";
+import { getObjectJson } from "./objects";
+import { getOilJson } from "./oils";
+import { simulation, config, releaseConfig, genericOverrides, oilOverrides, objectOverrides } from "./stores/index.svelte";
 
 export function dateOffset(days: number) {
     const date = new Date();
@@ -75,4 +77,17 @@ export function releasesToJson() {
     }));
 
     return JSON.stringify(releasesData);
+}
+
+export function getTracerJson() {
+    if (config.tracerType === "oil") {
+        return getOilJson();
+    } else if (config.tracerType === "sar") {
+        return getObjectJson();
+    } else {
+        return JSON.stringify({
+            "wind_factor": genericOverrides.windFactor / 100,
+            "wind_deflection": genericOverrides.windDeflection
+        });
+    }
 }

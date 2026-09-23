@@ -1,7 +1,6 @@
 <script lang="ts">
-    import { config } from '$lib/stores/index.svelte';
-    import { searchObjects, getObjectJsonForRust, getGenericObjects } from '$lib/objects';
-    import { createProteus } from '$lib/simulation';
+    import { objectOverrides } from '$lib/stores/index.svelte';
+    import { searchObjects, getObjectJson, getGenericObjects } from '$lib/objects';
 
     interface SarObject {
         name: string;
@@ -10,21 +9,20 @@
         left: number[];
     }
 
-    let query = $state('');
     let results: SarObject[] = $state([]);
     let isFocused = $state(false);
 
     $effect(() => {
-        if (query.length > 0) {
-            results = searchObjects(query);
+        if (objectOverrides.query.length > 0) {
+            results = searchObjects(objectOverrides.query);
         } else if (isFocused) {
             results = getGenericObjects();
         }
     });
 
     function selectObject(obj: SarObject) {
-        config.tracerJson = getObjectJsonForRust(obj.name);
-        query = obj.name;
+        objectOverrides.id = obj.name;
+        objectOverrides.query = obj.name;
         results = [];
         isFocused = false;
     }
@@ -36,7 +34,7 @@
         <input
             class="selector-primary object-search"
             type="text"
-            bind:value={query}
+            bind:value={objectOverrides.query}
             onfocus={() => isFocused = true}
             onblur={() => isFocused = false}
             placeholder="Search the SAROPS Leeway Database..."
