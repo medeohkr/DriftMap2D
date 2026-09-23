@@ -1,13 +1,12 @@
 <script lang="ts">
     import { simulation, config, visualization } from "$lib/stores/index.svelte";
+    import { roundToSigFigs } from "$lib/utils";
     import { getScaledConcentrations, COLORS, PROBABILTIES} from "$lib/visualization";
 
     let oilScaling = $state(getScaledConcentrations());
 
     $effect(() => {
-        if (!simulation.simulationActive) {
-            oilScaling = getScaledConcentrations();
-        }
+        oilScaling = getScaledConcentrations();
     });
 </script>
 
@@ -21,11 +20,11 @@
         <div class="legend-labels">
             {#if config.tracerType === "sar"}
                 {#each PROBABILTIES.slice() as value}
-                    <div>{value * 100}% Confidence</div>
+                    <div>{value}% Confidence</div>
                 {/each}
             {:else}
                 {#each oilScaling.slice().reverse() as value}
-                    <div>{value} tons/km²</div>
+                    <div>{roundToSigFigs(value, 3)} tons/km²</div>
                 {/each}
             {/if}
         </div>

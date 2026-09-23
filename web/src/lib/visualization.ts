@@ -110,7 +110,6 @@ export function updateOverlay(checked: boolean) {
 
 export function getScaledConcentrations() {
     const scale = (simulation.proteus?.get_total_mass() ?? 0.0) * 0.0025;
-    console.log(scale)
     return CONCENTRATIONS.map((c) => c * scale);
 }
 
