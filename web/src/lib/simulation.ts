@@ -16,6 +16,7 @@ import {
     updateConcentrationLayer,
     captureSnapshot,
     getScaledConcentrations,
+    initGridLayer,
 } from "./visualization";
 import { Proteus } from "../pkg/proteus";
 import { getTotalDays, startDateTime, normalizeLongitude, releasesToJson, getAveragePosition, getTracerJson} from "./utils";
@@ -196,14 +197,15 @@ export async function startSimulation() {
     visualization.lastGridUpdate = 0;
 
     map.setPaintProperty("overlay-layer", "raster-opacity", 0.05);
+    map.setPaintProperty("unstranded-particles-layer", "circle-radius", visualization.particleRadius)
+    map.setPaintProperty("stranded-particles-layer", "circle-radius", visualization.particleRadius)
 
+    initGridLayer();
     updateConcentrationLayer();
-    getScaledConcentrations();
     zoom();
 
     if (visualization.currentMarker) visualization.currentMarker.remove();
 
-    createProteus();
 
     simulationStep(simulation.simulationVersion);
 }

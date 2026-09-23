@@ -71,7 +71,7 @@ export function releasesToJson() {
         lat: release.lat,
         radius: release.radius,
         schedule: release.schedule.map(interval => ({
-            amount: config.tracerType == "sar" ? 1 : interval.amount,
+            amount: interval.amount,
             duration: config.tracerType == "sar" ? 0 : interval.duration,
         }))
     }));
