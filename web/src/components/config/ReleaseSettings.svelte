@@ -134,7 +134,7 @@
         </button>
     </div>
 {/if}
-<details class="floating-container" open>
+<details class="floating-container">
     <summary style="cursor: pointer; user-select: none;">Manage Releases ({releaseConfig.releases.length})</summary>
     <div class="inline-rows-container">
     {#each releaseConfig.releases as release, index}

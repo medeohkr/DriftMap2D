@@ -17,7 +17,7 @@ export const COLORS = [
     "rgb(69, 97, 255)",
 ];
 
-const CONCENTRATIONS = [0.0001, 0.001, 0.01, 0.1];
+const CONCENTRATIONS = [0.001, 0.01, 0.1, 1];
 
 export const PROBABILTIES = [0.25, 0.5, 0.75, 0.95];
 
@@ -57,7 +57,7 @@ export function initGridLayer() {
             type: "circle",
             source: "particles-unstranded",
             paint: {
-                "circle-radius": 1.4,
+                "circle-radius": visualization.particleRadius,
                 "circle-color": "white",
                 "circle-opacity": 0.7,
             },
@@ -72,7 +72,7 @@ export function initGridLayer() {
             type: "circle",
             source: "particles-stranded",
             paint: {
-                "circle-radius": 2,
+                "circle-radius": visualization.particleRadius,
                 "circle-color": "rgb(255, 59, 20)",
                 "circle-opacity": 0.7,
             },
@@ -109,7 +109,8 @@ export function updateOverlay(checked: boolean) {
 }
 
 export function getScaledConcentrations() {
-    const scale = (simulation.proteus?.get_total_mass() ?? 0.0) / 100.0;
+    const scale = (simulation.proteus?.get_total_mass() ?? 0.0) * 0.0025;
+    console.log(scale)
     return CONCENTRATIONS.map((c) => c * scale);
 }
 
@@ -146,7 +147,6 @@ export function updateConcentrationLayer() {
         ["get", "concentration"],
         ...stops,
     ]);
-    getScaledConcentrations();
 }
 
 export function toggleVisualizationMode() {
@@ -234,7 +234,7 @@ export function buildHeatmap() {
 
     const { lonMin, lonMax, needsShift } = getShiftedBounds(data);
 
-    const padding = visualization.gridSize * 3;
+    const padding = visualization.gridSize * (visualization.smoothLevel + 1);
     visualization.heatmap = new HeatmapGenerator(
         lonMin - padding,
         lonMax + padding,
@@ -256,7 +256,7 @@ export function buildHeatmap() {
 
     visualization.heatmap.clear();
     visualization.heatmap.add_particles(lons, lats, masses);
-    visualization.heatmap.smooth(2);
+    visualization.heatmap.smooth(visualization.smoothLevel);
 
     if (config.tracerType === "sar") {
         visualization.heatmap.normalize_probability();

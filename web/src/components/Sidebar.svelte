@@ -8,6 +8,7 @@
     import TitleHeader from './TitleHeader.svelte';
     import AdvancedConfig from './config/AdvancedConfig.svelte';
     import TracerConfig from './config/TracerConfig.svelte';
+    import VisualizationConfig from './config/VisualizationConfig.svelte';
 
     let collapseTimeout: ReturnType<typeof setTimeout>;
     let transitionTimeout: ReturnType<typeof setTimeout>;
@@ -67,6 +68,10 @@
 
                 <details class="floating-container">
                     <AdvancedConfig />
+                </details>
+
+                <details class="floating-container">
+                    <VisualizationConfig />
                 </details>
         </div>
     </fieldset>
