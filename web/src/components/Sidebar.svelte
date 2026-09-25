@@ -30,7 +30,7 @@
         clearTimeout(transitionTimeout);
         transitionTimeout = setTimeout(() => {
             isTransitioning = false;
-        }, 200);
+        }, 300);
     }
 
 </script>
@@ -118,7 +118,7 @@
     width: var(--width-sidebar);
     max-height: calc(100vh - 2 * var(--spacing-sm));
     background: var(--bg-primary);
-    box-shadow: 2px 2px 8px var(--shadow-secondary);
+    box-shadow: 1px 1px 2px var(--shadow-secondary);
     transition: max-height var(--transition-slow);
 }
 
@@ -161,6 +161,7 @@
     flex-direction: column;
     min-height: 0;
     padding: 14px;
+    padding-left: 17px;
     row-gap: var(--spacing-lg);
     transition: all var(--transition-medium);
     opacity: 1;
