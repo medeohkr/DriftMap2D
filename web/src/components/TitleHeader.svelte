@@ -15,7 +15,7 @@
     display: flex;
     width: var(--width-sidebar);
     height: var(--height-title-header);
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: var(--spacing-sm) 18px;
 
     flex-shrink: 0;
     column-gap: var(--spacing-sm);

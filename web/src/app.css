@@ -17,15 +17,15 @@
     --width-datetime: 100px;
 
 /* colors */
-    --bg-primary: rgb(34, 34, 38);
-    --bg-secondary: rgb(48, 51, 58);
-    --bg-tertiary: rgb(81, 83, 91);
-    --bg-timeline: rgb(41, 42, 46);
+    --bg-primary: rgb(27, 27, 29);
+    --bg-secondary: rgb(41, 44, 51);
+    --bg-tertiary: rgb(68, 70, 79);
+    --bg-timeline: rgb(32, 32, 34);
     --text-primary: rgb(220, 220, 220);
     --text-secondary: rgb(180, 180, 180);
     --text-muted: rgb(134, 136, 139);
     --shadow-primary: rgb(0, 0, 0);
-    --shadow-secondary: rgb(25, 25, 25);
+    --shadow-secondary: rgb(32, 32, 32);
     --timeline-slider: rgb(60, 60, 60);
     --scrollbar: rgba(255,255,255,.2) transparent;
 
