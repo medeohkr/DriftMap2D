@@ -32,7 +32,7 @@ else:
     BASE_DIR = Path("D:/projects/driftmap/data")
 
 BUCKET = "driftmap-tiles"
-FORECAST_DAYS = 11  # Yesterday + 10 forecast days
+FORECAST_DAYS = 10  # Yesterday + 10 forecast days
 HINDCAST_DAYS = 30
 
 TILE_SIZE = 10.0
@@ -112,9 +112,7 @@ def download_ecmwf():
             client.retrieve(
                 date=date_str,
                 time="00",
-                # 0, 6, ..., 264 -> 45 steps (indices 0..44). One extra step
-                # beyond 264 so the final day tile can still read 5 steps.
-                step=list(range(0, 270, 6)),
+                step=list(range(0, 264, 6)),
                 param=["10u", "10v", "skt"],
                 target=out_file,
                 type="fc",
