@@ -47,7 +47,7 @@
                 onblur={updateReleaseLat}
                 type="number"
                 class="field-primary"
-                value={releaseConfig.activeRelease.lat.toFixed(2)}
+                value={releaseConfig.activeRelease.lat.toFixed(3)}
                 step="any"
             />
         </div>
@@ -59,7 +59,7 @@
                 class="field-primary"
                 value={normalizeLongitude(
                     releaseConfig.activeRelease.lon,
-                ).toFixed(2)}
+                ).toFixed(3)}
                 step="any"
             />
         </div>
@@ -134,7 +134,7 @@
         </button>
     </div>
 {/if}
-<details class="floating-container">
+<details class="floating-container" open>
     <summary style="cursor: pointer; user-select: none;">Manage Releases ({releaseConfig.releases.length})</summary>
     <div class="inline-rows-container">
     {#each releaseConfig.releases as release, index}

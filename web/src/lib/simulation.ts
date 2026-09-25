@@ -231,9 +231,6 @@ export async function resetSimulation() {
 
     if (simulation.animationId) cancelAnimationFrame(simulation.animationId);
 
-    createProteus();
-    updateConcentrationLayer();
-
     if (map) {
         map.getSource("concentration").setData({
             type: "FeatureCollection",
