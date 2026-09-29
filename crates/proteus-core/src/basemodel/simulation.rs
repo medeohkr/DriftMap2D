@@ -3,13 +3,8 @@ use super::{
     Integrator, meters_per_degree_lat, meters_per_degree_lon, normalize_lon, DataLoader,
     Diffusion, LandMaskLoader, ParticleView, Particles, ReleaseManager,
 };
-use crate::{basemodel::integrators, tracers::{GenericTracer, LeewayTracer, OilTracer, Tracer, TracerKind}};
-
-macro_rules! log {
-    ( $( $t:tt )* ) => {
-        web_sys::console::log_1(&format!( $( $t )* ).into())
-    }
-}
+use crate::tracers::{GenericTracer, LeewayTracer, OilTracer, Tracer, TracerKind};
+use crate::TileFetcher;
 
 pub struct Simulation {
     pub particles: Particles,
@@ -97,13 +92,13 @@ impl Simulation {
         )
     }
 
-    pub fn update_particles_batch(
+    pub fn update_particles_batch<F: TileFetcher>(
         &mut self,
         dt_days: f32,
-        loader: &DataLoader,
+        loader: &DataLoader<F>,
         current_day: usize,
         hour: f32,
-        landmask: &LandMaskLoader,
+        landmask: &LandMaskLoader<F>,
     ) {
         let dt = dt_days * 86400.0;
 

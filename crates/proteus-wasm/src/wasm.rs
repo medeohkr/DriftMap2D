@@ -1,23 +1,16 @@
-use crate::basemodel::DataLoader;
-use crate::basemodel::LandMaskLoader;
-use crate::basemodel::Simulation;
-use crate::tracers::TracerKind;
+use proteus_core::basemodel::{DataLoader, LandMaskLoader, Simulation};
+use proteus_core::tracers::{TracerKind};
+use super::fetch::GlooFetcher;
 use chrono::Duration;
 use chrono::Timelike;
 use chrono::{Datelike, Days, NaiveDateTime};
 use wasm_bindgen::prelude::*;
 
-macro_rules! log {
-    ( $( $t:tt )* ) => {
-        web_sys::console::log_1(&format!( $( $t )* ).into())
-    }
-}
-
 #[wasm_bindgen]
 pub struct Proteus {
     simulation: Simulation,
-    loader: DataLoader,
-    landmask: LandMaskLoader,
+    loader: DataLoader<GlooFetcher>,
+    landmask: LandMaskLoader<GlooFetcher>,
     days_since_start: f32,
     start_date: NaiveDateTime,
     steps_per_day: u32,
@@ -57,13 +50,19 @@ impl Proteus {
             diffusion_coeffs
         );
 
-        let loader = DataLoader::new("https://tiles.driftmap2d.com/tiles", -180.0, -80.0);
-        let landmask = LandMaskLoader::new(
-            "https://tiles.driftmap2d.com/roaring_landmask",
-            -180.0,
-            -90.0,
-            90.0,
-        );
+    let loader = DataLoader::new(
+        "https://tiles.driftmap2d.com/tiles",
+        -180.0,
+        -80.0,
+        GlooFetcher,
+    );
+    let landmask = LandMaskLoader::new(
+        "https://tiles.driftmap2d.com/roaring_landmask",
+        -180.0,
+        -90.0,
+        90.0,
+        GlooFetcher,
+    );
 
         Self {
             simulation,

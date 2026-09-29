@@ -10,7 +10,7 @@ use std::path::PathBuf;
 /// Grid dimensions of the source GSHHG binary mask.
 /// GSHHG mask is 1/240° resolution: 86400 × 43200 cells.
 const NX: u64 = 86400;
-const NY: u64 = 43200;
+const _NY: u64 = 43200;
 
 /// Tile size in cells. 2400 cells @ 1/240° = 10° per tile.
 const TILE_SIZE: u64 = 2400;
@@ -22,7 +22,7 @@ const N_TILES_Y: u64 = 18;
 #[derive(Parser, Debug)]
 #[command(
     name = "roaring-landmask",
-    about = "Tile a GSHHG RoaringTreemap landmask into 10° × 10° RoaringBitmap tiles."
+    about = "Tile a GSHHG RoaringTreemap landmask into 10° x 10° RoaringBitmap tiles."
 )]
 struct Args {
     /// Path to the source GSHHG binary mask (.tbmap, a serialized RoaringTreemap).

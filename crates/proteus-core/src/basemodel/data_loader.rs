@@ -1,25 +1,11 @@
 use super::{
-    lerp, bilerp, find_depth_indices, meters_per_degree_lat, meters_per_degree_lon, normalize_lon,
+    lerp, bilerp, meters_per_degree_lat, meters_per_degree_lon, normalize_lon,
     ParticleView
 };
-use gloo_net::http::Request;
+use crate::fetch::{FetchError, TileFetcher};
 use half::f16;
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
-use wasm_bindgen::prelude::*;
-
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_name = "getPreloadedTile")]
-    fn get_preloaded_tile(url: &str) -> Option<Vec<u8>>;
-}
-
-macro_rules! log {
-    ( $( $t:tt )* ) => {
-        web_sys::console::log_1(&format!( $( $t )* ).into())
-    }
-}
-
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct TileKey {
     pub lon_idx: usize,
@@ -42,13 +28,14 @@ pub struct TileData {
     pub n_steps: usize,
 }
 
-pub struct DataLoader {
+pub struct DataLoader<F: TileFetcher> {
     min_lon: f32,
     min_lat: f32,
     step: f32,
     step_wind: f32,
     tile_size: f32,
     base_url: String,
+    fetcher: F,
 
     pub cache: HashMap<TileKey, TileData>,
     pending: HashSet<TileKey>,
@@ -66,8 +53,8 @@ pub enum LoaderError {
     Http(u16),
 }
 
-impl DataLoader {
-    pub fn new(base_url: &str, min_lon: f32, min_lat: f32) -> Self {
+impl<F: TileFetcher> DataLoader<F> {
+    pub fn new(base_url: &str, min_lon: f32, min_lat: f32, fetcher: F) -> Self {
         Self {
             min_lon,
             min_lat,
@@ -75,6 +62,7 @@ impl DataLoader {
             step_wind: 1.0 / 4.0,
             tile_size: 10.0,
             base_url: base_url.to_string(),
+            fetcher,
             cache: HashMap::new(),
             pending: HashSet::new(),
         }
@@ -377,23 +365,14 @@ impl DataLoader {
     }
 
     async fn load_tile(&self, url: &str) -> Result<TileData, LoaderError> {
-        if let Some(bytes) = get_preloaded_tile(url) {
+        if let Some(bytes) = self.fetcher.preloaded(url) {
             return parse_tile_data(&bytes).map_err(LoaderError::Parse);
         }
 
-        let response = Request::get(url)
-            .send()
-            .await
-            .map_err(|e| LoaderError::Network(e.to_string()))?;
-
-        if !response.ok() {
-            return Err(LoaderError::Http(response.status()));
-        }
-
-        let bytes = response
-            .binary()
-            .await
-            .map_err(|e| LoaderError::Network(e.to_string()))?;
+        let bytes = self.fetcher.fetch_bytes(url).await.map_err(|e| match e {
+            FetchError::Network(msg) => LoaderError::Network(msg),
+            FetchError::Http(code) => LoaderError::Http(code),
+        })?;
 
         parse_tile_data(&bytes).map_err(LoaderError::Parse)
     }
@@ -482,7 +461,7 @@ impl DataLoader {
             .load_by_date(current_date_int, &needed_ocean_tiles)
             .await
         {
-            web_sys::console::error_1(&format!("Failed to load ocean tiles: {:?}", e).into());
+            log::error!("Failed to load ocean tiles: {:?}", e);
         }
     }
 

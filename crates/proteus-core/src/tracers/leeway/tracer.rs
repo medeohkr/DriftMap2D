@@ -4,11 +4,6 @@ use rand::{Rng, thread_rng};
 use rand::rngs::ThreadRng;
 use rand_distr::StandardNormal;
 
-macro_rules! log {
-    ( $( $t:tt )* ) => {
-        web_sys::console::log_1(&format!( $( $t )* ).into())
-    }
-}
 pub struct LeewayTracer {
     pub properties: LeewayProperties,
     pub data: LeewayData,

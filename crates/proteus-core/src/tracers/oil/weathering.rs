@@ -1,12 +1,6 @@
 use super::OilData;
 use super::OilProperties;
 
-macro_rules! log {
-    ( $( $t:tt )* ) => {
-        web_sys::console::log_1(&format!( $( $t )* ).into())
-    }
-}
-
 const K0Y: f32 = 2.024e-6; // 0.000002024
 const DROP_MIN: f32 = 1.0e-6;
 const DROP_MAX: f32 = 1.0e-5;
@@ -53,7 +47,7 @@ fn y_max(viscosity_cp: f32) -> f32 {
 }
 
 // adios2 estimation helper for missing interfacial tension
-fn interfacial_tension_from_api(api: f32) -> f32 {
+fn _interfacial_tension_from_api(api: f32) -> f32 {
     0.001 * (39.0 - 0.2571 * api)
 }
 

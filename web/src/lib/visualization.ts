@@ -17,7 +17,7 @@ export const COLORS = [
     "rgb(69, 97, 255)",
 ];
 
-const CONCENTRATIONS = [0.001, 0.01, 0.1, 1];
+const CONCENTRATIONS = [0.008, 0.04, 0.2, 1];
 
 export const PROBABILTIES = [0.25, 0.5, 0.75, 0.95];
 

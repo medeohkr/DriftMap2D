@@ -1,10 +1,9 @@
-use gloo_net::http::Request;
+use crate::fetch::TileFetcher;
 use roaring::RoaringBitmap;
 use std::collections::{HashMap, HashSet};
-use wasm_bindgen::prelude::*;
 use super::normalize_lon;
 
-pub struct LandMaskLoader {
+pub struct LandMaskLoader<F: TileFetcher> {
     min_lon: f32,
     min_lat: f32,
     max_lat: f32,
@@ -12,12 +11,13 @@ pub struct LandMaskLoader {
     resolution_deg: f32,
     cells_per_tile: u32,
     base_url: String,
+    fetcher: F,
     cache: HashMap<(usize, usize), RoaringBitmap>,
     loaded_tiles: HashSet<(usize, usize)>,
 }
 
-impl LandMaskLoader {
-    pub fn new(base_url: &str, min_lon: f32, min_lat: f32, max_lat: f32) -> Self {
+impl <F: TileFetcher>LandMaskLoader<F> {
+    pub fn new(base_url: &str, min_lon: f32, min_lat: f32, max_lat: f32, fetcher: F) -> Self {
         let tile_size = 10.0;
         let resolution_deg = 1.0 / 240.0;
         let cells_per_tile = 2400; // Hardcoded
@@ -30,6 +30,7 @@ impl LandMaskLoader {
             resolution_deg,
             cells_per_tile,
             base_url: base_url.to_string(),
+            fetcher,
             cache: HashMap::new(),
             loaded_tiles: HashSet::new()
         }
@@ -87,19 +88,11 @@ impl LandMaskLoader {
             self.base_url, lon_idx, lat_idx
         );
 
-        let response = Request::get(&url)
-            .send()
+        let bytes = self
+            .fetcher
+            .fetch_bytes(&url)
             .await
             .map_err(|e| format!("Network error: {}", e))?;
-
-        if !response.ok() {
-            return Err(format!("HTTP {}", response.status()));
-        }
-
-        let bytes = response
-            .binary()
-            .await
-            .map_err(|e| format!("Binary error: {}", e))?;
 
         if bytes.len() < 8 {
             return Err("File too short".to_string());
@@ -118,9 +111,7 @@ impl LandMaskLoader {
 
         for (lon_idx, lat_idx) in needed_landmask_tiles {
             if let Err(e) = self.load_tile(lon_idx, lat_idx).await {
-                web_sys::console::warn_1(
-                    &format!("Landmask tile load failed: {}_{}: {}", lon_idx, lat_idx, e).into(),
-                );
+                log::error!("Landmask tile load failed: {}_{}: {}", lon_idx, lat_idx, e);
             }
         }
     }
