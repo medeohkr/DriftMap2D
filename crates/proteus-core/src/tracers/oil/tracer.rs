@@ -1,12 +1,6 @@
 use super::super::Tracer;
 use super::{weathering, OilData, OilProperties, OilPropertiesJson};
 
-macro_rules! log {
-    ( $( $t:tt )* ) => {
-        web_sys::console::log_1(&format!( $( $t )* ).into());
-    }
-}
-
 pub struct OilTracer {
     pub properties: OilProperties,
     pub data: OilData,

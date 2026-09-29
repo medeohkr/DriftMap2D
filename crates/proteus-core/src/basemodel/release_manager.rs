@@ -3,12 +3,6 @@ use rand::{rngs::ThreadRng, thread_rng};
 use rand_distr::{Distribution, Normal};
 use serde::Deserialize;
 
-macro_rules! log {
-    ( $( $t:tt )* ) => {
-        web_sys::console::log_1(&format!( $( $t )* ).into())
-    }
-}
-
 const EPSILON: f32 = 1e-3;
 
 pub struct ReleaseManager {

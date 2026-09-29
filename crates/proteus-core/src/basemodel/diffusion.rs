@@ -1,11 +1,8 @@
+use crate::TileFetcher;
 use super::{normalize_lon, DataLoader, ParticleView};
 use rand::prelude::*;
 use rand_distr::{Distribution, Normal};
-macro_rules! log {
-    ( $( $t:tt )* ) => {
-        web_sys::console::log_1(&format!( $( $t )* ).into());
-    }
-}
+
 const METERS_PER_DEGREE: f32 = 111_120.0;
 const CELL_AREA_DEG2: f32 = 1.0 / 144.0;
 pub enum DiffusionScheme {
@@ -35,9 +32,9 @@ impl Diffusion {
         }
     }
 
-    pub fn diffusion_step(
+    pub fn diffusion_step<F: TileFetcher>(
         &mut self,
-        loader: &DataLoader,
+        loader: &DataLoader<F>,
         old_view: &ParticleView,
         positions: &[(f32, f32, f32)],
         day: usize,
@@ -73,9 +70,9 @@ impl Diffusion {
         final_positions
     }
 
-    pub fn smagorinsky_step(
+    pub fn smagorinsky_step<F: TileFetcher>(
         &mut self,
-        loader: &DataLoader,
+        loader: &DataLoader<F>,
         old_view: &ParticleView,
         positions: &[(f32, f32, f32)],
         day: usize,

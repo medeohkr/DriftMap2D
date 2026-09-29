@@ -1,0 +1,23 @@
+[package]
+name = "proteus-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+# Shared
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+half = { workspace = true }
+roaring = { workspace = true }
+chrono = { workspace = true }
+
+# Core-only
+rand = { workspace = true }
+rand_distr = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+# For unit tests using a mock fetcher
+tokio = { workspace = true }

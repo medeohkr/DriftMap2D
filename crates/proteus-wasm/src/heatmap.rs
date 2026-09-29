@@ -6,12 +6,6 @@ use wasm_bindgen::prelude::*;
 const EPSILON: f32 = 1.0e-12;
 const OCCUPIED_THRESHOLD_FACTOR: f32 = 1.0e-6;
 
-macro_rules! log {
-    ($($t:tt)*) => {
-        web_sys::console::log_1(&format!($($t)*).into());
-    };
-}
-
 // ============================================================================
 // Geometry
 // ============================================================================
@@ -45,9 +39,7 @@ pub struct ProbabilityContour {
 
 pub struct EulerianGrid {
     lon_min: f64,
-    lon_max: f64,
     lat_min: f64,
-    lat_max: f64,
     cell_size: f64,
     nx: usize,
     ny: usize,
@@ -77,9 +69,7 @@ impl EulerianGrid {
         if !valid_bounds {
             return Self {
                 lon_min: 0.0,
-                lon_max: 1.0,
                 lat_min: 0.0,
-                lat_max: 1.0,
                 cell_size: 1.0,
                 nx: 1,
                 ny: 1,
@@ -93,9 +83,7 @@ impl EulerianGrid {
 
         Self {
             lon_min,
-            lon_max,
             lat_min,
-            lat_max,
             cell_size,
             nx,
             ny,

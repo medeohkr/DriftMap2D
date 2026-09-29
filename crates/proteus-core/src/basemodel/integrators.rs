@@ -1,11 +1,5 @@
 use super::ParticleView;
 
-macro_rules! log {
-    ( $( $t:tt )* ) => {
-        web_sys::console::log_1(&format!( $( $t )* ).into())
-    }
-}
-
 pub enum Integrator {
     Euler,
     Midpoint,
@@ -32,7 +26,7 @@ pub fn euler_step(
     view: &ParticleView,
     dt: f32,
     get_velocities_view: impl Fn(&ParticleView) -> Vec<(f32, f32)>,
-    get_velocities_slice: impl Fn(&[(f32, f32, f32)]) -> Vec<(f32, f32)>,
+    _get_velocities_slice: impl Fn(&[(f32, f32, f32)]) -> Vec<(f32, f32)>,
 ) -> Vec<(f32, f32, f32)> {
     let velocities = get_velocities_view(view);
     view.iter()

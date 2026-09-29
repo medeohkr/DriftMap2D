@@ -1,6 +1,5 @@
 pub mod data_loader;
 pub mod diffusion;
-pub mod heatmap;
 pub mod integrators;
 pub mod landmask_loader;
 pub mod particles;
