@@ -1,0 +1,26 @@
+{
+  "start_date": "2026-09-19 00:00",
+  "tracer_type": "generic",
+  "tracer_json": {
+    "wind_factor": 0.02,
+    "wind_deflection": 15
+  },
+  "releases": [
+    {
+      "lon": 141,
+      "lat": 35.5,
+      "radius": 0.1,
+      "schedule": [
+        { "amount": 1.0, "duration": 24 }
+      ]
+    }
+  ],
+  "particles": 5000,
+  "time_step_minutes": 15,
+  "advection": "rk4",
+  "diffusion": "constant",
+  "diffusion_coeffs": [0.0, 0.0],
+  "steps": 288,
+  "tile_url": "validation-tiles",
+  "output": "validation-centroids.json"
+}
