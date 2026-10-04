@@ -31,7 +31,7 @@ pub struct Config {
     pub steps: u32,
 
     #[serde(default = "default_base_url")]
-    pub base_url: String,
+    pub tile_url: String,
 
     #[serde(default = "default_output")]
     pub output: String,
@@ -62,5 +62,5 @@ where
 fn default_advection() -> String { "rk4".into() }
 fn default_diffusion() -> String { "constant".into() }
 fn default_diffusion_coeffs() -> Vec<f32> { vec![0.5, 2.0] }
-fn default_base_url() -> String { "https://tiles.driftmap2d.com/tiles".into() }
+fn default_base_url() -> String { "tiles".into() }
 fn default_output() -> String { "centroids.json".into() }
