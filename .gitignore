@@ -13,6 +13,6 @@ web/node_modules/
 web/src/lib/assets/
 web/src/archive/
 web/dist
-scripts/
+scripts/archive/
 TODO.md
 tests/

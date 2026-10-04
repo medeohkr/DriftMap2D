@@ -20,7 +20,7 @@
         <div class="legend-labels">
             {#if config.tracerType === "sar"}
                 {#each PROBABILTIES.slice() as value}
-                    <div>{value}% Confidence</div>
+                    <div>{value * 100}% Confidence</div>
                 {/each}
             {:else}
                 {#each oilScaling.slice().reverse() as value}

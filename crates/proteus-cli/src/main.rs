@@ -34,7 +34,6 @@ async fn main() -> Result<()> {
         .with_context(|| format!("failed to read config: {}", config_path.display()))?;
     let config: Config = serde_json::from_str(&config_text)
         .with_context(|| format!("failed to parse config: {}", config_path.display()))?;
-
     run(config, config_dir).await
 }
 
@@ -61,13 +60,13 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
     );
 
     let mut loader = DataLoader::new(
-        &format!("{}", config.base_url),
+        &format!("https://tiles.driftmap2d.com/{}", config.tile_url),
         MIN_LON,
         MIN_LAT,
         ReqwestFetcher::new(),
     );
     let mut landmask = LandMaskLoader::new(
-        &format!("{}/roaring_landmask", config.base_url),
+        "https://tiles.driftmap2d.com/roaring_landmask",
         MIN_LON,
         -90.0,
         90.0,
