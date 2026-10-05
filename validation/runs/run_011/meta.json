@@ -1,0 +1,12 @@
+{
+  "run_index": 11,
+  "release_lon": -167.14285714285714,
+  "release_lat": -7.142857142857142,
+  "start_time": "2026-09-19T00:00:00",
+  "duration_hours": 72,
+  "n_particles": 1,
+  "wind_factor": 0.02,
+  "wind_deflection": 0.0,
+  "opendrift_seconds": 2.137932300567627,
+  "cli_seconds": 1.2284483909606934
+}

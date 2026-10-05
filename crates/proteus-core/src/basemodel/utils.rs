@@ -1,9 +1,31 @@
-pub fn meters_per_degree_lat(value: f32, _lat: f32) -> f32 {
-    value / 111_120.0
+// pub fn meters_per_degree_lat(value: f32, _lat: f32) -> f32 {
+//     value / 111_120.0
+// }
+
+// pub fn meters_per_degree_lon(value: f32, lat: f32) -> f32 {
+//     value / (111_120.0 * lat.to_radians().cos())
+// }
+/// WGS84 ellipsoid parameters
+const WGS84_A: f32 = 6_378_137.0;         // semi-major axis, meters
+const WGS84_E2: f32 = 6.694_379_990_14e-3; // first eccentricity squared
+
+/// Meters per degree of latitude at the given latitude (WGS84).
+pub fn meters_per_degree_lat(value: f32, lat: f32) -> f32 {
+    let phi = lat.to_radians();
+    let sin_phi = phi.sin();
+    let denom = (1.0 - WGS84_E2 * sin_phi * sin_phi).powf(1.5);
+    let m = WGS84_A * (1.0 - WGS84_E2) / denom;   // meridional radius
+    value / (m * std::f32::consts::PI / 180.0)
 }
 
+/// Meters per degree of longitude at the given latitude (WGS84).
 pub fn meters_per_degree_lon(value: f32, lat: f32) -> f32 {
-    value / (111_120.0 * lat.to_radians().cos())
+    let phi = lat.to_radians();
+    let sin_phi = phi.sin();
+    let denom = (1.0 - WGS84_E2 * sin_phi * sin_phi).sqrt();
+    let n = WGS84_A / denom;                      // prime vertical radius
+    let r = n * phi.cos();                        // radius of the parallel
+    value / (r * std::f32::consts::PI / 180.0)
 }
 
 pub fn normalize_lon(lon: f32) -> f32 {
