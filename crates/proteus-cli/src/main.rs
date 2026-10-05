@@ -73,10 +73,23 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
         ReqwestFetcher::new(),
     );
 
-    let mut centroids: Vec<(usize, f32, f32)> = Vec::with_capacity(config.steps as usize);
+    // One centroid per step, plus the initial seed position at step 0.
+    let mut centroids: Vec<(usize, f32, f32)> = Vec::with_capacity(config.steps as usize + 1);
     let dt_days = 1.0 / steps_per_day as f32;
 
-    for step_count in 0..config.steps {
+    for step_count in 0..=config.steps {
+        // Step 0 is the seeding step: seed, record initial centroid, do not advance.
+        if step_count == 0 {
+            simulation.release_particles(0);
+            let (lon, lat) = centroid(&simulation);
+            centroids.push((0, lon, lat));
+            log::info!("step 0/{} centroid=({:.4}, {:.4})", config.steps, lon, lat);
+            continue;
+        }
+
+        // Step N: advance from t = (N-1)*dt to t = N*dt.
+        // hour is the forcing time used for the advance, matching the WASM
+        // convention: hour = 24 * step_count / steps_per_day.
         let day_offset = step_count / steps_per_day;
         let date = start_date.date() + chrono::Duration::days(day_offset as i64);
         let current_date_int =
@@ -97,8 +110,8 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
         centroids.push((step_count as usize, lon, lat));
 
         log::info!(
-            "step {}/{} centroid=({:.3}, {:.3})",
-            step_count + 1,
+            "step {}/{} centroid=({:.4}, {:.4})",
+            step_count,
             config.steps,
             lon,
             lat
