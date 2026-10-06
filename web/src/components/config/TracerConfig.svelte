@@ -1,6 +1,7 @@
 <script lang="ts">
     import { config } from "$lib/stores/config.svelte";
     import { genericOverrides, objectOverrides, oilOverrides } from "$lib/stores/index.svelte";
+    import { numberInput } from "$lib/utils";
 
 </script>
 
@@ -15,6 +16,7 @@
                 bind:value={oilOverrides.windFactor}
                 step="any"
                 min="0"
+                use:numberInput={{ min: 0, max: 100 }}
             />
         </div>
         <div class="container-secondary">
@@ -33,6 +35,7 @@
                     bind:value={oilOverrides.windDeflection}
                     step="any"
                     min="0"
+                    use:numberInput={{ min: -90, max: 90 }}
                 />
             </div>
         {/if}
@@ -55,6 +58,7 @@
                         bind:value={oilOverrides.bulltime}
                         step="any"
                         min="0"
+                        use:numberInput={{ min: 0, max: 1e3 }}
                     />
                 </div>
             {:else}
@@ -66,6 +70,7 @@
                         bind:value={oilOverrides.bullwinkleFrac}
                         step="any"
                         min="0"
+                        use:numberInput={{ min: 0, max: 100 }}
                     />
                 </div>
             {/if}
@@ -81,6 +86,7 @@
                 bind:value={objectOverrides.jibeProbability}
                 step="any"
                 min="0"
+                use:numberInput={{ min: 0, max: 100 }}
             />
         </div>
         <div class="container-secondary">
@@ -101,6 +107,7 @@
                     bind:value={objectOverrides.capsizeThreshold}
                     step="any"
                     min="0"
+                    use:numberInput={{ min: 0, max: 1e3 }}
                 />
             </div>
             <div class="container-secondary">
@@ -111,6 +118,7 @@
                     bind:value={objectOverrides.capsizeFraction}
                     step="any"
                     min="0"
+                    use:numberInput={{ min: 0, max: 100 }}
                 />
             </div>
             <div class="container-secondary">
@@ -121,6 +129,7 @@
                     bind:value={objectOverrides.capsizeSigma}
                     step="any"
                     min="0"
+                    use:numberInput={{ min: 0, max: 1e3 }}
                 />
             </div>
         </div>
@@ -136,6 +145,7 @@
                 bind:value={genericOverrides.windFactor}
                 step="any"
                 min="0"
+                use:numberInput={{ min: 0, max: 100 }}
             />
         </div>
         <div class="container-secondary">
@@ -146,6 +156,7 @@
                 bind:value={genericOverrides.windDeflection}
                 step="any"
                 min="0"
+                use:numberInput={{ min: -90, max: 90 }}
             />
         </div>
     </div>

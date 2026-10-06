@@ -1,5 +1,6 @@
 <script lang="ts">
     import { config } from "$lib/stores/config.svelte";
+    import { numberInput } from "$lib/utils";
 
     $effect(() => {
         if (config.tracerType == "sar") {
@@ -19,8 +20,9 @@
             class="field-primary"
             bind:value={config.particleCount}
             step="any"
-            min="100"
+            min="1"
             max="50000"
+            use:numberInput={{ min: 1, max: 50000 }}
         />
     </div>
     <div class="container-secondary">
@@ -30,7 +32,8 @@
             class="field-primary"
             bind:value={config.timeStepMin}
             step="any"
-            min="1"
+            min="0"
+            use:numberInput={{ min: 0, max: 1e3 }}
         />
     </div>
     <div class="container-secondary">
@@ -58,6 +61,7 @@
                 bind:value={config.diffusionCoeffs[0]}
                 step="any"
                 min="0"
+                use:numberInput={{ min: 0, max: 1e6 }}
             />
         </div>
         {:else}
@@ -69,6 +73,7 @@
                 bind:value={config.diffusionCoeffs[1]}
                 step="any"
                 min="0"
+                use:numberInput={{ min: 0, max: 1e3 }}
             />
         </div>
         {/if}
