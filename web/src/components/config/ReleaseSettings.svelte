@@ -1,7 +1,7 @@
 <script lang="ts">
     import { config, releaseConfig } from "$lib/stores/index.svelte";
     import { updateMarker } from "$lib/map";
-    import { normalizeLongitude } from "$lib/utils";
+    import { normalizeLongitude, numberInput } from "$lib/utils";
     import trash from "$lib/assets/images/TrashCan.webp";
     import { untrack } from 'svelte'
 
@@ -49,6 +49,7 @@
                 class="field-primary"
                 value={releaseConfig.activeRelease.lat.toFixed(3)}
                 step="any"
+                use:numberInput={{ min: -90, max: 90 }}
             />
         </div>
         <div class="container-secondary">
@@ -61,6 +62,7 @@
                     releaseConfig.activeRelease.lon,
                 ).toFixed(3)}
                 step="any"
+                use:numberInput={{ min: -180, max: 180 }}
             />
         </div>
         <div class="container-secondary">
@@ -70,6 +72,7 @@
                 type="number"
                 class="field-primary"
                 step="any"
+                use:numberInput={{ min: 0, max: 1e3 }}
             />
         </div>
     </div>
@@ -99,6 +102,7 @@
                                 1,
                                 e.currentTarget.value.length,
                             ))}
+                        use:numberInput={{ min: 0, max: 1e9 }}
                     />
                     <span>tons &nbsp;for</span>
                     <input
@@ -114,6 +118,7 @@
                                 1,
                                 e.currentTarget.value.length,
                             ))}
+                        use:numberInput={{ min: 0, max: 1e3 }}
                     />
                     <span class="interval-text">hours</span>
                 </div>
