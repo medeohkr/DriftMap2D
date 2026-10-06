@@ -106,6 +106,7 @@
                         type="number"
                         class="field-primary transparent interval-field"
                         class:dark={index % 2 != 0}
+                        style="max-width: 30px;"
                         step="any"
                         size="2"
                         oninput={(e) =>
@@ -234,9 +235,13 @@
 
 .interval-field {
     width: auto;
+    min-width: 30px;
+    max-width: 80px;
     box-sizing: content-box;
-    padding: 0;
+    padding-right: var(--spacing-xxs);
     margin: 0;
+
+    field-sizing: content;
 }
 
 .interval-container {

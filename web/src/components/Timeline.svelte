@@ -176,7 +176,8 @@
         width: var(--spacing-md);
         height: var(--spacing-md);
         border-radius: 50%;
-        background: var(--button-primary);
+        background-color: var(--text-secondary);
+        border: 2px solid var(--text-muted);
         cursor: pointer;
     }
 

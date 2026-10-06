@@ -13,13 +13,13 @@ export interface Schedule {
 export const releaseConfig = $state({
     releases: [
         {
-            lat: 26.58,
-            lon: 56.25,
-            radius: 2.5,
+            lat: 48.4,
+            lon: -125.0,
+            radius: 0.5,
             schedule: [
                 {
                     amount: 100,
-                    duration: 12,
+                    duration: 6,
                 },
             ],
         },

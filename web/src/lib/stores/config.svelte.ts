@@ -16,11 +16,11 @@ export interface Config {
 }
 
 export const config: Config = $state({
-    particleCount: 20000,
+    particleCount: 5000,
     timeStepMin: 15,
-    advectionScheme: "rk4",
+    advectionScheme: "rk2",
     diffusionScheme: "constant",
-    diffusionCoeffs: [50, 0.1],
+    diffusionCoeffs: [10, 0.1],
 
     startDate: dateOffset(0),
     startTime: "00:00",

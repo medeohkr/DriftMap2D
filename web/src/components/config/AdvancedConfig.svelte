@@ -5,7 +5,7 @@
         if (config.tracerType == "sar") {
             config.diffusionCoeffs = [0, 0]
         } else {
-            config.diffusionCoeffs = [50, 0.1]
+            config.diffusionCoeffs = [10, 0.1]
         }
     })
 </script>
