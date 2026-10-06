@@ -165,6 +165,9 @@
     row-gap: var(--spacing-lg);
     transition: all var(--transition-medium);
     opacity: 1;
+
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
 }
 .sidebar.transitioning .sidebar-content {
     overflow: hidden;
