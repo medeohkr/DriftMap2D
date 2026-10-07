@@ -1,6 +1,6 @@
 <script lang="ts">
     import { objectOverrides } from '$lib/stores/index.svelte';
-    import { searchObjects, getObjectJson, getGenericObjects } from '$lib/objects';
+    import { searchObjects, getGenericObjects } from '$lib/tracers/objects';
 
     interface SarObject {
         name: string;
@@ -9,12 +9,13 @@
         left: number[];
     }
 
+    let query = $state("");
     let results: SarObject[] = $state([]);
     let isFocused = $state(false);
 
     $effect(() => {
-        if (objectOverrides.query.length > 0) {
-            results = searchObjects(objectOverrides.query);
+        if (query.length > 0) {
+            results = searchObjects(query);
         } else if (isFocused) {
             results = getGenericObjects();
         }
@@ -23,6 +24,7 @@
     function selectObject(obj: SarObject) {
         objectOverrides.id = obj.name;
         objectOverrides.query = obj.name;
+        query = "";
         results = [];
         isFocused = false;
     }
@@ -34,10 +36,10 @@
         <input
             class="selector-primary object-search"
             type="text"
-            bind:value={objectOverrides.query}
+            bind:value={query}
             onfocus={() => isFocused = true}
             onblur={() => isFocused = false}
-            placeholder="Search the SAROPS Leeway Database..."
+            placeholder={objectOverrides.query}
         />
     </div>
 
@@ -102,7 +104,6 @@
     background: none;
     border: none;
     cursor: pointer;
-
     justify-content: space-between;
     align-items: center;
     border-bottom: var(--border-sm) solid var(--border-color);
@@ -120,5 +121,15 @@
 .object-name {
     flex: 1;
     white-space: nowrap;
+}
+
+.object-search::placeholder {
+    opacity: 1;
+    color: var(--text-muted);
+}
+
+.object-search::-moz-placeholder {
+    opacity: 1;
+    color: var(--text-muted);
 }
 </style>

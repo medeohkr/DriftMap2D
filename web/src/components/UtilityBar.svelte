@@ -14,7 +14,6 @@
         config.endTime = "00:00";
         config.totalDays = 7;
         config.tracerType = "generic";
-        config.autoZoom = true;
 
         releaseConfig.releases = [
             {
@@ -35,12 +34,13 @@
         visualization.gridUpdateInterval = 100;
         visualization.gridSize = 0.02;
         visualization.smoothLevel = 2;
+        visualization.autoZoom = true;
 
         genericOverrides.windFactor = 2.0;
         genericOverrides.windDeflection = 0.0;
 
-        oilOverrides.query = "";
-        oilOverrides.id = "";
+        oilOverrides.query = "Generic Light Crude";
+        oilOverrides.id = "GN00006";
         oilOverrides.windFactor = 3.5;
         oilOverrides.windDeflection = 20.0;
         oilOverrides.deflectionScheme = "samuels";
@@ -48,8 +48,8 @@
         oilOverrides.bullwinkleFrac = 0;
         oilOverrides.bulltime = 0;
         
-        objectOverrides.query = "";
-        objectOverrides.id = "";
+        objectOverrides.query = "Person in water, unknown state (mean values)";
+        objectOverrides.id = "Person in water, unknown state (mean values)";
         objectOverrides.jibeProbability = 4;
         objectOverrides.capsizing = false;
         objectOverrides.capsizeThreshold = 30;

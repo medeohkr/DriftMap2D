@@ -1,5 +1,5 @@
-import { getObjectJson } from "./objects";
-import { getOilJson } from "./oils";
+import { getObjectJson } from "./tracers/objects";
+import { getOilJson } from "./tracers/oils";
 import { simulation, config, releaseConfig, genericOverrides, oilOverrides, objectOverrides } from "./stores/index.svelte";
 
 export function dateOffset(days: number) {

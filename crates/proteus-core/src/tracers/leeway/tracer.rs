@@ -13,7 +13,11 @@ pub struct LeewayTracer {
 impl Tracer for LeewayTracer {
     fn push(&mut self) {
         self.data.capsized.push(false);
-        self.data.orientation.push(self.rng.gen());
+        if self.properties.random_orientation {
+            self.data.orientation.push(self.rng.gen());
+        } else {
+            self.data.orientation.push(self.data.orientation.len() % 2 == 0)
+        }
         loop {
             let rdw: f32 = self.rng.sample(StandardNormal);
             let dweps = rdw * self.properties.downwind[2];
