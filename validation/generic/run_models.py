@@ -32,23 +32,22 @@ from opendrift.readers import (
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-SMOC_PATH = Path("../data/currents/smoc_20260919.nc")
-ECMWF_GRIB = Path("../data/wind/ecmwf_2026-09-19_00z.grib2")
-ECMWF_NC = Path("../data/wind/ecmwf_2026-09-19_00z.nc")
+SMOC_PATH = Path("../../data/currents/smoc_20260919.nc")
+ECMWF_GRIB = Path("../../data/wind/ecmwf_2026-09-19_00z.grib2")
+ECMWF_NC = Path("../../data/wind/ecmwf_2026-09-19_00z.nc")
 
 START_TIME = datetime(2026, 9, 19, 0, 0)
-DURATION_HOURS = 72
+DURATION_HOURS = 48
 N_PARTICLES = 1
 TIME_STEP_SECONDS = 900
 TIME_STEP_OUTPUT_SECONDS = 3600
 
-# Central Pacific grid: 8 x 8 = 64 points
-GRID_LON_MIN, GRID_LON_MAX = -180.0, -150.0
-GRID_LAT_MIN, GRID_LAT_MAX = -10.0, 10.0
+GRID_LON_MIN, GRID_LON_MAX = -177.5, -147.5
+GRID_LAT_MIN, GRID_LAT_MAX = -7.5, 7.5
 GRID_N = 8
 
 # CLI
-CLI_BIN = Path("../target/release/proteus.exe")   # Windows
+CLI_BIN = Path("../../target/release/proteus.exe")   # Windows
 CLI_STEPS = DURATION_HOURS * (3600 // TIME_STEP_OUTPUT_SECONDS)  # 18
 CLI_TIME_STEP_MINUTES = TIME_STEP_OUTPUT_SECONDS / 60.0           # 60
 

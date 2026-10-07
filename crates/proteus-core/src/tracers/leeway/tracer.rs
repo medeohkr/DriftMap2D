@@ -16,7 +16,7 @@ impl Tracer for LeewayTracer {
         if self.properties.random_orientation {
             self.data.orientation.push(self.rng.gen());
         } else {
-            self.data.orientation.push(self.data.orientation.len() % 2 == 0)
+            self.data.orientation.push(self.data.orientation.len() % 2 == 0);
         }
         loop {
             let rdw: f32 = self.rng.sample(StandardNormal);
@@ -57,7 +57,7 @@ impl Tracer for LeewayTracer {
 
     fn windage(&self, index: usize, _lat: f32, wind_u: f32, wind_v: f32) -> (f32, f32) {
         let wind_speed = (wind_u * wind_u + wind_v * wind_v).sqrt();
-        
+
         let wind_dir_u = wind_u / wind_speed;
         let wind_dir_v = wind_v / wind_speed;
         

@@ -28,6 +28,7 @@
         }
 
         await startSimulation();
+        simulationState = "running";
     }
 
     function pause() {

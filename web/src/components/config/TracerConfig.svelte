@@ -93,7 +93,7 @@
             <span>Random Orientation</span>
             <select bind:value={objectOverrides.randomOrientation} class="scheme-selector">
                 <option value={true}>True</option>
-                <option value={false}>false</option>
+                <option value={false}>False</option>
             </select>
         </div>
         <div class="container-secondary">

@@ -33,7 +33,7 @@ export function getObjectJson() {
         right: object.right,
         left: object.left,
         jibe_probability: objectOverrides.jibeProbability,
-        deterministic_orientation: objectOverrides.randomOrientation,
+        random_orientation: objectOverrides.randomOrientation,
         capsizing: objectOverrides.capsizing,
         capsize_threshold: objectOverrides.capsizeThreshold,
         capsize_fraction: objectOverrides.capsizeFraction,     
