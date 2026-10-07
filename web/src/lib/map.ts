@@ -60,7 +60,7 @@ export async function updateMarker(lon: number, lat: number) {
 }
 
 export function zoom() {
-    if (!config.autoZoom) return;
+    if (!visualization.autoZoom) return;
     if (map.getZoom() < 6 - getTotalDays() / 100) {
         map.flyTo({
             center: [getAverageReleasePosition()[0], getAverageReleasePosition()[1]],

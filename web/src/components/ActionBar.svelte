@@ -1,7 +1,8 @@
 <script lang="ts">
     import resetBtnImg from '$lib/assets/images/ResetBtn.webp';
     import { startSimulation, stopSimulation, resetSimulation, resumeSimulation } from '$lib/simulation';
-    import { timeline, sidebarState } from '$lib/stores/index.svelte';
+    import { timeline, sidebarState, releaseConfig, simulation } from '$lib/stores/index.svelte';
+    import { showToast } from '$lib/stores/toast.svelte';
 
     let simulationState: "inactive" | "running" | "paused" | "playback" = $state("inactive");
     let { toggleSidebar } = $props();
@@ -12,24 +13,33 @@
         }
     });
 
-    async function start(e: Event) {
-        const errors = await startSimulation();
-        if (!errors || errors.length === 0) {
-            simulationState = "running";
+    async function start() {
+        let errorMessage = "";
+        for (let index = 0; index < releaseConfig.releases.length; index++) {
+            const release = releaseConfig.releases[index];
+            if (simulation.proteus?.is_on_land(release.lon, release.lat)) {
+                errorMessage += `Release ${index + 1} (${release.lat.toFixed(1)}°N, ${release.lon.toFixed(1)}°E) is on land.\n`;
+            }
         }
+        if (errorMessage.length) {
+            showToast(errorMessage);
+            return;
+        }
+
+        await startSimulation();
     }
 
-    function pause(e: Event) {
+    function pause() {
         stopSimulation();
         simulationState = "paused";
     }
 
-    function resume(e: Event) {
+    function resume() {
         resumeSimulation();
         simulationState = "running";
     }
 
-    function reset(e: Event) {
+    function reset() {
         resetSimulation();
         simulationState = "inactive";
     }

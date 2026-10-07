@@ -6,6 +6,7 @@ import {
     timeline,
     stats,
     history,
+    Release,
 } from "./stores/index.svelte";
 import { map, updateMarker, zoom } from "./map";
 import { preloader } from "./preloader";
@@ -18,6 +19,7 @@ import {
 } from "./visualization";
 import { Proteus } from "../pkg/proteus";
 import { getTotalDays, startDateTime, releasesToJson, getAveragePosition, getTracerJson} from "./utils";
+import { showToast } from "./stores/toast.svelte";
 
 export function createProteus() {
     simulation.proteus = new Proteus(
@@ -33,11 +35,6 @@ export function createProteus() {
     );
 }
 
-export function validateSimulation() {
-    const errors: any = [];
-
-    return errors;
-}
 
 export async function simulationStep(version: number) {
     if (
@@ -79,7 +76,7 @@ export async function simulationStep(version: number) {
         }
         updateBoundingBox();
 
-        if (simulation.stepCount % 2 === 0) {
+        if (simulation.stepCount % visualization.snapshotInterval === 0) {
             updateStats();
             captureSnapshot(simulation.proteus.current_day());
         }
@@ -119,13 +116,6 @@ export async function startSimulation() {
 
     if (simulation.landmaskPromise) {
         await simulation.landmaskPromise;
-    }
-
-    const errors = validateSimulation();
-
-    if (errors.length) {
-        alert(`❌ Cannot start simulation:\n\n${errors.join("\n\n")}`);
-        return errors;
     }
 
     simulation.simulationActive = true;

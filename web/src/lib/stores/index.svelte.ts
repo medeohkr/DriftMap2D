@@ -9,3 +9,4 @@ export { oilOverrides, type OilOverrides } from "./oil-overrides.svelte";
 export { objectOverrides, type ObjectOverrides } from "./object-overrides.svelte"
 export { sidebarState, type SidebarState } from "./sidebar.svelte";
 export { releaseConfig, type Release, type Schedule } from "./releases.svelte"
+export { toast, type Toast } from "./toast.svelte"
