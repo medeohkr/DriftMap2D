@@ -1,5 +1,6 @@
 <script lang="ts">
     import resetBtnImg from '$lib/assets/images/ResetBtn.webp';
+    import { exportScenario } from '$lib/io/exportScenario';
     import { startSimulation, stopSimulation, resetSimulation, resumeSimulation } from '$lib/simulation';
     import { timeline, sidebarState, releaseConfig, simulation } from '$lib/stores/index.svelte';
     import { showToast } from '$lib/stores/toast.svelte';
@@ -75,7 +76,7 @@
 <button
     class:active={timeline.playbackMode}
     class="btn-primary"
-    id="export-geojson"
+    onclick={() => exportScenario()}
 >
     Export GeoJson
 </button>

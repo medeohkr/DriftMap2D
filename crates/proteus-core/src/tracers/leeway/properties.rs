@@ -8,6 +8,7 @@ pub struct LeewayProperties {
     pub left: [f32; 3],
 
     pub jibe_probability: f32,
+    pub random_orientation: bool,
 
     pub capsizing: bool,
     pub capsize_threshold: f32,

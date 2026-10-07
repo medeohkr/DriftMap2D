@@ -90,6 +90,13 @@
             />
         </div>
         <div class="container-secondary">
+            <span>Random Orientation</span>
+            <select bind:value={objectOverrides.randomOrientation} class="scheme-selector">
+                <option value={true}>True</option>
+                <option value={false}>false</option>
+            </select>
+        </div>
+        <div class="container-secondary">
             <span>Object Can Capsize</span>
             <select bind:value={objectOverrides.capsizing} class="scheme-selector">
                 <option value={true}>True</option>

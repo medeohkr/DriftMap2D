@@ -1,6 +1,6 @@
 import { initMap, updateMarker } from "./map";
 import { initGridLayer } from "./visualization";
-import { loadOilCatalog} from "./oils";
+import { loadOilCatalog} from "./tracers/oils";
 import { createProteus } from "./simulation";
 import init, { setup_panic_hook } from "../pkg/proteus";
 import { releaseConfig } from "./stores/index.svelte";

@@ -15,4 +15,6 @@ web/src/archive/
 web/dist
 scripts/archive/
 TODO.md
-validation/runs/
+validation/generic/runs/
+validation/oil/runs/
+validation/leeway/runs/

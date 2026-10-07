@@ -1,13 +1,14 @@
 <script lang="ts">
-    import { oilOverrides} from '$lib/stores/index.svelte';
-    import { searchOils, type OilRecord, getGenericOils} from '$lib/oils';
+    import { oilOverrides } from '$lib/stores/index.svelte';
+    import { searchOils, type OilRecord, getGenericOils } from '$lib/tracers/oils';
 
+    let query = $state("");
     let results: OilRecord[] = $state([]);
     let isFocused = $state(false);
 
     $effect(() => {
-        if (oilOverrides.query.length > 0) {
-            results = searchOils(oilOverrides.query);
+        if (query.length > 0) {
+            results = searchOils(query);
         } else if (isFocused) {
             results = getGenericOils();
         }
@@ -16,6 +17,7 @@
     function selectOil(oil: OilRecord) {
         oilOverrides.id = oil.oil_id;
         oilOverrides.query = oil.name;
+        query = "";
         results = [];
         isFocused = false;
     }
@@ -27,10 +29,10 @@
         <input
             class="selector-primary oil-search"
             type="text"
-            bind:value={oilOverrides.query}
+            bind:value={query}
             onfocus={() => isFocused = true}
             onblur={() => isFocused = false}
-            placeholder="Search the ADIOS Oil Database..."
+            placeholder={oilOverrides.query}
         />
     </div>
 
@@ -59,7 +61,6 @@
 
 .oil-search {
     width: 100%;
-
     text-overflow: ellipsis;
 }
 
@@ -96,7 +97,6 @@
     background: none;
     border: none;
     cursor: pointer;
-
     justify-content: space-between;
     align-items: center;
     border-bottom: var(--border-sm) solid var(--border-color);
@@ -114,7 +114,6 @@
 .oil-name {
     overflow: hidden;
     flex: 1;
-
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -123,5 +122,13 @@
     margin-left: var(--spacing-sm);
 }
 
+.oil-search::placeholder {
+    opacity: 1;
+    color: var(--text-muted);
+}
 
+.oil-search::-moz-placeholder {
+    opacity: 1;
+    color: var(--text-muted);
+}
 </style>
