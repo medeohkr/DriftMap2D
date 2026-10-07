@@ -11,6 +11,7 @@
   import CoordinateDisplay from './components/CoordinateDisplay.svelte';
   
   import './app.css';
+    import Toast from './components/Toast.svelte';
 
   
   onMount(async () => {
@@ -27,6 +28,7 @@
   <Timeline />
   <CurrentDay />
   <CoordinateDisplay />
+  <Toast />
 </div>
 
 <style>

@@ -12,7 +12,6 @@ export interface Config {
     endTime: string;
     totalDays: number;
     tracerType: string;
-    autoZoom: boolean;
 }
 
 export const config: Config = $state({
@@ -29,6 +28,4 @@ export const config: Config = $state({
     totalDays: 7,
 
     tracerType: "generic",
-
-    autoZoom: true,
 });

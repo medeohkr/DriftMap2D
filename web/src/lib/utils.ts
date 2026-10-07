@@ -101,7 +101,6 @@ export function roundToSigFigs(num: number, sigFigs: number) {
   return result;
 }
 
-// lib/actions/numberInput.ts
 type NumberInputParams = {
     min?: number;
     max?: number;
