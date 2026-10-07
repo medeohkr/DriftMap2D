@@ -69,27 +69,30 @@ def load_centroids(path):
 # Per-run normalized error
 # ---------------------------------------------------------------------------
 def run_error_series(od_lon, od_lat, dm_lon, dm_lat):
-    """Return normalized error at each step.
-
-    error_pct[n] = 100 * haversine(dm[n], od[n]) / haversine(od[n], od[0])
-
-    Where the drift distance is zero (step 0), the error is defined as 0.
-    """
     n = min(len(od_lon), len(dm_lon))
     od_lon, od_lat = od_lon[:n], od_lat[:n]
     dm_lon, dm_lat = dm_lon[:n], dm_lat[:n]
 
     abs_err_km = haversine_km(dm_lon, dm_lat, od_lon, od_lat)
-    drift_km = haversine_km(od_lon, od_lat, od_lon[0], od_lat[0])
+    drift_km = cumulative_path_length(od_lon, od_lat)
 
-    # Avoid division by zero at step 0 (drift_km[0] == 0 by construction)
-    err_pct = np.zeros(n)
-    mask = drift_km > 1e-6
+    err_pct = np.full(n, np.nan)
+    mask = np.isfinite(abs_err_km) & np.isfinite(drift_km) & (drift_km > 1e-6)
     err_pct[mask] = 100.0 * abs_err_km[mask] / drift_km[mask]
 
     return err_pct, abs_err_km, drift_km
 
+def cumulative_path_length(lon, lat):
+    """Total distance traveled along the trajectory up to each step.
 
+    Returns an array of length n where result[0] = 0 and
+    result[i] = sum of haversine distances from step 0 to step i.
+    """
+    n = len(lon)
+    out = np.zeros(n)
+    for i in range(1, n):
+        out[i] = out[i - 1] + haversine_km(lon[i-1], lat[i-1], lon[i], lat[i])
+    return out
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -183,7 +186,7 @@ def main():
     )
     ax_pct.set_ylabel("centroid error (% of drift distance)")
     ax_pct.set_title(
-        "DriftMap vs OpenDrift: normalized centroid error over 72h "
+        "DriftMap vs OpenDrift: normalized centroid error over 48h "
         f"across {len(per_run_pct)} Pacific runs"
     )
     ax_pct.grid(True, alpha=0.3)
