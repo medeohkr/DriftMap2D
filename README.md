@@ -1,3 +1,4 @@
-DriftMap is a client-side, multi-tracer Lagrangian particle tracking model that runs entirely in the browser via WebAssembly. It is primarily used to determine the fate and trajectory of simulated substances and objects such as oil and plastic in marine environments.
+DriftMap2D is a client-side, multi-tracer Lagrangian particle tracking model that runs entirely in the browser via WebAssembly. It is primarily used to determine the fate and trajectory of simulated tracers (such as oil or a search and rescue object) in the ocean.
 
-Driftmap performs all advection/diffusion and tracer-specific behaviour modelling completely client-side. It achieves this by streaming processed and tiled hydrodynamical data from CDN ahead of simulation time, allowing for extremely fast lagrangian simulation with real-time visualization.
+DriftMap2D performs all modelling calculations client-side. It achieves this by streaming processed and tiled hydrodynamical data from a CDN ahead of simulation time, and by using a rust engine compiled to WASM to interpolate, integrate, and apply tracer-specific physics, DriftMap2D can complete drift simulations in seconds with real-time simulation.
+
