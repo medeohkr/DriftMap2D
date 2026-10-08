@@ -38,7 +38,7 @@ export const releaseConfig = $state({
             schedule: [
                 {
                     amount: 100,
-                    duration: 12,
+                    duration: 6,
                 },
             ],
             ...release,
@@ -59,7 +59,7 @@ export const releaseConfig = $state({
     addInterval(interval: any) {
         releaseConfig.activeRelease.schedule.push({
             amount: 100,
-            duration: 12,
+            duration: 6,
             ...interval,
         });
     },
