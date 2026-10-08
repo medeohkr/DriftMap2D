@@ -49,11 +49,11 @@
         <ActionBar {toggleSidebar} />
     </div>
 
-    <div class="utility-bar">
-        <UtilityBar />
-    </div>
-
     <fieldset disabled={simulation.simulationActive}>
+        <div class="utility-bar">
+            <UtilityBar />
+        </div>
+        
         <div class="sidebar-content">
                 <div class="model-selection">
                     <ModelSelection />
