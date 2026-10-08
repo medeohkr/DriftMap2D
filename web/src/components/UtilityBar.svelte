@@ -3,7 +3,7 @@
     import { dateOffset } from "$lib/utils";
 
     function resetConfig() {
-        config.particleCount = 20000;
+        config.particleCount = 10000;
         config.timeStepMin = 15;
         config.advectionScheme = "rk2";
         config.diffusionScheme = "constant";
