@@ -12,7 +12,7 @@ DriftMap2D currently supports the following tracer modules:
 
 Generic Drift does not have any tracer-specific physics; it is purely an ocean and wind drift module akin to OpenDrift's OceanDrift.
 
-Oil Weathering models emulsification and evaporation for 1460 ADIOS oils. The weathering parameterizations were primarily ported from PyGnome.
+Oil Weathering models emulsification and evaporation for 1460 ADIOS oils. The weathering parameterizations were primarily ported from PyGNOME.
 https://github.com/NOAA-ORR-ERD/PyGnome
 
 Search and Rescue is a port of OpenDrift's Leeway model and supports all 85 Leeway objects provided by OpenDrifts' object property database.
@@ -26,7 +26,7 @@ Generic Drift and Search and Rescue models have been validated against Opendrift
 DriftMap2D currently serves processed tiles from the following global forcing products:
 
     For Ocean Currents (uo, vo): 
-        - SMOC (Surface Merged Ocean Current). An hourly, 1/12 degree surface ocean currrent velocity product by CMEMS that includes Stokes' drift and tidal drift, eliminating the need for a separate wave model.
+        - SMOC (Surface Merged Ocean Current). An hourly, 1/12 degree surface ocean current velocity product by CMEMS that includes Stokes' drift and tidal drift, eliminating the need for a separate wave model.
         https://data.marine.copernicus.eu/product/GLOBAL_ANALYSISFORECAST_PHY_001_024/download?dataset=cmems_mod_glo_phy_anfc_merged-uv_PT1H-i_202211
 
     For Wind and Sea Temperature (10u, 10v, skt):
