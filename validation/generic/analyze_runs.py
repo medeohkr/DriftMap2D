@@ -202,7 +202,7 @@ def main():
     )
     ax_pct.set_ylabel("centroid error (% of path length)")
     ax_pct.set_title(
-        f"DriftMap vs OpenDrift: centroid error across {len(per_run_pct)} runs"
+        f"DriftMap Generic Drift vs OpenDrift OceanDrift: centroid error across {len(per_run_pct)} runs"
     )
     ax_pct.grid(True, alpha=0.3)
     ax_pct.legend(loc="upper left")
