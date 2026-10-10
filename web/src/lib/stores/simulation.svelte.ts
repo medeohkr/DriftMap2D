@@ -1,4 +1,4 @@
-import type { Proteus } from "../../pkg/proteus";
+import type { Proteus } from "../../pkg/proteus_wasm";
 
 export interface Simulation {
     proteus: Proteus | null;

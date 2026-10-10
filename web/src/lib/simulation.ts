@@ -17,7 +17,7 @@ import {
     updateConcentrationLayer,
     captureSnapshot,
 } from "./visualization";
-import { Proteus } from "../pkg/proteus";
+import { Proteus } from "../pkg/proteus_wasm";
 import { getTotalDays, startDateTime, releasesToJson, getAveragePosition, getTracerJson} from "./utils";
 import { showToast } from "./stores/toast.svelte";
 
@@ -117,7 +117,7 @@ export async function startSimulation() {
     if (simulation.landmaskPromise) {
         await simulation.landmaskPromise;
     }
-    
+
     simulation.simulationActive = true;
     simulation.simulationRunning = true;
     simulation.simulationVersion++;
@@ -187,13 +187,6 @@ export function updateStats() {
         simulation.proteus?.mass_weighted_evaporation()?.toFixed(1) ?? "0.0";
     stats.totalMass =
         simulation.proteus?.total_floating_mass_tons()?.toFixed(1) ?? "0.0";
-}
-
-export function getStats() {
-    return {
-        stranded: stats.stranded,
-        emulsified: stats.emulsified,
-        evaporated: stats.evaporated,
-        total_mass: stats.totalMass,
-    };
+    stats.activeParticles =
+        simulation.proteus?.active_particle_count().toString() ?? "0.0";
 }
