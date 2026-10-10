@@ -7,7 +7,7 @@ import {
     stats,
     history,
 } from "./stores/index.svelte";
-import { HeatmapGenerator } from "../pkg/proteus";
+import { HeatmapGenerator } from "../pkg/proteus_wasm";;
 import { getAverageReleasePosition } from "./utils";
 
 export const COLORS = [
