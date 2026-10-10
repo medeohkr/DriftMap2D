@@ -31,8 +31,8 @@ impl Particles {
         self.len += 1;
     }
 
-    pub fn stranded_count(&self) -> usize {
-        self.stranded.iter().filter(|&&a| a).count()
+    pub fn unstranded_count(&self) -> usize {
+        self.stranded.iter().filter(|&&a| !a).count()
     }
 
     // needed in array for wasm

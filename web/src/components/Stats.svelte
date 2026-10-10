@@ -3,12 +3,20 @@
 </script>
 
 {#if simulation.simulationActive}
-    {#if config.tracerType == "oil"}
-        <div class="stats-container" id="stats-container">
-            <div class="container-secondary">
-                <span class="stats-primary-text">Stranded</span>
-                <span class="unit-text" id="stranded">{stats.stranded}%</span>
-            </div>
+    <div class="stats-container" id="stats-container">
+        <div class="container-secondary">
+            <span class="stats-primary-text">Active Particles</span>
+            <span class="unit-text" id="total-mass"
+                >{stats.activeParticles}</span
+            >
+        </div>
+        <div class="container-secondary">
+            <span class="stats-primary-text">Stranded</span>
+            <span class="unit-text" id="stranded"
+                >{stats.stranded}%</span
+            >
+        </div>
+        {#if config.tracerType === "oil"}
             <div class="container-secondary">
                 <span class="stats-primary-text">Emulsified</span>
                 <span class="unit-text" id="emulsified"
@@ -21,14 +29,16 @@
                     >{stats.evaporated}%</span
                 >
             </div>
+        {/if}
+        {#if ["generic", "oil"].includes(config.tracerType)}
             <div class="container-secondary">
                 <span class="stats-primary-text">Floating Mass</span>
                 <span class="unit-text" id="total-mass"
                     >{stats.totalMass} t</span
                 >
             </div>
-        </div>
-    {/if}
+        {/if}
+    </div>
 {/if}
 
 <style>
@@ -49,12 +59,5 @@
         font-weight: var(--weight-primary);
         color: var(--text-secondary);
         margin-right: 50px;
-    }
-
-    #stranded,
-    #emulsified,
-    #evaporated,
-    #total-mass {
-        width: var(--width-stats-units);
     }
 </style>

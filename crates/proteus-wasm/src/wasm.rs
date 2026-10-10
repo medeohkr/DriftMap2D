@@ -156,8 +156,8 @@ impl Proteus {
         positions
     }
 
-    pub fn stranded_particle_count(&self) -> usize {
-        self.simulation.get_particles().stranded_count()
+    pub fn active_particle_count(&self) -> usize {
+        self.simulation.get_particles().unstranded_count()
     }
 
     pub fn current_day(&self) -> f32 {

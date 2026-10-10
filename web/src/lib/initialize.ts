@@ -2,7 +2,7 @@ import { initMap, updateMarker } from "./map";
 import { initGridLayer } from "./visualization";
 import { loadOilCatalog} from "./tracers/oils";
 import { createProteus } from "./simulation";
-import init, { setup_panic_hook } from "../pkg/proteus";
+import init, { setup_panic_hook } from "../pkg/proteus_wasm";
 import { releaseConfig } from "./stores/index.svelte";
 
 export async function initialize() {
