@@ -122,6 +122,12 @@
     transition: max-height var(--transition-slow);
 }
 
+@media (max-width: 768px) {
+    .sidebar {
+        height: calc(700px);
+        top: 80px;
+    }
+}
 .sidebar.stage-1 {
     max-height: calc(60px + var(--height-action-btn) + var(--height-utility-bar));
 }

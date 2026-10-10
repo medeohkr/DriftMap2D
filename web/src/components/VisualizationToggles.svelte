@@ -61,4 +61,9 @@
         background: white;
         color: var(--shadow-primary);
     }
+    @media (max-width: 768px) {
+        .visualization-toggle-container {
+            left: 35%;
+        }
+    }
 </style>
