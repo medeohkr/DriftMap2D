@@ -117,7 +117,7 @@ export async function startSimulation() {
     if (simulation.landmaskPromise) {
         await simulation.landmaskPromise;
     }
-
+    
     simulation.simulationActive = true;
     simulation.simulationRunning = true;
     simulation.simulationVersion++;
