@@ -135,7 +135,11 @@
         border-radius: var(--border-lg);
         box-shadow: var(--shadow-size-secondary) var(--shadow-secondary);
     }
-
+    @media (max-width: 768px) {
+        .timeline-container {
+            position: fixed;
+        }
+    }
     .timeline-controls {
         display: flex;
         column-gap: var(--spacing-sm);

@@ -45,7 +45,11 @@
         box-shadow: var(--shadow-size-secondary) var(--shadow-secondary);
         pointer-events: none;
     }
-
+    @media (max-width: 768px) {
+        #concentration-legend {
+            position: fixed;
+        }
+    }
     .legend-bars {
         display: flex;
         flex-direction: column;

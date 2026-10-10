@@ -45,7 +45,11 @@
         align-items: center;
         white-space: nowrap;
     }
-
+    @media (max-width: 768px) {
+        .visualization-toggle-container {
+            left: 35%;
+        }
+    }
     .visualization-toggle {
         background: none;
         color: var(--text-primary);
@@ -60,10 +64,5 @@
     .visualization-toggle.active {
         background: white;
         color: var(--shadow-primary);
-    }
-    @media (max-width: 768px) {
-        .visualization-toggle-container {
-            left: 35%;
-        }
     }
 </style>
