@@ -12,7 +12,7 @@ impl Integrator {
         view: &ParticleView,
         dt: f32,
         get_velocities_view: impl Fn(&ParticleView) -> Vec<(f32, f32)>,
-        get_velocities_slice: impl Fn(&[(f32, f32, f32)]) -> Vec<(f32, f32)>,
+        get_velocities_slice: impl Fn(&[(f32, f32, f32)], f32) -> Vec<(f32, f32)>,
     ) -> Vec<(f32, f32, f32)> {
         match self {
             Integrator::Euler => euler_step(view, dt, get_velocities_view, get_velocities_slice),
@@ -26,7 +26,7 @@ pub fn euler_step(
     view: &ParticleView,
     dt: f32,
     get_velocities_view: impl Fn(&ParticleView) -> Vec<(f32, f32)>,
-    _get_velocities_slice: impl Fn(&[(f32, f32, f32)]) -> Vec<(f32, f32)>,
+    _get_velocities_slice: impl Fn(&[(f32, f32, f32)], f32) -> Vec<(f32, f32)>,
 ) -> Vec<(f32, f32, f32)> {
     let velocities = get_velocities_view(view);
     view.iter()
@@ -44,10 +44,10 @@ pub fn midpoint_step(
     view: &ParticleView,
     dt: f32,
     get_velocities_view: impl Fn(&ParticleView) -> Vec<(f32, f32)>,
-    get_velocities_slice: impl Fn(&[(f32, f32, f32)]) -> Vec<(f32, f32)>,
+    get_velocities_slice: impl Fn(&[(f32, f32, f32)], f32) -> Vec<(f32, f32)>,
 ) -> Vec<(f32, f32, f32)> {
     let k1 = get_velocities_view(view);
-    let k2 = get_velocities_slice(&compute_intermediate_positions(view, 0.5 * dt, &k1));
+    let k2 = get_velocities_slice(&compute_intermediate_positions(view, 0.5 * dt, &k1), 0.5 * dt);
 
     view.iter()
         .map(|(i, lon, lat, depth)| {
@@ -64,12 +64,12 @@ pub fn rk4_step(
     view: &ParticleView,
     dt: f32,
     get_velocities_view: impl Fn(&ParticleView) -> Vec<(f32, f32)>,
-    get_velocities_slice: impl Fn(&[(f32, f32, f32)]) -> Vec<(f32, f32)>,
+    get_velocities_slice: impl Fn(&[(f32, f32, f32)], f32) -> Vec<(f32, f32)>,
 ) -> Vec<(f32, f32, f32)> {
     let k1 = get_velocities_view(view);
-    let k2 = get_velocities_slice(&compute_intermediate_positions(view, 0.5 * dt, &k1));
-    let k3 = get_velocities_slice(&compute_intermediate_positions(view, 0.5 * dt, &k2));
-    let k4 = get_velocities_slice(&compute_intermediate_positions(view, dt, &k3));
+    let k2 = get_velocities_slice(&compute_intermediate_positions(view, 0.5 * dt, &k1), 0.5 * dt);
+    let k3 = get_velocities_slice(&compute_intermediate_positions(view, 0.5 * dt, &k2), 0.5 * dt);
+    let k4 = get_velocities_slice(&compute_intermediate_positions(view, dt, &k3), dt);
 
     view.iter()
         .map(|(i, lon, lat, depth)| {
