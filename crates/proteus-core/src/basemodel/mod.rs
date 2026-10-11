@@ -6,7 +6,6 @@ pub mod particles;
 pub mod release_manager;
 pub mod simulation;
 pub mod utils;
-pub mod wasm;
 
 pub use data_loader::DataLoader;
 pub use diffusion::Diffusion;

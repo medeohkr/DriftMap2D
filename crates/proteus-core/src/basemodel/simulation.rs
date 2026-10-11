@@ -145,8 +145,14 @@ impl Simulation {
                 .collect()
         };
 
-        let get_velocities_slice = |slice: &[(f32, f32, f32)]| -> Vec<(f32, f32)> {
-            let env = loader.get_velocities_wind_slice(slice, current_day, hour);
+        let get_velocities_slice = |slice: &[(f32, f32, f32)], dt: f32| -> Vec<(f32, f32)> {
+            let mut new_hour = hour + dt / 3600.0;
+            let mut new_day = current_day;
+            if new_hour >= 24.0 {
+                new_hour -= 24.0;
+                new_day += 1;
+            }
+            let env = loader.get_velocities_wind_slice(slice, new_day, new_hour);
             env.iter()
                 .copied()
                 .enumerate()
