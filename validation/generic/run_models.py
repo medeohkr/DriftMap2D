@@ -39,8 +39,7 @@ ECMWF_NC = Path("../../data/wind/ecmwf_2026-09-19_00z.nc")
 START_TIME = datetime(2026, 9, 19, 0, 0)
 DURATION_HOURS = 48
 N_PARTICLES = 1
-TIME_STEP_SECONDS = 900
-TIME_STEP_OUTPUT_SECONDS = 3600
+TIME_STEP_SECONDS = 3600
 
 GRID_LON_MIN, GRID_LON_MAX = -177.5, -147.5
 GRID_LAT_MIN, GRID_LAT_MAX = -7.5, 7.5
@@ -48,8 +47,8 @@ GRID_N = 8
 
 # CLI
 CLI_BIN = Path("../../target/release/proteus.exe")   # Windows
-CLI_STEPS = DURATION_HOURS * (3600 // TIME_STEP_OUTPUT_SECONDS)  # 18
-CLI_TIME_STEP_MINUTES = TIME_STEP_OUTPUT_SECONDS / 60.0           # 60
+CLI_STEPS = DURATION_HOURS * (3600 // TIME_STEP_SECONDS)
+CLI_TIME_STEP_MINUTES = TIME_STEP_SECONDS / 60.0
 
 # Same physics as the OpenDrift config
 WIND_FACTOR = 0.02
@@ -111,7 +110,7 @@ def run_opendrift(run_dir, release_lon, release_lat, reader_smoc, reader_wind):
     o.run(
         duration=timedelta(hours=DURATION_HOURS),
         time_step=TIME_STEP_SECONDS,
-        time_step_output=TIME_STEP_OUTPUT_SECONDS,
+        time_step_output=TIME_STEP_SECONDS,
         outfile=str(out_nc),
     )
     return time.time() - t0
