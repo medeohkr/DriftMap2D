@@ -200,6 +200,16 @@ fieldset {
 }
 
 fieldset[disabled] {
-    opacity: 0.6;
+    cursor: not-allowed !important;
 }
+
+:global(fieldset[disabled] *) {
+    pointer-events: auto !important;
+}
+
+:global(fieldset[disabled] *:hover) {
+    cursor: not-allowed !important;
+    opacity: 1.0
+}
+
 </style>
