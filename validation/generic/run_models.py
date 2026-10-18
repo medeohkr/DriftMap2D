@@ -50,7 +50,6 @@ CLI_BIN = Path("../../target/release/proteus.exe")   # Windows
 CLI_STEPS = DURATION_HOURS * (3600 // TIME_STEP_SECONDS)
 CLI_TIME_STEP_MINUTES = TIME_STEP_SECONDS / 60.0
 
-# Same physics as the OpenDrift config
 WIND_FACTOR = 0.02
 WIND_DEFLECTION = 0.0
 
@@ -104,6 +103,7 @@ def run_opendrift(run_dir, release_lon, release_lat, reader_smoc, reader_wind):
         radius=0,
         number=N_PARTICLES,
         time=START_TIME,
+        wind_drift_factor=WIND_FACTOR
     )
 
     t0 = time.time()
