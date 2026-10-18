@@ -17,7 +17,6 @@ export function showToast(message: string, duration: number = 3500) {
     
     toast.message = message;
     toast.visible = true;
-    console.log(toast.visible)
     toast.timeoutId = setTimeout(() => {
         toast.visible = false;
         toast.timeoutId = null;

@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 if sys.platform == "linux":
     BASE_DIR = Path("./data")
 else:
-    BASE_DIR = Path("D:/projects/driftmap/data")
+    BASE_DIR = Path("D:/projects/driftmap2d/data")
 
 BUCKET = "driftmap-tiles"
 FORECAST_DAYS = 10  # Yesterday + 10 forecast days

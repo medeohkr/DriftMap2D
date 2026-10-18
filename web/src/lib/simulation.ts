@@ -1,14 +1,12 @@
 import {
     simulation,
     config,
-    releaseConfig,
     visualization,
     timeline,
     stats,
     history,
-    Release,
 } from "./stores/index.svelte";
-import { map, updateMarker, zoom } from "./map";
+import { map, zoom } from "./map";
 import { preloader } from "./preloader";
 import {
     updateHeatmapVisualization,
@@ -19,7 +17,6 @@ import {
 } from "./visualization";
 import { Proteus } from "../pkg/proteus_wasm";
 import { getTotalDays, startDateTime, releasesToJson, getAveragePosition, getTracerJson} from "./utils";
-import { showToast } from "./stores/toast.svelte";
 
 export function createProteus() {
     simulation.proteus = new Proteus(
@@ -131,10 +128,6 @@ export async function startSimulation() {
     updateConcentrationLayer();
     zoom();
 
-    if (visualization.currentMarker) {
-        visualization.currentMarker.getElement().style.display = "none";
-    }
-
     simulationStep(simulation.simulationVersion);
 }
 
@@ -175,10 +168,6 @@ export async function resetSimulation() {
             type: "FeatureCollection",
             features: [],
         });
-    }
-
-    if (visualization.currentMarker) {
-        visualization.currentMarker.getElement().style.display = "";
     }
 }
 

@@ -19,10 +19,11 @@
         timeline.timelineDay = index;
         timeline.timelineDate = s.dateStr;
 
-        stats.stranded = s.stranded;
-        stats.emulsified = s.emulsified;
-        stats.evaporated = s.evaporated;
-        stats.totalMass = s.totalMass;
+        stats.activeParticles = s.stats.activeParticles;
+        stats.stranded = s.stats.stranded;
+        stats.emulsified = s.stats.emulsified;
+        stats.evaporated = s.stats.evaporated;
+        stats.totalMass = s.stats.totalMass;
 
         map.getSource("particles-unstranded").setData(s.unstrandedGeojson);
         map.getSource("particles-stranded").setData(s.strandedGeojson);

@@ -48,7 +48,6 @@ struct Schedule {
 
 impl ReleaseManager {
     pub fn new(releases_json: &str, total_particles: usize, steps_per_day: u32) -> Self {
-        log::debug!("{total_particles}");
         let releases: Vec<Release> =
             serde_json::from_str(releases_json).expect("invalid JSON!");
         let total_mass: f32 = releases

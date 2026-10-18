@@ -49,10 +49,10 @@
         <ActionBar {toggleSidebar} />
     </div>
 
+    <div class="utility-bar">
+        <UtilityBar />
+    </div>
     <fieldset disabled={simulation.simulationActive}>
-        <div class="utility-bar">
-            <UtilityBar />
-        </div>
         
         <div class="sidebar-content">
                 <div class="model-selection">
@@ -105,6 +105,14 @@
     overflow: hidden;
     transition: all var(--transition-medium);
     opacity: 1;
+    display: flex;
+    width: var(--width-sidebar);
+    font-family: var(--font-family);
+    color: var(--text-secondary);
+    background-color: var(--bg-tertiary);
+    padding: 0px var(--spacing-md);
+    justify-content: space-between;
+    align-items: center;
 }
 
 .sidebar {

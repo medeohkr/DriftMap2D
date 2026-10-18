@@ -13,10 +13,6 @@
         });
     })
 
-    $effect(() => {
-        
-    })
-
     function updateReleaseLat(e: Event) {
         const value = parseFloat((e.target as HTMLInputElement).value);
         if (!isNaN(value)) {
