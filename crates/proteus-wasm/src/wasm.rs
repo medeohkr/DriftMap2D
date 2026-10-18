@@ -35,6 +35,9 @@ impl Proteus {
         diffusion_scheme: &str,
         diffusion_coeffs: Vec<f32>
     ) -> Self {
+        console_log::init_with_level(log::Level::Debug).ok();
+        console_error_panic_hook::set_once();
+
         let start_date = NaiveDateTime::parse_from_str(start_date_str, "%Y-%m-%d %H:%M")
             .expect("Invalid date format");
         let steps_per_day = (1440.0 / time_step_minutes) as u32;
