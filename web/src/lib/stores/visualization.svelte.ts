@@ -1,3 +1,5 @@
+import { simulation } from "./simulation.svelte";
+
 export interface Visualization {
     particleRadius: number;
     gridUpdateInterval: number;

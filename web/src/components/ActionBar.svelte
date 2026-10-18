@@ -19,7 +19,7 @@
         for (let index = 0; index < releaseConfig.releases.length; index++) {
             const release = releaseConfig.releases[index];
             if (simulation.proteus?.is_on_land(release.lon, release.lat)) {
-                errorMessage += `Release ${index + 1} (${release.lat.toFixed(1)}°N, ${release.lon.toFixed(1)}°E) is on land.\n`;
+                errorMessage += `Release ${index + 1} (${release.lat.toFixed(1)}°N, ${release.lon.toFixed(1)}°E) is on land\n`;
             }
         }
         if (errorMessage.length) {
@@ -77,9 +77,9 @@
 <button
     class:active={timeline.playbackMode}
     class="btn-primary"
-    onclick={() => exportScenario()}
+    onclick={reset}
 >
-    Export GeoJson
+    New Simulation
 </button>
 <button
     class="btn-secondary"

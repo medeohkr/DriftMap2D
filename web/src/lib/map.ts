@@ -37,11 +37,10 @@ export function initMap() {
 }
 
 export async function updateMarker(lon: number, lat: number) {
+    console.log(`called with ${lon}, ${lat}`);
     if (visualization.currentMarker) {
-        visualization.currentMarker.remove();
-    }
-    
-    if (!simulation.simulationActive) {
+        visualization.currentMarker.setLngLat([lon, lat])
+    } else {
         visualization.currentMarker = new maplibregl.Marker({
             color: "#37579b",
             scale: 0.9,
@@ -49,6 +48,7 @@ export async function updateMarker(lon: number, lat: number) {
             .setLngLat([lon, lat])
             .addTo(map);
     }
+    
     const currentDate = parseInt(config.startDate.replace(/-/g, ""));
     const positions = new Float32Array(getReleasePositions());
     const oceanTile = preloader.getTileIndicesForOcean(positions);
@@ -74,4 +74,14 @@ export function zoom() {
             duration: 2000,
         });
     }
+}
+
+export function setMarkerVisible(visible: boolean) {
+    const marker = visualization.currentMarker;
+    if (!marker) return;
+
+    const el = marker.getElement();
+    if (!el) return;
+
+    el.style.display = visible ? "" : "none";
 }

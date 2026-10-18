@@ -262,17 +262,20 @@ export function buildHeatmap() {
     }
 }
 
-export function captureSnapshot(day: Number) {
+export function captureSnapshot(day: number) {
     history.simulationHistory.push({
         day: day,
         dateStr: simulation.proteus?.current_time_str(),
         unstrandedGeojson: getUnstrandedGeojson(),
         strandedGeojson: getStrandedGeojson(),
         heatmapGeojson: getHeatmapGeojson(),
-        stranded: stats.stranded,
-        emulsified: stats.emulsified,
-        evaporated: stats.evaporated,
-        totalMass: stats.totalMass,
+        stats: {
+            activeParticles: stats.activeParticles,
+            stranded: stats.stranded,
+            emulsified: stats.emulsified,
+            evaporated: stats.evaporated,
+            totalMass: stats.totalMass,
+        },
     });
 }
 

@@ -5,10 +5,14 @@ import { oilOverrides } from '$lib/stores/oil-overrides.svelte';
 import { objectOverrides } from '$lib/stores/object-overrides.svelte';
 import { genericOverrides } from '$lib/stores/generic-overrides.svelte';
 import { history } from '$lib/stores/history.svelte';
-import type { DriftMapGeoJson, DriftMapConfig } from './exportScenario';
+import type { DriftMap2DGeoJson, DriftMap2DConfig } from './exportScenario';
 import { showToast } from '$lib/stores/toast.svelte';
+import { timeline } from '$lib/stores/timeline.svelte';
+import { resetSimulation } from '$lib/simulation';
+import { updateMarker } from '$lib/map';
+import { simulation } from '$lib/stores/simulation.svelte';
 
-export function applyConfig(cfg: DriftMapConfig): void {
+export function applyConfig(cfg: DriftMap2DConfig): void {
     // Tracer
     config.tracerType = cfg.tracerType;
     
@@ -27,6 +31,7 @@ export function applyConfig(cfg: DriftMapConfig): void {
     config.totalDays = cfg.totalDays;
     
     // Releases
+    releaseConfig.activeReleaseIndex = 0;
     releaseConfig.releases = cfg.releases.map(r => ({
         lat: r.lat,
         lon: r.lon,
@@ -36,7 +41,6 @@ export function applyConfig(cfg: DriftMapConfig): void {
             duration: s.duration,
         })),
     }));
-    releaseConfig.activeReleaseIndex = 0;
     
     // Oil
     oilOverrides.id = cfg.oil.id;
@@ -67,15 +71,13 @@ export function applyConfig(cfg: DriftMapConfig): void {
     visualization.gridSize = cfg.visualization.gridSize;
     visualization.smoothLevel = cfg.visualization.smoothLevel;
     visualization.snapshotInterval = cfg.visualization.snapshotInterval;
-    visualization.visualizationMode = cfg.visualization.visualizationMode as "particles" | "heatmap";
     visualization.autoZoom = cfg.visualization.autoZoom;
 }
 
-export function loadSnapshots(geojson: DriftMapGeoJson): void {
+export function loadSnapshots(geojson: DriftMap2DGeoJson): void {
     history.simulationHistory = geojson.features.map((feature: any) => {
         const geometries = feature.geometry.geometries;
-        const hasHeatmaps = geojson.properties.includesSnapshots;
-        
+
         const snapshot: any = {
             day: feature.properties.day,
             dateStr: feature.properties.date,
@@ -94,20 +96,9 @@ export function loadSnapshots(geojson: DriftMapGeoJson): void {
                     geometry: { type: "Point", coordinates: coord },
                 })),
             },
-            heatmapGeojson: null,
+            heatmapGeojson: feature.properties.heatmap ?? null,
         };
-        
-        if (hasHeatmaps && geometries[2]?.geometries) {
-            snapshot.heatmapGeojson = {
-                type: "FeatureCollection",
-                features: geometries[2].geometries.map((geom: any) => ({
-                    type: "Feature",
-                    geometry: geom,
-                    properties: { concentration: 1 },
-                })),
-            };
-        }
-        
+
         return snapshot;
     });
 }
@@ -115,18 +106,19 @@ export function loadSnapshots(geojson: DriftMapGeoJson): void {
 export async function importScenario(file: File): Promise<void> {
     try {
         const text = await file.text();
-        const data: DriftMapGeoJson = JSON.parse(text);
+        const data: DriftMap2DGeoJson = JSON.parse(text);
         
-        if (data.properties?.model !== "DriftMap") {
+        if (data.properties?.model !== "DriftMap2D") {
             showToast("Not a DriftMap scenario file");
             return;
         }
         
-        // Apply config
+        resetSimulation();
         applyConfig(data.properties.config);
         
-        // Load snapshots if present
         if (data.properties.includesSnapshots && data.features.length > 0) {
+            simulation.simulationActive = true;
+            timeline.playbackMode = true;
             loadSnapshots(data);
             showToast(`Loaded scenario with ${data.features.length} snapshots`);
         } else {

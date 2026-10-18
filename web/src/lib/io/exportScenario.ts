@@ -6,24 +6,24 @@ import { objectOverrides } from '$lib/stores/object-overrides.svelte';
 import { genericOverrides } from '$lib/stores/generic-overrides.svelte';
 import { history } from '$lib/stores/history.svelte';
 
-export interface DriftMapConfig {
+export interface DriftMap2DConfig {
     // Tracer
     tracerType: string;
-    
+
     // Simulation
     particleCount: number;
     timeStepMin: number;
     advectionScheme: string;
     diffusionScheme: string;
     diffusionCoeffs: number[];
-    
+
     // Time
     startDate: string;
     startTime: string;
     endDate: string;
     endTime: string;
     totalDays: number;
-    
+
     // Releases
     releases: Array<{
         lat: number;
@@ -31,7 +31,7 @@ export interface DriftMapConfig {
         radius: number;
         schedule: Array<{ amount: number; duration: number }>;
     }>;
-    
+
     // Tracer-specific overrides
     oil: {
         id: string;
@@ -42,7 +42,7 @@ export interface DriftMapConfig {
         bullwinkleFrac: number;
         bulltime: number;
     };
-    
+
     sar: {
         id: string;
         jibeProbability: number;
@@ -51,12 +51,12 @@ export interface DriftMapConfig {
         capsizeFraction: number;
         capsizeSigma: number;
     };
-    
+
     generic: {
         windFactor: number;
         windDeflection: number;
     };
-    
+
     // Visualization
     visualization: {
         particleRadius: number;
@@ -69,14 +69,14 @@ export interface DriftMapConfig {
     };
 }
 
-export interface DriftMapGeoJson {
+export interface DriftMap2DGeoJson {
     type: "FeatureCollection";
     properties: {
-        model: "DriftMap";
+        model: "DriftMap2D";
         version: string;
         date: string;
         includesSnapshots: boolean;
-        config: DriftMapConfig;
+        config: DriftMap2DConfig;
     };
     features: Array<{
         type: "Feature";
@@ -84,6 +84,7 @@ export interface DriftMapGeoJson {
             day: number;
             date: string;
             stats: any;
+            heatmap?: any;
         };
         geometry: {
             type: "GeometryCollection";
@@ -92,22 +93,22 @@ export interface DriftMapGeoJson {
     }>;
 }
 
-export function getCurrentConfig(): DriftMapConfig {
+export function getCurrentConfig(): DriftMap2DConfig {
     return {
         tracerType: config.tracerType,
-        
+
         particleCount: config.particleCount,
         timeStepMin: config.timeStepMin,
         advectionScheme: config.advectionScheme,
         diffusionScheme: config.diffusionScheme,
         diffusionCoeffs: [...config.diffusionCoeffs],
-        
+
         startDate: config.startDate,
         startTime: config.startTime,
         endDate: config.endDate,
         endTime: config.endTime,
         totalDays: config.totalDays,
-        
+
         releases: releaseConfig.releases.map(r => ({
             lat: r.lat,
             lon: r.lon,
@@ -117,7 +118,7 @@ export function getCurrentConfig(): DriftMapConfig {
                 duration: s.duration,
             })),
         })),
-        
+
         oil: {
             id: oilOverrides.id,
             windFactor: oilOverrides.windFactor,
@@ -127,7 +128,7 @@ export function getCurrentConfig(): DriftMapConfig {
             bullwinkleFrac: oilOverrides.bullwinkleFrac,
             bulltime: oilOverrides.bulltime,
         },
-        
+
         sar: {
             id: objectOverrides.id,
             jibeProbability: objectOverrides.jibeProbability,
@@ -136,12 +137,12 @@ export function getCurrentConfig(): DriftMapConfig {
             capsizeFraction: objectOverrides.capsizeFraction,
             capsizeSigma: objectOverrides.capsizeSigma,
         },
-        
+
         generic: {
             windFactor: genericOverrides.windFactor,
             windDeflection: genericOverrides.windDeflection,
         },
-        
+
         visualization: {
             particleRadius: visualization.particleRadius,
             gridUpdateInterval: visualization.gridUpdateInterval,
@@ -154,13 +155,47 @@ export function getCurrentConfig(): DriftMapConfig {
     };
 }
 
+/**
+ * Format a latitude or longitude value as a hemisphere-suffixed string.
+ * e.g. -48.4 -> "48S" (with pos="N", neg="S")
+ */
+function formatCoord(value: number, pos: string, neg: string): string {
+    return `${Math.abs(value).toFixed(0)}${value >= 0 ? pos : neg}`;
+}
+
+/**
+ * Build a descriptive filename from the current scenario state.
+ *
+ * Examples:
+ *   driftmap2d-oil-48N125W-scenario-2026-10-17.geojson
+ *   driftmap2d-config-sar-26N56E-2026-10-17.geojson
+ *   driftmap2d-generic-unnamed-scenario-2026-10-17.geojson
+ */
+export function buildFilename(hasSnapshots: boolean): string {
+    const tracer = config.tracerType.replace(/[^a-z0-9_-]/gi, "").toLowerCase() || "generic";
+
+    const firstRelease = releaseConfig.releases[0];
+    const location = firstRelease
+        ? `${formatCoord(firstRelease.lat, "N", "S")}${formatCoord(firstRelease.lon, "E", "W")}`
+        : "unnamed";
+
+    const stamp = new Date().toISOString().slice(0, 10);
+
+    if (hasSnapshots) {
+        return `driftmap2d-${tracer}-${location}-scenario-${stamp}.geojson`;
+    } else {
+        return `driftmap2d-config-${tracer}-${location}-${stamp}.geojson`;
+    }
+}
+
 export function exportScenario(filename?: string): void {
     const config = getCurrentConfig();
     const hasSnapshots = history.simulationHistory.length > 0;
-    const geojson: DriftMapGeoJson = {
+
+    const geojson: DriftMap2DGeoJson = {
         type: "FeatureCollection",
         properties: {
-            model: "DriftMap",
+            model: "DriftMap2D",
             version: "0.1",
             date: new Date().toISOString(),
             includesSnapshots: hasSnapshots,
@@ -172,6 +207,7 @@ export function exportScenario(filename?: string): void {
                 day: snapshot.day,
                 date: snapshot.dateStr,
                 stats: snapshot.stats,
+                heatmap: snapshot.heatmapGeojson,
             },
             geometry: {
                 type: "GeometryCollection",
@@ -188,26 +224,18 @@ export function exportScenario(filename?: string): void {
                             (f: any) => f.geometry.coordinates
                         ),
                     },
-                    snapshot.heatmapGeojson.features
-                        ? {
-                            type: "GeometryCollection",
-                            geometries: snapshot.heatmapGeojson.features.map(
-                                (f: any) => f.geometry
-                            ),
-                        }
-                        : null,
-                ].filter(Boolean),
+                ],
             },
         })),
     };
-    
+
     const blob = new Blob([JSON.stringify(geojson)], {
         type: "application/geo+json",
     });
-    
+
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = filename ?? `driftmap-${Date.now()}.geojson`;
+    a.download = filename ?? buildFilename(hasSnapshots);
     a.click();
     URL.revokeObjectURL(a.href);
 }

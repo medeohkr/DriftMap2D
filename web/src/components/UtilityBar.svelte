@@ -1,8 +1,26 @@
 <script lang="ts">
-    import { config, releaseConfig, visualization, genericOverrides, objectOverrides, oilOverrides } from "$lib/stores/index.svelte";
+    import { exportScenario } from "$lib/io/exportScenario";
+import { importScenario } from "$lib/io/importScenario";
+    import { config, releaseConfig, visualization, genericOverrides, objectOverrides, oilOverrides, simulation } from "$lib/stores/index.svelte";
     import { dateOffset } from "$lib/utils";
+    let fileInput = $state<HTMLInputElement | undefined>(undefined);
 
+    function openFilePicker() {
+        fileInput?.click();
+    }
+    
+    async function handleFileChange(e: Event) {
+        const input = e.currentTarget as HTMLInputElement;
+        const file = input.files?.[0];
+        if (file) {
+            await importScenario(file);
+        }
+        input.value = "";
+    }
     function resetConfig() {
+        if (simulation.simulationActive) {
+            return;
+        }
         config.particleCount = 10000;
         config.timeStepMin = 15;
         config.advectionScheme = "rk2";
@@ -58,26 +76,18 @@
     }
 </script>
 
-<div class="import-autozoom-container">
-    <button class="btn-tertiary">Import Scenario</button>
-    <input type="file" id="import-geojson-file" accept=".json,.geojson" />
-    <button class="btn-tertiary">Save Config</button>
-    <button class="btn-tertiary" onclick={resetConfig}>Reset Config</button>
-
-</div>
+<button class="btn-tertiary" onclick={openFilePicker}>Import...</button>
+<input
+    bind:this={fileInput}
+    type="file"
+    id="import-geojson-file"
+    accept=".json,.geojson"
+    onchange={handleFileChange}
+/>
+<button class="btn-tertiary" onclick={() => exportScenario()}>Save Scenario</button>
+<button class="btn-tertiary" onclick={resetConfig}>Reset Settings</button>
 
 <style>
-.import-autozoom-container {
-    display: flex;
-    width: var(--width-sidebar);
-    font-family: var(--font-family);
-    color: var(--text-secondary);
-    background-color: var(--bg-tertiary);
-    padding: 0px var(--spacing-md);
-    justify-content: space-between;
-    align-items: center;
-}
-
 .btn-tertiary {
     padding: var(--spacing-xxs);
     font-family: var(--font-family);
