@@ -36,10 +36,12 @@ export function initMap() {
     });
 }
 
+let landmaskPreloadInFlight = false;
+let pendingLandmaskPreload: Float32Array | null = null;
+
 export async function updateMarker(lon: number, lat: number) {
-    console.log(`called with ${lon}, ${lat}`);
     if (visualization.currentMarker) {
-        visualization.currentMarker.setLngLat([lon, lat])
+        visualization.currentMarker.setLngLat([lon, lat]);
     } else {
         visualization.currentMarker = new maplibregl.Marker({
             color: "#37579b",
@@ -48,15 +50,47 @@ export async function updateMarker(lon: number, lat: number) {
             .setLngLat([lon, lat])
             .addTo(map);
     }
-    
-    const currentDate = parseInt(config.startDate.replace(/-/g, ""));
+
     const positions = new Float32Array(getReleasePositions());
-    const oceanTile = preloader.getTileIndicesForOcean(positions);
-    preloader.preloadTiles(currentDate, oceanTile);
-    simulation.landmaskPromise =
-        simulation.proteus?.load_landmask_tiles(positions) ?? null
-    await simulation.landmaskPromise;
-    simulation.landmaskPromise = null;
+    const currentDate = parseInt(config.startDate.replace(/-/g, ""));
+    const oceanTiles = preloader.getTileIndicesForOcean(positions);
+    preloader.preloadTiles(currentDate, oceanTiles);
+
+    pendingLandmaskPreload = positions;
+    if (!landmaskPreloadInFlight) {
+        runPendingLandmaskPreload();
+    }
+}
+
+async function runPendingLandmaskPreload() {
+    landmaskPreloadInFlight = true;
+    try {
+        while (pendingLandmaskPreload) {
+            const positions = pendingLandmaskPreload;
+            pendingLandmaskPreload = null;
+
+            try {
+                await simulation.proteus?.load_landmask_tiles(positions);
+            } catch (e) {
+                console.error("Landmask preload failed:", e);
+            }
+        }
+    } finally {
+        landmaskPreloadInFlight = false;
+    }
+}
+
+export function awaitLandmaskPreload(): Promise<void> {
+    return new Promise(resolve => {
+        const check = () => {
+            if (!landmaskPreloadInFlight) {
+                resolve();
+            } else {
+                setTimeout(check, 10);
+            }
+        };
+        check();
+    });
 }
 
 export function zoom() {
