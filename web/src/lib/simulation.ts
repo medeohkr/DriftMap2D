@@ -131,7 +131,9 @@ export async function startSimulation() {
     updateConcentrationLayer();
     zoom();
 
-    if (visualization.currentMarker) visualization.currentMarker.remove();
+    if (visualization.currentMarker) {
+        visualization.currentMarker.getElement().style.display = "none";
+    }
 
     simulationStep(simulation.simulationVersion);
 }
@@ -149,6 +151,8 @@ export function resumeSimulation() {
 }
 
 export async function resetSimulation() {
+    if (simulation.animationId) cancelAnimationFrame(simulation.animationId);
+
     simulation.simulationActive = false;
     simulation.simulationRunning = false;
     simulation.simulationVersion++;
@@ -157,8 +161,6 @@ export async function resetSimulation() {
     timeline.playbackMode = false;
 
     map.setPaintProperty("overlay-layer", "raster-opacity", 0.4);
-
-    if (simulation.animationId) cancelAnimationFrame(simulation.animationId);
 
     if (map) {
         map.getSource("concentration").setData({
@@ -175,7 +177,9 @@ export async function resetSimulation() {
         });
     }
 
-    updateMarker(releaseConfig.activeRelease.lon, releaseConfig.activeRelease.lat);
+    if (visualization.currentMarker) {
+        visualization.currentMarker.getElement().style.display = "";
+    }
 }
 
 export function updateStats() {
