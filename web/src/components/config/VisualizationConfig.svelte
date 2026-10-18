@@ -43,7 +43,7 @@
             bind:value={visualization.smoothLevel}
             step="any"
             min="0"
-            use:numberInput={{ min: 0, max: 1e3 }}
+            use:numberInput={{ min: 1, max: 1e3 }}
         />
     </div>
     <div class="container-secondary">
