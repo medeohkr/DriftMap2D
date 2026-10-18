@@ -15,22 +15,33 @@
         }
     });
 
+    let startInFlight = false;
+
     async function start() {
-        await awaitLandmaskPreload();
-        let errorMessage = "";
-        for (let index = 0; index < releaseConfig.releases.length; index++) {
-            const release = releaseConfig.releases[index];
-            if (simulation.proteus?.is_on_land(release.lon, release.lat)) {
-                errorMessage += `Release ${index + 1} (${release.lat.toFixed(1)}°N, ${release.lon.toFixed(1)}°E) is on land\n`;
-            }
-        }
-        if (errorMessage.length) {
-            showToast(errorMessage);
+        if (startInFlight) {
+            showToast("Please wait... The simulation is loading");
             return;
         }
+        startInFlight = true;
+        try {
+            await awaitLandmaskPreload();
+            let errorMessage = "";
+            for (let index = 0; index < releaseConfig.releases.length; index++) {
+                const release = releaseConfig.releases[index];
+                if (simulation.proteus?.is_on_land(release.lon, release.lat)) {
+                    errorMessage += `Release ${index + 1} (${release.lat.toFixed(1)}°N, ${release.lon.toFixed(1)}°E) is on land\n`;
+                }
+            }
+            if (errorMessage.length) {
+                showToast(errorMessage);
+                return;
+            }
 
-        await startSimulation();
-        simulationState = "running";
+            await startSimulation();
+            simulationState = "running";
+        } finally {
+            startInFlight = false;
+        }
     }
 
     function pause() {
