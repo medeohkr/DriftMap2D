@@ -1,6 +1,6 @@
 <script lang="ts">
     import { config, releaseConfig } from "$lib/stores/index.svelte";
-    import { updateMarker } from "$lib/map";
+    import { map, updateMarker } from "$lib/map";
     import { normalizeLongitude, numberInput } from "$lib/utils";
     import trash from "$lib/assets/images/TrashCan.webp";
     import { untrack } from 'svelte'
@@ -9,7 +9,9 @@
         const lon = releaseConfig.activeRelease.lon;
         const lat = releaseConfig.activeRelease.lat;
         untrack(() => {
-            updateMarker(lon, lat);
+            if (map) {
+                updateMarker(lon, lat);
+            }
         });
     })
 

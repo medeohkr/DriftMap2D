@@ -6,7 +6,7 @@ import {
     stats,
     history,
 } from "./stores/index.svelte";
-import { map, zoom } from "./map";
+import { awaitLandmaskPreload, map, zoom } from "./map";
 import { preloader } from "./preloader";
 import {
     updateHeatmapVisualization,
@@ -41,9 +41,11 @@ export async function simulationStep(version: number) {
     )
         return;
 
-    const t0 = performance.now();
     await simulation.proteus?.step(simulation.stepCount);
-    const t1 = performance.now();
+
+    if (simulation.simulationVersion !== version) {
+        return;
+    }
 
     try {
         const todayDateInt = simulation.proteus.get_current_date_int();
@@ -101,19 +103,12 @@ export async function simulationStep(version: number) {
             timeline.playbackMode = true;
         }
     } finally {
-        const t2 = performance.now()
-        console.log(`${t1 - t0}ms per step, ${t2 - t0}ms total`)
-        console.log(`centroid: ${getAveragePosition()}`)
         simulation.stepCount++;
     }
 }
 
 export async function startSimulation() {
     if (simulation.simulationRunning) return;
-
-    if (simulation.landmaskPromise) {
-        await simulation.landmaskPromise;
-    }
 
     simulation.simulationActive = true;
     simulation.simulationRunning = true;
@@ -127,7 +122,7 @@ export async function startSimulation() {
     createProteus();
     updateConcentrationLayer();
     zoom();
-
+    
     simulationStep(simulation.simulationVersion);
 }
 

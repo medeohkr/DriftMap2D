@@ -1,6 +1,7 @@
 <script lang="ts">
     import resetBtnImg from '$lib/assets/images/ResetBtn.webp';
     import { exportScenario } from '$lib/io/exportScenario';
+    import { awaitLandmaskPreload } from '$lib/map';
     import { startSimulation, stopSimulation, resetSimulation, resumeSimulation } from '$lib/simulation';
     import { timeline, sidebarState, releaseConfig, simulation } from '$lib/stores/index.svelte';
     import { showToast } from '$lib/stores/toast.svelte';
@@ -15,6 +16,7 @@
     });
 
     async function start() {
+        await awaitLandmaskPreload();
         let errorMessage = "";
         for (let index = 0; index < releaseConfig.releases.length; index++) {
             const release = releaseConfig.releases[index];
