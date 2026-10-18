@@ -18,3 +18,4 @@ TODO.md
 validation/generic/runs/
 validation/oil/runs/
 validation/leeway/runs/
+.tokeignore
