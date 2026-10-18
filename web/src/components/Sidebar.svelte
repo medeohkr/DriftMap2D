@@ -207,12 +207,22 @@ fieldset {
     transition: all var(--transition-medium);
 }
 
-fieldset[disabled] {
+:global(fieldset[disabled] *) {
+    pointer-events: auto !important;
+}
+
+:global(fieldset[disabled] input),
+:global(fieldset[disabled] div) {
+    cursor: not-allowed !important;
+}
+
+:global(fieldset[disabled] button:hover),
+:global(fieldset[disabled] select:hover) {
     cursor: not-allowed !important;
     opacity: 1.0 !important;
 }
 
-:global(fieldset[disabled] *) {
-    pointer-events: none !important;
+:global(fieldset[disabled] .selector-primary:hover) {
+    background-color: var(--bg-secondary) !important;
 }
 </style>
