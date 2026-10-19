@@ -9,7 +9,7 @@ import type { DriftMap2DGeoJson, DriftMap2DConfig } from './exportScenario';
 import { showToast } from '$lib/stores/toast.svelte';
 import { timeline } from '$lib/stores/timeline.svelte';
 import { resetSimulation } from '$lib/simulation';
-import { updateMarker } from '$lib/map';
+import { updateMarker, zoom } from '$lib/map';
 import { simulation } from '$lib/stores/simulation.svelte';
 
 export function applyConfig(cfg: DriftMap2DConfig): void {
@@ -120,6 +120,7 @@ export async function importScenario(file: File): Promise<void> {
             simulation.simulationActive = true;
             timeline.playbackMode = true;
             loadSnapshots(data);
+            zoom();
             showToast(`Loaded scenario with ${data.features.length} snapshots`);
         } else {
             showToast("Loaded scenario config");
