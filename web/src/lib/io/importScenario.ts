@@ -9,7 +9,7 @@ import type { DriftMap2DGeoJson, DriftMap2DConfig } from './exportScenario';
 import { showToast } from '$lib/stores/toast.svelte';
 import { timeline } from '$lib/stores/timeline.svelte';
 import { resetSimulation } from '$lib/simulation';
-import { updateMarker, zoom } from '$lib/map';
+import { zoom } from '$lib/map';
 import { simulation } from '$lib/stores/simulation.svelte';
 
 export function applyConfig(cfg: DriftMap2DConfig): void {
@@ -44,7 +44,7 @@ export function applyConfig(cfg: DriftMap2DConfig): void {
     
     // Oil
     oilOverrides.id = cfg.oil.id;
-    oilOverrides.query = cfg.oil.id;
+    oilOverrides.query = cfg.oil.query;
     oilOverrides.windFactor = cfg.oil.windFactor;
     oilOverrides.deflectionScheme = cfg.oil.deflectionScheme as "samuels" | "constant";
     oilOverrides.windDeflection = cfg.oil.windDeflection;

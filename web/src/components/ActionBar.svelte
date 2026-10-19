@@ -1,6 +1,5 @@
 <script lang="ts">
     import resetBtnImg from '$lib/assets/images/ResetBtn.webp';
-    import { exportScenario } from '$lib/io/exportScenario';
     import { awaitLandmaskPreload } from '$lib/map';
     import { startSimulation, stopSimulation, resetSimulation, resumeSimulation } from '$lib/simulation';
     import { timeline, sidebarState, releaseConfig, simulation } from '$lib/stores/index.svelte';
