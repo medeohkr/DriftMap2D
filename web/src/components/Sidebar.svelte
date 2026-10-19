@@ -212,8 +212,10 @@ fieldset {
 }
 
 :global(fieldset[disabled] input),
+:global(fieldset[disabled] select),
 :global(fieldset[disabled] div) {
     cursor: not-allowed !important;
+    opacity: 1.0 !important;
 }
 
 :global(fieldset[disabled] button:hover),

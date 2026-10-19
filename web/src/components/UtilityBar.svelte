@@ -89,7 +89,7 @@ import { importScenario } from "$lib/io/importScenario";
 
 <style>
 .btn-tertiary {
-    padding: var(--spacing-xxs);
+    padding: var(--spacing-xxxs);
     font-family: var(--font-family);
     font-size: var(--font-size-xs);
     color: var(--text-secondary);
