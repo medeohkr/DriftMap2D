@@ -35,6 +35,7 @@ export interface DriftMap2DConfig {
     // Tracer-specific overrides
     oil: {
         id: string;
+        query: string;
         windFactor: number;
         deflectionScheme: string;
         windDeflection: number | null;
@@ -121,6 +122,7 @@ export function getCurrentConfig(): DriftMap2DConfig {
 
         oil: {
             id: oilOverrides.id,
+            query: oilOverrides.query,
             windFactor: oilOverrides.windFactor,
             deflectionScheme: oilOverrides.deflectionScheme,
             windDeflection: oilOverrides.windDeflection,
