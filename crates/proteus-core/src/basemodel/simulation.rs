@@ -1,7 +1,7 @@
 // simulation.rs
 use super::{
-    Integrator, meters_per_degree_lat, meters_per_degree_lon, normalize_lon, DataLoader,
-    Diffusion, LandMaskLoader, ParticleView, Particles, ReleaseManager,
+    meters_per_degree_lat, meters_per_degree_lon, normalize_lon, DataLoader, Diffusion, Integrator,
+    LandMaskLoader, ParticleView, Particles, ReleaseManager,
 };
 use crate::tracers::{GenericTracer, LeewayTracer, OilTracer, Tracer, TracerKind};
 use crate::TileFetcher;
@@ -23,7 +23,7 @@ impl Simulation {
         step_count: u32,
         advection_scheme: &str,
         diffusion_scheme: &str,
-        diffusion_coeffs: Vec<f32>
+        diffusion_coeffs: Vec<f32>,
     ) -> Self {
         let release_manager = ReleaseManager::new(releases_json, total_particles, step_count);
         let tracer = match tracer_type {
@@ -38,10 +38,7 @@ impl Simulation {
                 release_manager.initial_mass_per_particle(),
             )),
 
-            "sar" => TracerKind::Leeway(LeewayTracer::new(
-                tracer_json,
-                total_particles
-            )),
+            "sar" => TracerKind::Leeway(LeewayTracer::new(tracer_json, total_particles)),
 
             _ => TracerKind::Generic(GenericTracer::new(
                 tracer_json,
@@ -67,9 +64,7 @@ impl Simulation {
     }
 
     pub fn release_particles(&mut self, step_count: u32) {
-        let seeds = self
-            .release_manager
-            .update(step_count);
+        let seeds = self.release_manager.update(step_count);
         for seed in seeds {
             self.particles.add_particle(seed.lon, seed.lat, seed.depth);
         }
@@ -146,13 +141,8 @@ impl Simulation {
         };
 
         let get_velocities_slice = |slice: &[(f32, f32, f32)], dt: f32| -> Vec<(f32, f32)> {
-            let mut new_hour = hour + dt / 3600.0;
-            let mut new_day = current_day;
-            if new_hour >= 24.0 {
-                new_hour -= 24.0;
-                new_day += 1;
-            }
-            let env = loader.get_velocities_wind_slice(slice, new_day, new_hour);
+            let env = loader.get_velocities_wind_slice(slice, current_day, hour + dt / 3600.0);
+
             env.iter()
                 .copied()
                 .enumerate()
