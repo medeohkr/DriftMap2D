@@ -95,8 +95,8 @@ impl Proteus {
         }
         self.simulation.release_particles(step_count);
 
-        let hour = (24.0 * step_count as f32 / self.steps_per_day as f32) % 24.0;
-
+        let hour = (24.0 * step_count.saturating_sub(1) as f32 / self.steps_per_day as f32) % 24.0;
+        
         self.loader
             .load_ocean_tiles(self.get_unstranded_positions(), current_date_int)
             .await;
@@ -112,7 +112,7 @@ impl Proteus {
             &self.landmask,
         );
 
-        self.days_since_start = step_count as f32 / self.steps_per_day as f32;
+        self.days_since_start = step_count.saturating_sub(1) as f32 / self.steps_per_day as f32;
 
         Ok(())
     }

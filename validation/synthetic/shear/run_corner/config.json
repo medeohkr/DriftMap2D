@@ -1,0 +1,32 @@
+{
+  "start_date": "2026-09-19 00:00",
+  "tracer_type": "generic",
+  "tracer_json": {
+    "wind_factor": 0.0,
+    "wind_deflection": 0.0
+  },
+  "releases": [
+    {
+      "lon": -174.95833333333334,
+      "lat": -74.95833333333333,
+      "radius": 0.0,
+      "schedule": [
+        {
+          "amount": 1.0,
+          "duration": 0
+        }
+      ]
+    }
+  ],
+  "particles": 1,
+  "time_step_minutes": 60.0,
+  "advection": "rk4",
+  "diffusion": "constant",
+  "diffusion_coeffs": [
+    0.0,
+    0.0
+  ],
+  "steps": 1,
+  "tile_url": "file:///D:/projects/driftmap2d/validation/synthetic/shear/tiles",
+  "output": "proteus_centroids.json"
+}

@@ -59,12 +59,8 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
         config.diffusion_coeffs,
     );
 
-    let mut loader = DataLoader::new(
-        &format!("https://tiles.driftmap2d.com/{}", config.tile_url),
-        MIN_LON,
-        MIN_LAT,
-        ReqwestFetcher::new(),
-    );
+    let base_url = resolve_tile_base_url(&config.tile_url);
+    let mut loader = DataLoader::new(&base_url, MIN_LON, MIN_LAT, ReqwestFetcher::new());
     let mut landmask = LandMaskLoader::new(
         "https://tiles.driftmap2d.com/roaring_landmask",
         MIN_LON,
@@ -90,11 +86,11 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
         // Step N: advance from t = (N-1)*dt to t = N*dt.
         // hour is the forcing time used for the advance, matching the WASM
         // convention: hour = 24 * step_count / steps_per_day.
-        let day_offset = step_count / steps_per_day;
+        let day_offset = step_count.saturating_sub(1) / steps_per_day;
         let date = start_date.date() + chrono::Duration::days(day_offset as i64);
         let current_date_int =
             date.year() as usize * 10000 + date.month() as usize * 100 + date.day() as usize;
-        let hour = (24.0 * step_count as f32 / steps_per_day as f32) % 24.0;
+        let hour = (24.0 * step_count.saturating_sub(1) as f32 / steps_per_day as f32) % 24.0;
 
         simulation.release_particles(step_count);
 
@@ -179,5 +175,21 @@ fn centroid(simulation: &Simulation) -> (f32, f32) {
         (0.0, 0.0)
     } else {
         ((sum_lon / count as f64) as f32, (sum_lat / count as f64) as f32)
+    }
+}
+/// Resolve the tile base URL from the config value.
+///
+/// - If `tile_url` already has a scheme (`file://`, `http://`, `https://`),
+///   use it as-is. This supports local paths and custom servers.
+/// - Otherwise, treat it as a path under the production CDN. So
+///   `"validation-tiles"` becomes `"https://tiles.driftmap2d.com/validation-tiles"`.
+fn resolve_tile_base_url(tile_url: &str) -> String {
+    if tile_url.starts_with("file://")
+        || tile_url.starts_with("http://")
+        || tile_url.starts_with("https://")
+    {
+        tile_url.to_string()
+    } else {
+        format!("https://tiles.driftmap2d.com/{}", tile_url)
     }
 }
