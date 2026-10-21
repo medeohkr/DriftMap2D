@@ -11,9 +11,9 @@ pub struct Proteus {
     simulation: Simulation,
     loader: DataLoader<GlooFetcher>,
     landmask: LandMaskLoader<GlooFetcher>,
-    days_since_start: f32,
     start_date: NaiveDateTime,
     steps_per_day: u32,
+    last_step_count: u32,
 }
 
 #[wasm_bindgen]
@@ -53,50 +53,50 @@ impl Proteus {
             diffusion_coeffs
         );
 
-    let loader = DataLoader::new(
-        "https://tiles.driftmap2d.com/tiles",
-        -180.0,
-        -80.0,
-        GlooFetcher,
-    );
-    let landmask = LandMaskLoader::new(
-        "https://tiles.driftmap2d.com/roaring_landmask",
-        -180.0,
-        -90.0,
-        90.0,
-        GlooFetcher,
-    );
+        let loader = DataLoader::new(
+            "https://tiles.driftmap2d.com/tiles",
+            -180.0,
+            -80.0,
+            GlooFetcher,
+        );
+        let landmask = LandMaskLoader::new(
+            "https://tiles.driftmap2d.com/roaring_landmask",
+            -180.0,
+            -90.0,
+            90.0,
+            GlooFetcher,
+        );
 
         Self {
             simulation,
             loader,
             landmask,
-            days_since_start: 0.0,
             start_date,
             steps_per_day,
+            last_step_count: 0,
         }
-    }
-
-    pub fn get_current_date_int(&self) -> usize {
-        let current_date = self.start_date + Days::new(self.days_since_start as u64);
-        let year = current_date.year();
-        let month = current_date.month();
-        let day = current_date.day();
-        (year as usize * 10000) + (month as usize * 100) + day as usize
     }
 
     pub async fn step(&mut self, step_count: u32) -> Result<(), JsValue> {
         let dt_days = 1.0 / self.steps_per_day as f32;
-        let current_date_int = self.get_current_date_int();
 
         if step_count == 0 {
             self.simulation.release_particles(step_count);
+            self.last_step_count = 0;
             return Ok(());
         }
+
         self.simulation.release_particles(step_count);
 
         let hour = (24.0 * step_count.saturating_sub(1) as f32 / self.steps_per_day as f32) % 24.0;
-        
+
+        // Forcing date: the day containing the START of the advance, (step_count - 1) * dt
+        let forcing_day_offset = step_count.saturating_sub(1) / self.steps_per_day;
+        let forcing_date = self.start_date + Days::new(forcing_day_offset as u64);
+        let current_date_int = forcing_date.year() as usize * 10000
+            + forcing_date.month() as usize * 100
+            + forcing_date.day() as usize;
+
         self.loader
             .load_ocean_tiles(self.get_unstranded_positions(), current_date_int)
             .await;
@@ -112,8 +112,7 @@ impl Proteus {
             &self.landmask,
         );
 
-        self.days_since_start = step_count.saturating_sub(1) as f32 / self.steps_per_day as f32;
-
+        self.last_step_count = step_count;
         Ok(())
     }
 
@@ -164,21 +163,28 @@ impl Proteus {
     }
 
     pub fn current_day(&self) -> f32 {
-        self.days_since_start
+        self.last_step_count as f32 / self.steps_per_day as f32
     }
 
+    pub fn get_current_date_int(&self) -> usize {
+        let day_offset = self.last_step_count / self.steps_per_day;
+        let date = self.start_date + Days::new(day_offset as u64);
+        date.year() as usize * 10000
+            + date.month() as usize * 100
+            + date.day() as usize
+    }
+    
     pub fn current_time_str(&self) -> String {
-        let current_date =
-            self.start_date + Duration::seconds((self.days_since_start * 24.0 * 3600.0) as i64);
+        let seconds = (self.current_day() * 86400.0) as i64;
+        let current_date = self.start_date + Duration::seconds(seconds);
 
-        let year = current_date.year();
-        let month = current_date.month();
-        let day = current_date.day();
-        let hour = current_date.hour();
-        let minute = current_date.minute();
         format!(
             "{:04}-{:02}-{:02} {:02}:{:02}",
-            year, month, day, hour, minute
+            current_date.year(),
+            current_date.month(),
+            current_date.day(),
+            current_date.hour(),
+            current_date.minute()
         )
     }
 
