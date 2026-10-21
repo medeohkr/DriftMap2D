@@ -26,7 +26,7 @@
     0.0,
     0.0
   ],
-  "steps": 1,
+  "steps": 48,
   "tile_url": "file:///D:/projects/driftmap2d/validation/synthetic/time_varying/tiles",
   "output": "proteus_centroids.json"
 }

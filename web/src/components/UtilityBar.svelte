@@ -23,7 +23,7 @@ import { importScenario } from "$lib/io/importScenario";
         }
         config.particleCount = 10000;
         config.timeStepMin = 15;
-        config.advectionScheme = "rk2";
+        config.advectionScheme = "euler";
         config.diffusionScheme = "constant";
         config.diffusionCoeffs = [10, 0.1];
         config.startDate = dateOffset(0);
