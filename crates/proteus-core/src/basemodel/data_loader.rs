@@ -127,9 +127,6 @@ impl<F: TileFetcher> DataLoader<F> {
         tile_min_lat: f32,
     ) -> (f32, f32) {
         let cells_per_hour = tile.n_lon * tile.n_lat;
-        let hour_offset_0 = hour as usize * cells_per_hour;
-        let hour_offset_1 = (hour + 1.0) as usize * cells_per_hour;
-        let hour_frac = hour - hour.floor();
 
         let (lon_cell, lat_cell) = self.get_cell_index(
             lon,
@@ -146,6 +143,18 @@ impl<F: TileFetcher> DataLoader<F> {
 
         let frac_lon = (lon - cell_lon_min) / self.step;
         let frac_lat = (lat - cell_lat_min) / self.step;
+
+        if hour >= (tile.n_hours - 1) as f32 {
+            let idx = (tile.n_hours - 1) * cells_per_hour + lat_cell * tile.n_lon + lon_cell;
+            let u = bilerp(&tile.u, frac_lon, frac_lat, idx, tile.n_lon);
+            let v = bilerp(&tile.v, frac_lon, frac_lat, idx, tile.n_lon);
+            return (u, v);
+        }
+
+
+        let hour_offset_0 = hour as usize * cells_per_hour;
+        let hour_offset_1 = (hour + 1.0) as usize * cells_per_hour;
+        let hour_frac = hour - hour.floor();
 
         // let (depth_idx, _t) = find_depth_indices(&tile.depths, depth);
         let idx_0 = hour_offset_0 + lat_cell * tile.n_lon + lon_cell;
@@ -177,11 +186,8 @@ impl<F: TileFetcher> DataLoader<F> {
         tile_min_lat: f32,
         want_sst: bool,
     ) -> (f32, f32, f32) {
-        let wind_step = hour as usize / 6;
         let cells_per_wind_step = tile.n_lon_wind * tile.n_lat_wind;
-        let wind_step_offset_0 = wind_step * cells_per_wind_step;
-        let wind_step_offset_1 = (wind_step + 1) * cells_per_wind_step;
-        let wind_frac = hour / 6.0 - (hour / 6.0).floor();
+        let wind_step = hour as usize / 6;
 
         let (wlon_cell, wlat_cell) = self.get_cell_index(
             lon,
@@ -198,6 +204,29 @@ impl<F: TileFetcher> DataLoader<F> {
 
         let wfrac_lon = (lon - wcell_lon_min) / self.step_wind;
         let wfrac_lat = (lat - wcell_lat_min) / self.step_wind;
+
+        // Last wind step of the tile: no step+1 to interpolate toward.
+        // Use the last step's value directly.
+        if wind_step >= tile.n_steps - 1 {
+            let widx = (tile.n_steps - 1) * cells_per_wind_step
+                + wlat_cell * tile.n_lon_wind
+                + wlon_cell;
+
+            let wind_u = bilerp(&tile.wind_u, wfrac_lon, wfrac_lat, widx, tile.n_lon_wind);
+            let wind_v = bilerp(&tile.wind_v, wfrac_lon, wfrac_lat, widx, tile.n_lon_wind);
+            let sst = if want_sst {
+                bilerp(&tile.sst_k, wfrac_lon, wfrac_lat, widx, tile.n_lon_wind)
+            } else {
+                0.0
+            };
+
+            return (wind_u, wind_v, sst);
+        }
+
+        // Normal interpolation between wind_step and wind_step+1.
+        let wind_step_offset_0 = wind_step * cells_per_wind_step;
+        let wind_step_offset_1 = (wind_step + 1) * cells_per_wind_step;
+        let wind_frac = hour / 6.0 - (hour / 6.0).floor();
 
         let widx_0 = wind_step_offset_0 + wlat_cell * tile.n_lon_wind + wlon_cell;
         let widx_1 = wind_step_offset_1 + wlat_cell * tile.n_lon_wind + wlon_cell;

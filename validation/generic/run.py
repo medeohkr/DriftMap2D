@@ -50,7 +50,7 @@ CLI_BIN = Path("../../target/release/proteus.exe")   # Windows
 CLI_STEPS = DURATION_HOURS * (3600 // TIME_STEP_SECONDS)
 CLI_TIME_STEP_MINUTES = TIME_STEP_SECONDS / 60.0
 
-WIND_FACTOR = 0.02
+WIND_FACTOR = 0.00
 WIND_DEFLECTION = 0.0
 
 RUNS_DIR = Path("runs")
@@ -96,7 +96,7 @@ def run_opendrift(run_dir, release_lon, release_lat, reader_smoc, reader_wind):
 
     o = OceanDrift(loglevel=30)
     o.add_reader([reader_smoc, reader_wind])
-    o.set_config('drift:advection_scheme', 'euler')
+    o.set_config('drift:advection_scheme', 'runge-kutta4')
     o.seed_elements(
         lon=release_lon,
         lat=release_lat,
@@ -137,7 +137,7 @@ def write_cli_config(run_dir, release_lon, release_lat):
         ],
         "particles": N_PARTICLES,
         "time_step_minutes": CLI_TIME_STEP_MINUTES,
-        "advection": "euler",
+        "advection": "rk4",
         "diffusion": "constant",
         "diffusion_coeffs": [0.0, 0.0],
         "steps": CLI_STEPS,
