@@ -28,7 +28,10 @@ from shared.proteus_utils import run_cli
 # Test config
 # ---------------------------------------------------------------------------
 START_TIME = datetime(2026, 9, 19, 0, 0)
-DURATION_HOURS = 48
+if sys.argv[1] == "time_varying":
+    DURATION_HOURS = 48
+else:
+    DURATION_HOURS = 1
 N_PARTICLES = 1
 TIME_STEP_SECONDS = 3600
 

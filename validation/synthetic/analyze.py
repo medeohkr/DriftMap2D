@@ -53,57 +53,6 @@ CASE_PARAMS = {
     },
 }
 
-
-# ---------------------------------------------------------------------------
-# Analytic solutions
-# ---------------------------------------------------------------------------
-def analytic_constant(lon0, lat0, u, v):
-    """Constant field. 1 hour of drift."""
-    t = START_TIME_HOURS * 3600.0
-    lat_t = lat0 + v * t / METERS_PER_DEGREE_LAT
-    lon_t = lon0 + u * t / METERS_PER_DEGREE_LON
-    return lon_t, lat_t
-
-
-def analytic_shear(lon0, lat0, u0, shear, v):
-    """u(lat) = u0 + shear*lat, v constant. 1 hour of drift."""
-    t = START_TIME_HOURS * 3600.0
-    lat_t = lat0 + v * t / METERS_PER_DEGREE_LAT
-    dx = u0 * t + shear * (lat0 * t + 0.5 * v * t * t / METERS_PER_DEGREE_LAT)
-    lon_t = lon0 + dx / METERS_PER_DEGREE_LON
-    return lon_t, lat_t
-
-
-def analytic_time_varying(lon0, lat0, u0, amp, period_h):
-    """u(t) = u0 + amp * sin(2π t / period_h), v = 0. 1 hour of drift."""
-    t = START_TIME_HOURS * 3600.0
-    period_s = period_h * 3600.0
-    omega = 2 * np.pi / period_s
-    dx = u0 * t + (amp / omega) * (1.0 - np.cos(omega * t))
-    lon_t = lon0 + dx / METERS_PER_DEGREE_LON
-    lat_t = lat0
-    return lon_t, lat_t
-
-
-def analytic_for_case(case, lon0, lat0):
-    """Dispatch to the right analytic function based on case name."""
-    if case not in CASE_PARAMS:
-        raise SystemExit(
-            f"Unknown case '{case}'. Known cases: {', '.join(CASE_PARAMS)}"
-        )
-    params = CASE_PARAMS[case]
-    kind = params["type"]
-    if kind == "constant":
-        return analytic_constant(lon0, lat0, params["u"], params["v"])
-    if kind == "shear":
-        return analytic_shear(lon0, lat0, params["u0"], params["shear"], params["v"])
-    if kind == "time_varying":
-        return analytic_time_varying(
-            lon0, lat0, params["u0"], params["amp"], params["period_h"]
-        )
-    raise SystemExit(f"Unknown case type '{kind}' for case '{case}'")
-
-
 # ---------------------------------------------------------------------------
 # Load centroids
 # ---------------------------------------------------------------------------
@@ -157,17 +106,11 @@ def main():
         _, lon0, lat0 = od[0]  # release point
 
         sep_m = haversine_km(od_final[1], od_final[2], dm_final[1], dm_final[2]) * 1000.0
-
-        ana_lon, ana_lat = analytic_for_case(case, lon0, lat0)
-        od_vs_ana_m = haversine_km(od_final[1], od_final[2], ana_lon, ana_lat) * 1000.0
-        dm_vs_ana_m = haversine_km(dm_final[1], dm_final[2], ana_lon, ana_lat) * 1000.0
-
         print(
             f"{name:<12} "
             f"({od_final[1]:>10.6f}, {od_final[2]:>9.6f})  "
             f"({dm_final[1]:>10.6f}, {dm_final[2]:>9.6f})  "
             f"{sep_m:<12.4f} "
-            f"OD:{od_vs_ana_m:.4f} DM:{dm_vs_ana_m:.4f}"
         )
 
 

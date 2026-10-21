@@ -23,7 +23,8 @@ validation/forcing/currents/
 validation/forcing/wind/
 validation/forcing/tiles/
 validation/*/runs/
-validation/synthetic/*/input.nc
-validation/synthetic/*/tiles/
-validation/synthetic/*/*.json
+validation/synthetic/constant/
+validation/synthetic/time_varying/
+validation/synthetic/shear/
 !validation/*/config.json
+__pycache__/
