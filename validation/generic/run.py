@@ -10,23 +10,26 @@ Each run writes:
     config.json          (the CLI config used)
     meta.json            (release point, run index, timing)
 
-Run from tests/opendrift_validation/.
+Run from validation/generic/.
 """
 import json
-import subprocess
 import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
-import xarray as xr
 
 from opendrift.models.oceandrift import OceanDrift
-from opendrift.readers import (
-    reader_netCDF_CF_generic,
-    add_standard_name_for_surface_grib_variables,
+from opendrift.readers import reader_netCDF_CF_generic
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from shared.opendrift_utils import (
+    prepare_ecmwf_netcdf as prepare_ecmwf_netcdf_shared,
+    save_centroids_from_nc,
 )
+from shared.proteus_utils import run_cli as run_cli_shared
 
 
 # ---------------------------------------------------------------------------
@@ -46,7 +49,6 @@ GRID_LAT_MIN, GRID_LAT_MAX = -7.5, 7.5
 GRID_N = 8
 
 # CLI
-CLI_BIN = Path("../../target/release/proteus.exe")   # Windows
 CLI_STEPS = DURATION_HOURS * (3600 // TIME_STEP_SECONDS)
 CLI_TIME_STEP_MINUTES = TIME_STEP_SECONDS / 60.0
 
@@ -65,15 +67,7 @@ def prepare_ecmwf_netcdf():
         return
 
     print("  Converting ECMWF GRIB2 -> CF NetCDF...")
-    ds = xr.open_dataset(ECMWF_GRIB, engine="cfgrib")
-    ds = ds.drop_vars("time", errors="ignore")
-    ds = ds.swap_dims({"step": "valid_time"}).rename({"valid_time": "time"})
-    ds = ds.drop_vars(
-        ["step", "heightAboveGround", "surface"], errors="ignore"
-    )
-    ds = add_standard_name_for_surface_grib_variables(ds)
-    ds = ds.drop_vars("skt", errors="ignore")
-    ds.to_netcdf(ECMWF_NC)
+    prepare_ecmwf_netcdf_shared(ECMWF_GRIB, ECMWF_NC)
     print(f"  Wrote {ECMWF_NC}")
 
 
@@ -119,7 +113,7 @@ def run_opendrift(run_dir, release_lon, release_lat, reader_smoc, reader_wind):
 # ---------------------------------------------------------------------------
 # CLI run
 # ---------------------------------------------------------------------------
-def write_cli_config(run_dir, release_lon, release_lat):
+def make_cli_config(release_lon, release_lat):
     config = {
         "start_date": START_TIME.strftime("%Y-%m-%d %H:%M"),
         "tracer_type": "generic",
@@ -144,23 +138,13 @@ def write_cli_config(run_dir, release_lon, release_lat):
         "tile_url": "validation-tiles",
         "output": "proteus_centroids.json",
     }
-    cfg_path = run_dir / "config.json"
-    with open(cfg_path, "w") as f:
-        json.dump(config, f, indent=2)
-    return cfg_path
+    return config
 
 
 def run_cli(run_dir, release_lon, release_lat):
-    cfg_path = write_cli_config(run_dir, release_lon, release_lat)
-
-    t0 = time.time()
-    result = subprocess.run(
-        [str(CLI_BIN.resolve()), str(cfg_path.resolve())],
-        cwd=str(run_dir.resolve()),
-        capture_output=True,
-        text=True,
+    elapsed, result = run_cli_shared(
+        run_dir, make_cli_config(release_lon, release_lat)
     )
-    elapsed = time.time() - t0
 
     if result.returncode != 0:
         print(f"    ❌ CLI failed (exit {result.returncode})")
@@ -173,57 +157,12 @@ def run_cli(run_dir, release_lon, release_lat):
 # Save OpenDrift centroids as JSON (for debugging/alignment)
 # ---------------------------------------------------------------------------
 def save_opendrift_centroids(run_dir):
-    """Read opendrift_output.nc, write opendrift_centroids.json with
-    the same schema as proteus_centroids.json: a list of
-    {step, lon, lat} entries, one per output time.
-    """
     nc_path = run_dir / "opendrift_output.nc"
-    ds = xr.open_dataset(nc_path)
-
-    # Locate lon/lat variables (naming varies by OpenDrift version)
-    lon_name = next((n for n in ("lon", "longitude") if n in ds), None)
-    lat_name = next((n for n in ("lat", "latitude") if n in ds), None)
-    if lon_name is None or lat_name is None:
-        ds.close()
-        raise RuntimeError(f"no lon/lat variables in {nc_path}")
-
-    lons = ds[lon_name].values
-    lats = ds[lat_name].values
-
-    # Times: OpenDrift writes a 'time' coordinate.
-    time_name = next((n for n in ds.coords if "time" in n.lower()), "time")
-    times = ds[time_name].values
-
-    ds.close()
-
-    # Normalize shape to (n_steps, n_particles)
-    if lons.shape[0] == 1:
-        lons = lons[0]
-        lats = lats[0]
-    if lons.ndim == 2 and lons.shape[0] > lons.shape[1]:
-        lons = lons.T
-        lats = lats.T
-
-    n_steps = lons.shape[0]
-    out = []
-    for i in range(n_steps):
-        slon = lons[i]
-        slat = lats[i]
-        mask = ~np.isnan(slon) & ~np.isnan(slat)
-        if mask.any():
-            out.append({
-                "step": i,
-                "lon": float(np.mean(slon[mask])),
-                "lat": float(np.mean(slat[mask])),
-                "time": str(times[i]) if i < len(times) else None,
-                "n_active": int(mask.sum()),
-            })
-
     json_path = run_dir / "opendrift_centroids.json"
-    with open(json_path, "w") as f:
-        json.dump(out, f, indent=2)
-
+    save_centroids_from_nc(nc_path, json_path)
     return json_path
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -267,35 +206,24 @@ def main():
 
         print(f"\n[{i+1:>2}/{total}] ({lon:.2f}, {lat:.2f})")
 
-        if not (run_dir / "opendrift_output.nc").exists():
-            print("    OpenDrift...", end="", flush=True)
-            try:
-                od_sec = run_opendrift(run_dir, lon, lat, reader_smoc, reader_wind)
-                meta["opendrift_seconds"] = od_sec
-                print(f" {od_sec:.1f}s")
-            except Exception as e:
-                print(f" ❌ {e}")
-                meta["opendrift_error"] = str(e)
-        else:
-            print("    OpenDrift... cached")
+        print("    OpenDrift...", end="", flush=True)
+        try:
+            od_sec = run_opendrift(run_dir, lon, lat, reader_smoc, reader_wind)
+            meta["opendrift_seconds"] = od_sec
+            print(f" {od_sec:.1f}s")
+        except Exception as e:
+            print(f" ❌ {e}")
+            meta["opendrift_error"] = str(e)
 
-        # Always (re)write the OpenDrift centroids JSON from the NetCDF.
-        if (run_dir / "opendrift_output.nc").exists():
-            try:
-                save_opendrift_centroids(run_dir)
-            except Exception as e:
-                print(f"    ⚠️ could not save opendrift_centroids.json: {e}")
-
-        if not (run_dir / "proteus_centroids.json").exists():
-            print("    DriftMap...", end="", flush=True)
-            cli_sec, ok = run_cli(run_dir, lon, lat)
-            if ok:
-                meta["cli_seconds"] = cli_sec
-                print(f" {cli_sec:.1f}s")
-            else:
-                meta["cli_error"] = "nonzero exit"
+        save_opendrift_centroids(run_dir)
+        
+        print("    DriftMap...", end="", flush=True)
+        cli_sec, ok = run_cli(run_dir, lon, lat)
+        if ok:
+            meta["cli_seconds"] = cli_sec
+            print(f" {cli_sec:.1f}s")
         else:
-            print("    DriftMap... cached")
+            meta["cli_error"] = "nonzero exit"
 
         with open(run_dir / "meta.json", "w") as f:
             json.dump(meta, f, indent=2)
