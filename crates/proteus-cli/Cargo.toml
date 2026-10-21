@@ -11,7 +11,7 @@ path = "src/main.rs"
 [dependencies]
 proteus-core = { path = "../proteus-core" }
 
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["fs"] }
 reqwest = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
@@ -20,3 +20,4 @@ log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
+url = { workspace = true }

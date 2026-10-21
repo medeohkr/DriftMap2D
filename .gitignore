@@ -19,3 +19,11 @@ validation/generic/runs/
 validation/oil/runs/
 validation/leeway/runs/
 .tokeignore
+validation/forcing/currents/
+validation/forcing/wind/
+validation/forcing/tiles/
+validation/*/runs/
+validation/synthetic/*/input.nc
+validation/synthetic/*/tiles/
+validation/synthetic/*/*.json
+!validation/*/config.json

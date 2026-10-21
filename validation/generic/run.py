@@ -32,9 +32,9 @@ from opendrift.readers import (
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-SMOC_PATH = Path("../../data/currents/smoc_20260919.nc")
-ECMWF_GRIB = Path("../../data/wind/ecmwf_2026-09-19_00z.grib2")
-ECMWF_NC = Path("../../data/wind/ecmwf_2026-09-19_00z.nc")
+SMOC_PATH = Path("../forcing/currents/smoc_20260919.nc")
+ECMWF_GRIB = Path("../forcing/wind/ecmwf_2026-09-19_00z.grib2")
+ECMWF_NC = Path("../forcing/wind/ecmwf_2026-09-19_00z.nc")
 
 START_TIME = datetime(2026, 9, 19, 0, 0)
 DURATION_HOURS = 48

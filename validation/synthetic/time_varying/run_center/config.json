@@ -7,8 +7,8 @@
   },
   "releases": [
     {
-      "lon": -25.0,
-      "lat": 5,
+      "lon": -175.0,
+      "lat": 0.0,
       "radius": 0.0,
       "schedule": [
         {
@@ -19,14 +19,14 @@
     }
   ],
   "particles": 1,
-  "time_step_minutes": 15.0,
+  "time_step_minutes": 60.0,
   "advection": "rk4",
   "diffusion": "constant",
   "diffusion_coeffs": [
     0.0,
     0.0
   ],
-  "steps": 48,
-  "tile_url": "validation-tiles",
+  "steps": 1,
+  "tile_url": "file:///D:/projects/driftmap2d/validation/synthetic/time_varying/tiles",
   "output": "proteus_centroids.json"
 }

@@ -42,6 +42,7 @@ anyhow = "1.0"
 clap = { version = "4", features = ["derive"] }
 env_logger = "0.11"
 csv = "1.3"
+url = "2"
 
 # --- Logging façade (used by core) ---
 log = "0.4"
