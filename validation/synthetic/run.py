@@ -28,7 +28,7 @@ from shared.proteus_utils import run_cli
 # Test config
 # ---------------------------------------------------------------------------
 START_TIME = datetime(2026, 9, 19, 0, 0)
-DURATION_HOURS = 1
+DURATION_HOURS = 48
 N_PARTICLES = 1
 TIME_STEP_SECONDS = 3600
 

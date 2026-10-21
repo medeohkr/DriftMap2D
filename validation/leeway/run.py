@@ -32,13 +32,13 @@ from opendrift.readers import (
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-SMOC_PATH = Path("../../data/currents/smoc_20260919.nc")
-ECMWF_GRIB = Path("../../data/wind/ecmwf_2026-09-19_00z.grib2")
-ECMWF_NC = Path("../../data/wind/ecmwf_2026-09-19_00z.nc")
+SMOC_PATH = Path("../forcing/currents/smoc_20260919.nc")
+ECMWF_GRIB = Path("../forcing/wind/ecmwf_2026-09-19_00z.grib2")
+ECMWF_NC = Path("../forcing/wind/ecmwf_2026-09-19_00z.nc")
 
 START_TIME = datetime(2026, 9, 19, 0, 0)
 DURATION_HOURS = 48
-N_PARTICLES = 10000
+N_PARTICLES = 100000
 TIME_STEP_SECONDS = 3600
 
 GRID_LON_MIN, GRID_LON_MAX = -177.5, -147.5
@@ -93,7 +93,7 @@ def run_opendrift(run_dir, release_lon, release_lat, reader_smoc, reader_wind):
 
     o = Leeway(loglevel=30)
     o.add_reader([reader_smoc, reader_wind])
-    o.set_config('drift:advection_scheme', 'runge-kutta4')
+    o.set_config('drift:advection_scheme', 'euler')
     o.seed_elements(
         lon=release_lon,
         lat=release_lat,
@@ -143,7 +143,7 @@ def write_cli_config(run_dir, release_lon, release_lat):
         ],
         "particles": N_PARTICLES,
         "time_step_minutes": CLI_TIME_STEP_MINUTES,
-        "advection": "rk4",
+        "advection": "euler",
         "diffusion": "constant",
         "diffusion_coeffs": [0.0, 0.0],
         "steps": CLI_STEPS,
