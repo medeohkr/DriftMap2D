@@ -3,19 +3,20 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
 
 from shared.analysis import analyze_runs
 
 
 def main():
     analyze_runs(
-        Path("runs"),
-        Path("error_vs_step_pct.csv"),
-        Path("error_vs_step_abs.csv"),
-        Path("error_vs_step.png"),
-        "DriftMap Generic Drift vs OpenDrift OceanDrift: centroid error "
-        "across {n_runs} runs, RK4",
+        HERE / "runs",
+        HERE / "error_vs_step_pct.csv",
+        HERE / "error_vs_step_abs.csv",
+        HERE / "error_vs_step.png",
+        "Proteus vs Opendrift Ocean Drift: centroid error "
+        "across {n_runs} runs, no windage, RK4 scheme",
         "simulation step (hours since release)",
     )
 

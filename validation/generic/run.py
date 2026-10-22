@@ -10,7 +10,7 @@ Each run writes:
     config.json          (the CLI config used)
     meta.json            (release point, run index, timing)
 
-Run from validation/generic/.
+Run from any directory; paths are relative to validation/generic/.
 """
 import json
 import sys
@@ -23,7 +23,8 @@ import numpy as np
 from opendrift.models.oceandrift import OceanDrift
 from opendrift.readers import reader_netCDF_CF_generic
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent))
 
 from shared.opendrift_utils import (
     prepare_ecmwf_netcdf as prepare_ecmwf_netcdf_shared,
@@ -35,9 +36,9 @@ from shared.proteus_utils import run_cli as run_cli_shared
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-SMOC_PATH = Path("../forcing/currents/smoc_20260919.nc")
-ECMWF_GRIB = Path("../forcing/wind/ecmwf_2026-09-19_00z.grib2")
-ECMWF_NC = Path("../forcing/wind/ecmwf_2026-09-19_00z.nc")
+SMOC_PATH = (HERE.parent / "forcing/currents/smoc_20260919.nc")
+ECMWF_GRIB = (HERE.parent / "forcing/wind/ecmwf_2026-09-19_00z.grib2")
+ECMWF_NC = (HERE.parent / "forcing/wind/ecmwf_2026-09-19_00z.nc")
 
 START_TIME = datetime(2026, 9, 19, 0, 0)
 DURATION_HOURS = 48
@@ -55,7 +56,7 @@ CLI_TIME_STEP_MINUTES = TIME_STEP_SECONDS / 60.0
 WIND_FACTOR = 0.00
 WIND_DEFLECTION = 0.0
 
-RUNS_DIR = Path("runs")
+RUNS_DIR = HERE / "runs"
 
 
 # ---------------------------------------------------------------------------
