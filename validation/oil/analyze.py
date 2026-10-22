@@ -99,7 +99,7 @@ def main():
             writer.writerows({names.get(key, key): value for key, value in row.items()}
                              for row in stats)
         print(f"Wrote {path}")
-    fig.suptitle(f"Proteus vs OpenDrift oil budget: mean errors across {n_runs} runs")
+    fig.suptitle(f"Proteus vs OpenDrift Oil Weathering: mean errors across {n_runs} runs, no windage, Euler scheme")
     fig.tight_layout()
     fig.savefig(HERE / "error_vs_step.png", dpi=160)
     plt.close(fig)
