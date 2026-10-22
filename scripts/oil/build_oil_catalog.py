@@ -480,6 +480,14 @@ def convert_oil(path: Path) -> dict[str, Any]:
     )
 
     bullwinkle, bullwinkle_estimated = extract_bullwinkle(oil, sara)
+    water_fraction_max = pp.max_water_fraction_emulsion(oil)
+    water_fraction_max_estimated = water_fraction_max is None
+    if water_fraction_max_estimated:
+        # Match GNOME: estimate for crude/bitumen; other products default to zero.
+        if get(metadata, "product_type") in ("Crude Oil NOS", "Bitumen Blend"):
+            water_fraction_max = pp.emul_water(oil)
+        else:
+            water_fraction_max = 0.0
 
     return {
         "oil_id": oil_id,
@@ -521,6 +529,7 @@ def convert_oil(path: Path) -> dict[str, Any]:
         "component_mass_fractions": component_mass_fractions,
 
         "bullwinkle_fraction": bullwinkle,
+        "emulsion_water_fraction_max": clamp(float(water_fraction_max), 0.0, 0.9),
 
         "estimated": {
             "density": density_estimated,
@@ -529,6 +538,7 @@ def convert_oil(path: Path) -> dict[str, Any]:
             "sara": sara_estimated,
             "distillation": distillation_estimated,
             "bullwinkle_fraction": bullwinkle_estimated,
+            "emulsion_water_fraction_max": water_fraction_max_estimated,
         },
 
         "source_file": str(path),

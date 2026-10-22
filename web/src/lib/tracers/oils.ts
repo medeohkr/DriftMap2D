@@ -22,6 +22,7 @@ export interface OilRecord {
     molecular_weights_kg_mol: number[];
     component_mass_fractions: number[];
     bullwinkle_fraction: number;
+    emulsion_water_fraction_max?: number;
     estimated: {
         density: boolean;
         dynamic_viscosity: boolean;
@@ -163,6 +164,7 @@ export function getOilJson() {
         boiling_points_c: oil.boiling_points_c,
         molecular_weights_kg_mol: oil.molecular_weights_kg_mol,
         component_mass_fractions: oil.component_mass_fractions,
+        emulsion_water_fraction_max: oil.emulsion_water_fraction_max,
         bullwinkle_fraction: oilOverrides.emulOnset === "fraction" ? oilOverrides.bullwinkleFrac / 100 : 1,
         bulltime: oilOverrides.emulOnset === "time" ? oilOverrides.bulltime * 3600 : -1,
     });

@@ -71,6 +71,11 @@ impl OilTracer {
             .collect();
 
         let n_components = mass_components.len();
+        let emulsion_water_fraction_max = json.emulsion_water_fraction_max
+            .unwrap_or_else(|| weathering::estimate_water_fraction_max(&json.dynamic_viscosity_cp));
+        assert!(emulsion_water_fraction_max.is_finite()
+            && (0.0..=0.9).contains(&emulsion_water_fraction_max),
+            "emulsion_water_fraction_max must be between 0 and 0.9");
 
         Self {
             properties: OilProperties {
@@ -88,6 +93,7 @@ impl OilTracer {
                 molecular_weights: json.molecular_weights_kg_mol,
                 bullwinkle_fraction: json.bullwinkle_fraction,
                 bulltime: json.bulltime,
+                emulsion_water_fraction_max,
             },
             data: OilData {
                 age: Vec::with_capacity(capacity),

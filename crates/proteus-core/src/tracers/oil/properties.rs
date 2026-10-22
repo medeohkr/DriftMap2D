@@ -16,6 +16,7 @@ pub struct OilProperties {
     pub initial_mass_components: Vec<f32>,
     pub bullwinkle_fraction: f32,
     pub bulltime: f32,
+    pub emulsion_water_fraction_max: f32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -33,6 +34,9 @@ pub struct OilPropertiesJson {
     pub component_mass_fractions: Vec<f32>,
     pub bullwinkle_fraction: f32,
     pub bulltime: f32,
+    /// Optional for older configs; estimated once from fresh oil at 15 C.
+    #[serde(default)]
+    pub emulsion_water_fraction_max: Option<f32>,
 }
 
 #[derive(Debug, Deserialize)]
