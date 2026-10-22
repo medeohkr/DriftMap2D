@@ -50,39 +50,61 @@ def main():
             print(f"Skipping {run_dir.name}: {exc}")
     if not rows:
         raise SystemExit("No complete oil comparisons found. Run run.py first.")
-    with (HERE / "budget_comparison.csv").open("w", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=list(rows[0]))
-        writer.writeheader()
-        writer.writerows(rows)
+    # One row per metric and output time, aggregated across all valid runs.
+    fields = ["step", "hours", "metric", "mean", "std", "p10", "p90", "rmse", "n_runs"]
+    aggregated = {"pct": [], "abs": []}
+    n_runs = len({row["run"] for row in rows})
     fig, axes = plt.subplots(2, 2, figsize=(12, 8), sharex=True)
-    summary = {}
     for index, metric in enumerate(METRICS):
         selected = [row for row in rows if row["metric"] == metric]
-        hours = sorted({row["hours"] for row in selected})
-        for key, label in (("opendrift_percent", "OpenDrift"), ("proteus_percent", "Proteus")):
-            axes[index, 0].plot(hours, [np.mean([r[key] for r in selected if r["hours"] == h])
-                                       for h in hours], label=label)
-        errors = [[r["error_percentage_points"] for r in selected if r["hours"] == h]
-                  for h in hours]
-        axes[index, 1].plot(hours, [np.mean(np.abs(e)) for e in errors], label="Mean absolute error")
-        axes[index, 1].plot(hours, [np.max(np.abs(e)) for e in errors], label="Maximum absolute error")
-        axes[index, 0].set_ylabel(metric.replace("_percent", "").replace("_", " ") + " (%)")
-        axes[index, 1].set_ylabel("Error (percentage points)")
-        values = np.asarray([r["error_percentage_points"] for r in selected])
-        summary[metric] = {"mean_absolute_error_pp": float(np.mean(np.abs(values))),
-                           "max_absolute_error_pp": float(np.max(np.abs(values))),
-                           "rmse_pp": float(np.sqrt(np.mean(values**2)))}
-    for ax in axes.flat:
-        ax.grid(alpha=0.3)
-        ax.legend()
-        ax.set_xlabel("Hours since release")
-    n_runs = len({row["run"] for row in rows})
-    fig.suptitle(f"Proteus vs OpenDrift oil budget: {n_runs} runs")
+        for hours in sorted({row["hours"] for row in selected}):
+            samples = [row for row in selected if row["hours"] == hours]
+            absolute = np.abs([row["error_percentage_points"] for row in samples])
+            reference = np.asarray([row["opendrift_percent"] for row in samples])
+            # Relative error is undefined when OpenDrift's fraction is zero.
+            relative = 100 * absolute[reference > 0] / reference[reference > 0]
+            for kind, values in (("abs", absolute), ("pct", relative)):
+                stats = {"step": samples[0]["step"], "hours": hours, "metric": metric,
+                         "mean": float(np.mean(values)) if len(values) else float("nan"),
+                         "std": float(np.std(values)) if len(values) else float("nan"),
+                         "p10": float(np.percentile(values, 10)) if len(values) else float("nan"),
+                         "p90": float(np.percentile(values, 90)) if len(values) else float("nan"),
+                         "rmse": float(np.sqrt(np.mean(values**2))) if len(values) else float("nan"),
+                         "n_runs": len(values)}
+                aggregated[kind].append(stats)
+        for column, kind in enumerate(("pct", "abs")):
+            stats = [row for row in aggregated[kind] if row["metric"] == metric]
+            ax = axes[index, column]
+            hours = [r["hours"] for r in stats]
+            color = "C0" if kind == "pct" else "C1"
+            ax.plot(hours, [r["mean"] for r in stats], color=color, lw=2,
+                    label="Mean across runs")
+            ax.fill_between(hours, [r["p10"] for r in stats],
+                            [r["p90"] for r in stats], color=color, alpha=0.15,
+                            label="10th–90th percentile")
+            ax.set_title(metric.replace("_percent", "").capitalize())
+            ax.set_ylabel("Absolute error (percentage points)" if kind == "abs"
+                          else "Relative error (%)")
+            ax.set_xlabel("Hours since release")
+            ax.grid(alpha=0.3)
+            ax.legend(loc="upper left")
+            ax.axhline(0, color="k", lw=0.5, alpha=0.3)
+    for kind, stats in aggregated.items():
+        path = HERE / f"error_vs_step_{kind}.csv"
+        unit = "pp" if kind == "abs" else "pct"
+        names = {key: f"{key}_{unit}" for key in ("mean", "std", "p10", "p90", "rmse")}
+        with path.open("w", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=[names.get(key, key) for key in fields])
+            writer.writeheader()
+            writer.writerows({names.get(key, key): value for key, value in row.items()}
+                             for row in stats)
+        print(f"Wrote {path}")
+    fig.suptitle(f"Proteus vs OpenDrift oil budget: mean errors across {n_runs} runs")
     fig.tight_layout()
-    fig.savefig(HERE / "budget_vs_step.png", dpi=160)
+    fig.savefig(HERE / "error_vs_step.png", dpi=160)
     plt.close(fig)
-    (HERE / "budget_summary.json").write_text(json.dumps({"n_runs": n_runs, **summary}, indent=2))
-    print(json.dumps(summary, indent=2))
+    print(f"Analyzed {n_runs} runs. Relative errors exclude zero OpenDrift values.")
+
 
 
 if __name__ == "__main__":
