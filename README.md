@@ -18,9 +18,10 @@ https://github.com/NOAA-ORR-ERD/PyGnome
 Search and Rescue is a port of OpenDrift's Leeway model and supports all 85 Leeway objects provided by OpenDrifts' object property database.
 https://github.com/OpenDrift/opendrift/blob/master/opendrift/models/OBJECTPROP.DAT
 
-Generic Drift and Search and Rescue models have been validated against Opendrift:
+DriftMap's modules have been cross-validated against OpenDrift:
 
 <img src="validation\generic\error_vs_step.png">
+<img src="validation\oil\error_vs_step.png">
 <img src="validation\leeway\error_vs_step.png">
 
 DriftMap2D currently serves processed tiles from the following global forcing products:
