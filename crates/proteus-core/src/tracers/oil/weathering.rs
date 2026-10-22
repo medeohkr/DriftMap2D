@@ -34,7 +34,9 @@ fn lerp(props: &[(f32, f32)], target: f32) -> f32 {
     props.last().unwrap().1
 }
 // adios2 estimation of y_max
-fn y_max(viscosity_cp: f32) -> f32 {
+pub(super) fn estimate_water_fraction_max(viscosity_points: &[(f32, f32)]) -> f32 {
+    // ADIOS fallback uses fresh-oil dynamic viscosity at 15 C, once per oil.
+    let viscosity_cp = lerp(viscosity_points, 15.0);
     let viscosity_pas = (viscosity_cp * 1e-3).max(1e-12);
 
     let value = if viscosity_pas > 0.050 {
@@ -56,10 +58,138 @@ fn water_uptake_coefficient(wind_speed: f32) -> f32 {
 }
 
 fn mass_transport_coeff(wind_speed: f32) -> f32 {
-    if wind_speed > 10.0 {
+    if wind_speed >= 10.0 {
         0.06 * C_EVAP * wind_speed.powi(2)
     } else {
         C_EVAP * wind_speed.powf(0.78)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tracers::{OilTracer, Tracer};
+
+    fn oil(bullwinkle: f32, bulltime: f32) -> OilTracer {
+        let json = serde_json::json!({
+            "wind_factor": 0.0, "wind_deflection": 0.0,
+            "product_type": "test", "api": 30.0,
+            "density_kgm3": [[900.0, 15.0]],
+            "dynamic_viscosity_cp": [[9.0, 15.0]],
+            "interfacial_tension_n_m": [[0.03, 15.0]],
+            "sara_mass_fractions": {"asphaltenes": 0.03},
+            "boiling_points_c": [100.0, 400.0],
+            "molecular_weights_kg_mol": [0.1, 0.3],
+            "component_mass_fractions": [0.5, 0.5],
+            "bullwinkle_fraction": bullwinkle, "bulltime": bulltime
+        });
+        let mut oil = OilTracer::new(&json.to_string(), 1, 1000.0);
+        oil.push();
+        oil
+    }
+
+    #[test]
+    fn transport_uses_high_wind_branch_at_ten() {
+        assert!((mass_transport_coeff(10.0) - 0.015).abs() < 1e-7);
+    }
+
+    #[test]
+    fn viscosity_multiplier_uses_kinematic_units() {
+        // 9 cP / 900 kg/m³ = 1e-5 m²/s; NOAA kv1 = 4.7434165.
+        let (_, viscosity) = update_density_viscosity(0.0, 0.2, 900.0, 9.0, 1025.0);
+        let expected = 9.0 * (4.7434165_f32 * 0.2).exp();
+        assert!((viscosity - expected).abs() < 1e-4);
+    }
+
+    #[test]
+    fn evaporation_continues_then_stops_after_one_day() {
+        let mut oil = oil(1.0, -999.0);
+        oil.step(&[0], &[5.0], &[15.0], 3600.0);
+        let first_mass = oil.data.total_mass[0];
+        oil.step(&[0], &[5.0], &[15.0], 3600.0);
+        assert!(oil.data.total_mass[0] < first_mass);
+        oil.data.age[0] = 82800.0;
+        let before_boundary = oil.data.total_mass[0];
+        oil.step(&[0], &[5.0], &[15.0], 3600.0);
+        assert!(oil.data.total_mass[0] < before_boundary);
+        let after_boundary = oil.data.total_mass[0];
+        oil.step(&[0], &[5.0], &[15.0], 3600.0);
+        assert_eq!(oil.data.total_mass[0], after_boundary);
+    }
+
+    #[test]
+    fn emulsification_waits_until_next_step_after_evaporation_threshold() {
+        let mut oil = oil(1e-6, -999.0);
+        oil.step(&[0], &[5.0], &[15.0], 3600.0);
+        assert!(oil.data.total_mass[0] < oil.data.total_initial_mass);
+        assert!(oil.data.f_evap[0] > 1e-6);
+        assert_eq!(oil.data.y_w[0], 0.0);
+        oil.step(&[0], &[5.0], &[15.0], 3600.0);
+        assert!(oil.data.y_w[0] > 0.0);
+        assert_eq!(oil.data.emulsification_start_age[0], 0.0);
+    }
+
+    #[test]
+    fn reported_fraction_uses_current_mass_and_age_advances_after_weathering() {
+        let mut oil = oil(1.0, -999.0);
+        oil.step(&[0], &[5.0], &[15.0], 3600.0);
+        assert!(oil.data.f_evap[0] > 0.0);
+        assert_eq!(oil.data.f_evap[0], 1.0 - oil.data.total_mass[0] / oil.data.total_initial_mass);
+        assert_eq!(oil.data.age[0], 3600.0);
+        oil.step(&[0], &[5.0], &[15.0], 3600.0);
+        assert_eq!(oil.data.f_evap[0], 1.0 - oil.data.total_mass[0] / oil.data.total_initial_mass);
+        assert_eq!(oil.data.age[0], 7200.0);
+
+        // The diagnostic must refresh even when evaporation has stopped.
+        oil.data.age[0] = 90000.0;
+        let expected = 1.0 - oil.data.total_mass[0] / oil.data.total_initial_mass;
+        oil.step(&[0], &[5.0], &[15.0], 3600.0);
+        assert_eq!(oil.data.f_evap[0], expected);
+    }
+
+    #[test]
+    fn emulsification_requires_positive_threshold_or_reached_bulltime() {
+        let mut disabled = oil(0.0, -999.0);
+        disabled.step(&[0], &[5.0], &[15.0], 3600.0);
+        assert_eq!(disabled.data.y_w[0], 0.0);
+
+        let mut timed = oil(1.0, 3600.0);
+        timed.step(&[0], &[5.0], &[15.0], 3600.0);
+        assert_eq!(timed.data.y_w[0], 0.0);
+        timed.step(&[0], &[5.0], &[15.0], 3600.0);
+        assert!(timed.data.y_w[0] > 0.0);
+        assert_eq!(timed.data.emulsification_start_age[0], 3600.0);
+    }
+
+    #[test]
+    fn configured_water_cap_is_constant_and_respected() {
+        let mut oil = oil(0.0, 0.0);
+        oil.properties.emulsion_water_fraction_max = 0.8;
+        oil.properties.asphaltenes_frac = 0.0;
+        for _ in 0..48 {
+            oil.step(&[0], &[10.0], &[15.0], 3600.0);
+        }
+        assert!(oil.data.y_w[0] > 0.7);
+        assert!(oil.data.y_w[0] <= 0.8);
+        assert_eq!(oil.properties.emulsion_water_fraction_max, 0.8);
+    }
+
+    #[test]
+    fn zero_water_cap_disables_emulsification() {
+        let mut oil = oil(0.0, 0.0);
+        oil.properties.emulsion_water_fraction_max = 0.0;
+        oil.step(&[0], &[10.0], &[15.0], 3600.0);
+        assert_eq!(oil.data.y_w[0], 0.0);
+        assert_eq!(oil.data.interfacial_area[0], 0.0);
+    }
+
+    #[test]
+    fn legacy_water_cap_uses_fresh_oil_at_fifteen_celsius() {
+        let oil = oil(0.0, 0.0);
+        assert_eq!(oil.properties.emulsion_water_fraction_max, 0.9);
+        let cap = estimate_water_fraction_max(&[(50.0, 10.0), (150.0, 20.0)]);
+        let expected = 0.9 - 0.0952 * 2.0_f32.ln();
+        assert!((cap - expected).abs() < 1e-6);
     }
 }
 
@@ -88,8 +218,9 @@ pub fn update_density_viscosity(
     // Emulsion density (weighted average)
     let density = y_w * sea_water_density + (1.0 - y_w) * oil_density_kgm3;
 
-    // Evaporation factor
-    let kv1 = (oil_viscosity_cp.sqrt() * VISC_CURVFIT_PARAM).clamp(1.0, 10.0);
+    // The NOAA coefficient expects kinematic viscosity in m²/s, not cP.
+    let kinematic_viscosity = oil_viscosity_cp * 1e-3 / oil_density_kgm3;
+    let kv1 = (kinematic_viscosity.sqrt() * VISC_CURVFIT_PARAM).clamp(1.0, 10.0);
     let evap_factor = (kv1 * f_evap).exp();
 
     // Emulsification factor (Mooney equation)
@@ -126,7 +257,7 @@ fn evap_decay_constants(
         let sum_moles: f32 = mass_components[(idx * n_components)..((idx + 1) * n_components)]
             .iter()
             .zip(molecular_weights)
-            .map(|(&mass, &mw)| mass * mw)
+            .map(|(&mass, &mw)| mass / mw)
             .sum();
         let factor = -(areas[pos] * k) / (GAS_CONSTANT * (sst_celsius[pos] + 273.15) * sum_moles);
         let vp = vapor_pressure(boiling_points, sst_celsius[pos]);
@@ -141,9 +272,7 @@ fn evap_decay_constants(
 pub fn update_evaporation(
     mass_components: &mut [f32],
     n_components: usize,
-    total_initial_mass: f32,
     total_mass: &mut [f32],
-    f_evap: &mut [f32],
     area: &[f32],
     wind_speeds: &[f32],
     sst_celsius: &[f32],
@@ -175,22 +304,18 @@ pub fn update_evaporation(
         total_mass[idx] = mass_components[idx * n_components..(idx + 1) * n_components]
             .iter()
             .sum();
-        f_evap[idx] = 1.0 - (total_mass[idx] / total_initial_mass);
     }
 }
 
 pub fn update_emulsification(
     y_w: &mut f32,
     interfacial_area: &mut f32,
-    viscosity: f32,
-    asphaltenes_frac: f32,
+    y_max: f32,
     age_since_start: f32,
     wind_speed: f32,
     dt: f32,
 ) {
-    let y_max = y_max(viscosity);
-
-    if y_max <= 0.0 || *y_w >= y_max || asphaltenes_frac <= 0.0 {
+    if y_max <= 0.0 || *y_w >= y_max {
         return;
     }
 
@@ -220,6 +345,12 @@ pub fn step_particle_weathering(
 ) {
     let n = indices.len();
 
+    // Use the start-of-step fraction for viscosity and emulsification.
+    for &idx in indices {
+        particles.f_evap[idx] =
+            1.0 - particles.total_mass[idx] / particles.total_initial_mass;
+    }
+
     let initial_densities: Vec<f32> = (0..n)
         .map(|pos| lerp(&oil.density_kgm3, sst_celsius[pos]))
         .collect();
@@ -228,7 +359,7 @@ pub fn step_particle_weathering(
         .map(|pos| lerp(&oil.dynamic_viscosity_cp, sst_celsius[pos]))
         .collect();
 
-    let (oil_densities, oil_viscosities): (Vec<f32>, Vec<f32>) = indices
+    let oil_densities: Vec<f32> = indices
         .iter()
         .enumerate()
         .map(|(pos, &idx)| {
@@ -238,7 +369,7 @@ pub fn step_particle_weathering(
                 initial_densities[pos],
                 initial_viscosities[pos],
                 sea_water_density(sst_celsius[pos]),
-            )
+            ).0
         })
         .collect();
 
@@ -251,17 +382,25 @@ pub fn step_particle_weathering(
     let evaporating_indices: Vec<(usize, usize)> = indices
         .iter()
         .enumerate()
-        .filter(|(_, &idx)| particles.age[idx] == 0.0)
+        .filter(|(_, &idx)| particles.age[idx] < 86400.0)
         .map(|(pos, &idx)| (pos, idx))
         .collect();
 
-    if evaporating_indices.len() > 0 {
+    // OpenOil evaluates emulsification with the start-of-step fraction too.
+    let emulsifying: Vec<bool> = indices
+        .iter()
+        .map(|&idx| {
+            (oil.bullwinkle_fraction > 0.0
+                && particles.f_evap[idx] >= oil.bullwinkle_fraction)
+                || (oil.bulltime >= 0.0 && particles.age[idx] >= oil.bulltime)
+        })
+        .collect();
+
+    if !evaporating_indices.is_empty() {
         update_evaporation(
             &mut particles.mass_components,
             particles.n_components,
-            particles.total_initial_mass,
             &mut particles.total_mass,
-            &mut particles.f_evap,
             &areas,
             wind_speeds,
             sst_celsius,
@@ -273,29 +412,28 @@ pub fn step_particle_weathering(
     }
 
     for (pos, &idx) in indices.iter().enumerate() {
-        let mut emulsifying = false;
-        if particles.f_evap[idx] >= oil.bullwinkle_fraction
-            || (particles.age[idx] > oil.bulltime && oil.bulltime >= 0.0)
-        {
+        if emulsifying[pos] {
             if particles.emulsification_start_age[idx] == -1.0 {
-                particles.emulsification_start_age[idx] = particles.age[idx];
+                // OpenOil uses prescribed bulltime when positive, otherwise
+                // the element's bulltime (zero for a fresh release).
+                particles.emulsification_start_age[idx] = oil.bulltime.max(0.0);
             }
-            emulsifying = true;
-        }
-
-        if emulsifying {
             let age_since_start = particles.age[idx] - particles.emulsification_start_age[idx];
             update_emulsification(
                 &mut particles.y_w[idx],
                 &mut particles.interfacial_area[idx],
-                oil_viscosities[pos],
-                oil.asphaltenes_frac,
+                oil.emulsion_water_fraction_max,
                 age_since_start,
                 wind_speeds[pos],
                 dt,
             );
         }
 
+        // Refresh the public diagnostic from end-of-step masses. Both CLI and
+        // WASM report this value; internal onset decisions used the old value.
+        particles.f_evap[idx] =
+            1.0 - particles.total_mass[idx] / particles.total_initial_mass;
+        // Age advances after both evaporation and emulsification.
         particles.age[idx] += dt;
     }
 }

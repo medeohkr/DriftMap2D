@@ -7,6 +7,7 @@ use clap::Parser;
 use config::{Config, ReleasesSpec};
 use fetch::ReqwestFetcher;
 use proteus_core::basemodel::{DataLoader, LandMaskLoader, Simulation};
+use proteus_core::tracers::TracerKind;
 use std::path::PathBuf;
 
 const MIN_LON: f32 = -180.0;
@@ -70,7 +71,8 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
     );
 
     // One centroid per step, plus the initial seed position at step 0.
-    let mut centroids: Vec<(usize, f32, f32)> = Vec::with_capacity(config.steps as usize + 1);
+    let mut results: Vec<(usize, f32, f32, f32, f32)> =
+        Vec::with_capacity(config.steps as usize + 1);
     let dt_days = 1.0 / steps_per_day as f32;
 
     for step_count in 0..=config.steps {
@@ -78,7 +80,13 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
         if step_count == 0 {
             simulation.release_particles(0);
             let (lon, lat) = centroid(&simulation);
-            centroids.push((0, lon, lat));
+            results.push((
+                0,
+                lon,
+                lat,
+                mass_weighted_evaporation(&simulation),
+                mass_weighted_emulsification(&simulation),
+            ));
             log::info!("step 0/{} centroid=({:.4}, {:.4})", config.steps, lon, lat);
             continue;
         }
@@ -103,7 +111,13 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
         simulation.update_particles_batch(dt_days, &loader, current_date_int, hour, &landmask);
 
         let (lon, lat) = centroid(&simulation);
-        centroids.push((step_count as usize, lon, lat));
+        results.push((
+            step_count as usize,
+            lon,
+            lat,
+            mass_weighted_evaporation(&simulation),
+            mass_weighted_emulsification(&simulation),
+        ));
 
         log::info!(
             "step {}/{} centroid=({:.4}, {:.4})",
@@ -115,18 +129,30 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
     }
 
     // Write output
-    let out: Vec<serde_json::Value> = centroids
+    let out: Vec<serde_json::Value> = results
         .iter()
-        .map(|(step, lon, lat)| {
-            serde_json::json!({ "step": step, "lon": lon, "lat": lat })
-        })
+        .map(
+            |(step, lon, lat, evaporation_percent, emulsification_percent)| {
+                serde_json::json!({
+                    "step": step,
+                    "lon": lon,
+                    "lat": lat,
+                    "evaporation_percent": evaporation_percent,
+                    "emulsification_percent": emulsification_percent
+                })
+            },
+        )
         .collect();
 
     let output_path = config_dir.join(&config.output);
     std::fs::write(&output_path, serde_json::to_string_pretty(&out)?)
         .with_context(|| format!("failed to write {}", output_path.display()))?;
 
-    log::info!("wrote {} centroids to {}", centroids.len(), output_path.display());
+    log::info!(
+        "wrote {} simulation results to {}",
+        results.len(),
+        output_path.display()
+    );
     Ok(())
 }
 
@@ -174,9 +200,57 @@ fn centroid(simulation: &Simulation) -> (f32, f32) {
     if count == 0 {
         (0.0, 0.0)
     } else {
-        ((sum_lon / count as f64) as f32, (sum_lat / count as f64) as f32)
+        (
+            (sum_lon / count as f64) as f32,
+            (sum_lat / count as f64) as f32,
+        )
     }
 }
+
+pub fn mass_weighted_evaporation(simulation: &Simulation) -> f32 {
+    let particles = simulation.get_particles();
+    let mut total_initial = 0.0;
+    let mut total_evaporated = 0.0;
+
+    if let TracerKind::Oil(oil) = &particles.tracer {
+        for i in 0..particles.len {
+            if !particles.stranded[i] {
+                let initial_mass = simulation.release_manager.initial_mass_per_particle();
+                total_initial += initial_mass;
+                total_evaporated += initial_mass * oil.data.f_evap[i];
+            }
+        }
+    }
+
+    if total_initial > 0.0 {
+        total_evaporated / total_initial * 100.0
+    } else {
+        0.0
+    }
+}
+
+pub fn mass_weighted_emulsification(simulation: &Simulation) -> f32 {
+    let particles = simulation.get_particles();
+    let mut total_initial = 0.0;
+    let mut total_emulsified = 0.0;
+
+    if let TracerKind::Oil(oil) = &particles.tracer {
+        for i in 0..particles.len {
+            if !particles.stranded[i] {
+                let initial_mass = simulation.release_manager.initial_mass_per_particle();
+                total_initial += initial_mass;
+                total_emulsified += initial_mass * oil.data.y_w[i];
+            }
+        }
+    }
+
+    if total_initial > 0.0 {
+        total_emulsified / total_initial * 100.0
+    } else {
+        0.0
+    }
+}
+
 /// Resolve the tile base URL from the config value.
 ///
 /// - If `tile_url` already has a scheme (`file://`, `http://`, `https://`),
