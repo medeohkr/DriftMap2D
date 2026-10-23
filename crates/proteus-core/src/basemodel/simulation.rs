@@ -1,8 +1,9 @@
 // simulation.rs
 use super::{
-    meters_per_degree_lat, meters_per_degree_lon, normalize_lon, DataLoader, Diffusion, Integrator,
+    meters_per_degree_lat, meters_per_degree_lon, normalize_lon, Diffusion, Integrator,
     LandMaskLoader, ParticleView, Particles, ReleaseManager,
 };
+use crate::forcing::DataLoader;
 use crate::tracers::{GenericTracer, LeewayTracer, OilTracer, Tracer, TracerKind};
 use crate::TileFetcher;
 
@@ -99,7 +100,13 @@ impl Simulation {
 
         let (indices, (wind_speeds, sst_celsius)): (Vec<usize>, (Vec<f32>, Vec<f32>)) = {
             let temp_view = self.particles.view();
-            let wind_sst = loader.get_wind_sst(&temp_view, current_day, hour);
+            let wind_sst = loader.get_wind_sst(
+                temp_view
+                    .iter()
+                    .map(|(_, lon, lat, depth)| (lon, lat, depth)),
+                current_day,
+                hour,
+            );
 
             (
                 temp_view.indices,
@@ -122,7 +129,11 @@ impl Simulation {
         let unstranded_view = self.particles.view();
 
         let get_velocities_view = |view: &ParticleView| -> Vec<(f32, f32)> {
-            let env = loader.get_velocities_wind(view, current_day, hour);
+            let env = loader.get_velocities_wind(
+                view.iter().map(|(_, lon, lat, depth)| (lon, lat, depth)),
+                current_day,
+                hour,
+            );
 
             env.iter()
                 .copied()

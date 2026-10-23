@@ -6,7 +6,8 @@ use chrono::{Datelike, NaiveDateTime};
 use clap::Parser;
 use config::{Config, ReleasesSpec};
 use fetch::ReqwestFetcher;
-use proteus_core::basemodel::{DataLoader, LandMaskLoader, Simulation};
+use proteus_core::basemodel::{LandMaskLoader, Simulation};
+use proteus_core::forcing::DataLoader;
 use proteus_core::tracers::TracerKind;
 use std::path::PathBuf;
 

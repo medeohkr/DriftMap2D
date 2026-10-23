@@ -1,5 +1,6 @@
 use crate::TileFetcher;
-use super::{normalize_lon, DataLoader, ParticleView};
+use super::{normalize_lon, ParticleView};
+use crate::forcing::DataLoader;
 use rand::prelude::*;
 use rand_distr::{Distribution, Normal};
 
