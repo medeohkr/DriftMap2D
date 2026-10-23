@@ -2,7 +2,9 @@
 import * as maplibregl from 'https://unpkg.com/maplibre-gl@^6.6.0/dist/maplibre-gl.mjs';
 import { simulation, config, visualization, releaseConfig } from "./stores/index.svelte";
 import { preloader } from "./preloader";
-import { getTotalDays, getReleasePositions, getAverageReleasePosition, normalizeLongitude } from './utils';
+import { getReleasePositions, normalizeLongitude, getReleaseBounds } from "./utils";
+
+
 
 export let map: any;
 
@@ -25,8 +27,8 @@ export function initMap() {
 
     map.on("click", (e: any) => {
         if (!simulation.simulationActive) {
-            releaseConfig.activeRelease.lon = parseFloat(e.lngLat.lng.toFixed(2));
-            releaseConfig.activeRelease.lat = parseFloat(e.lngLat.lat.toFixed(2));
+            releaseConfig.activeRelease.lon = parseFloat(e.lngLat.lng.toFixed(3));
+            releaseConfig.activeRelease.lat = parseFloat(e.lngLat.lat.toFixed(3));
         }
     });
 
@@ -40,16 +42,17 @@ let landmaskPreloadInFlight = false;
 let pendingLandmaskPreload: Float32Array | null = null;
 
 export async function updateMarker(lon: number, lat: number) {
-    if (visualization.currentMarker) {
-        visualization.currentMarker.setLngLat([lon, lat]);
-    } else {
-        visualization.currentMarker = new maplibregl.Marker({
-            color: "#37579b",
-            scale: 0.9,
-        })
-            .setLngLat([lon, lat])
-            .addTo(map);
-    }
+    // A reused marker can retain its previous world-copy position through
+    // MapLibre's smart wrapping. Start fresh at the unwrapped release longitude.
+    const previousMarker = visualization.currentMarker;
+    const display = previousMarker?.getElement().style.display ?? "";
+    previousMarker?.remove();
+    const marker = new maplibregl.Marker({
+        color: "#37579b",
+        scale: 0.9,
+    }).setLngLat([lon, lat]);
+    marker.getElement().style.display = display;
+    visualization.currentMarker = marker.addTo(map);
 
     const positions = new Float32Array(getReleasePositions());
     const currentDate = parseInt(config.startDate.replace(/-/g, ""));
@@ -94,20 +97,22 @@ export function awaitLandmaskPreload(): Promise<void> {
 }
 
 export function zoom() {
-    if (!visualization.autoZoom) return;
-    if (map.getZoom() < 6 - getTotalDays() / 100) {
-        map.flyTo({
-            center: [getAverageReleasePosition()[0], getAverageReleasePosition()[1]],
-            zoom: 6 - getTotalDays() / 100,
-            duration: 2000,
-        });
-    } else {
-        map.flyTo({
-            center: [getAverageReleasePosition()[0], getAverageReleasePosition()[1]],
-            zoom: map.getZoom(),
-            duration: 2000,
-        });
-    }
+    if (!visualization.autoZoom || !map) return;
+    const bounds = getReleaseBounds(releaseConfig.releases, map.getCenter().lng);
+    if (!bounds) return;
+    const { width, height } = map.getContainer().getBoundingClientRect();
+    if (width <= 0 || height <= 0) return;
+    const padding = Math.min(80, width * 0.15, height * 0.15);
+    map.fitBounds(bounds, {
+        padding: {
+            top: padding,
+            bottom: padding,
+            left: width * 0.15 + padding,
+            right: padding,
+        },
+        maxZoom: Math.max(6, map.getZoom()),
+        duration: 1500,
+    });
 }
 
 export function setMarkerVisible(visible: boolean) {
