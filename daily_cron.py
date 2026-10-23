@@ -282,8 +282,6 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
                     for h in range(n_hours):
                         u_tile = u_day[h, :, :][np.ix_(lat_idx, lon_idx)]
                         v_tile = v_day[h, :, :][np.ix_(lat_idx, lon_idx)]
-                        u_tile = np.nan_to_num(u_tile, nan=0.0).astype(np.float16)
-                        v_tile = np.nan_to_num(v_tile, nan=0.0).astype(np.float16)
                         u_tile.tofile(f)
                         v_tile.tofile(f)
 
@@ -298,10 +296,6 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
                             u_w = u_wind_global[h][np.ix_(wind_lat_indices, wind_lon_indices)]
                             v_w = v_wind_global[h][np.ix_(wind_lat_indices, wind_lon_indices)]
                             s = sst_global[h][np.ix_(wind_lat_indices, wind_lon_indices)]
-
-                            u_w = np.nan_to_num(u_w, nan=0.0).astype(np.float16)
-                            v_w = np.nan_to_num(v_w, nan=0.0).astype(np.float16)
-                            s = np.nan_to_num(s, nan=273.15).astype(np.float16)
 
                             u_w.tofile(f)
                             v_w.tofile(f)
