@@ -171,6 +171,24 @@ def download_smoc_day(date):
         return None
 
 
+def halo_indices(coords, lower, upper, periodic=False):
+    """select a tile core with one neighboring source cell on each side"""
+    size = len(coords)
+    if periodic and np.isclose(coords[-1] - coords[0], 360.0, rtol=0, atol=1e-4):
+        size -= 1
+    core = np.flatnonzero((coords[:size] >= lower) & (coords[:size] < upper))
+    if not len(core):
+        return core, 0.0
+    first, last = int(core[0]) - 1, int(core[-1]) + 1
+    if periodic:
+        indices = np.arange(first, last + 1) % size
+        origin = float(coords[indices[0]]) - (360.0 if first < 0 else 0.0)
+    else:
+        indices = np.arange(max(0, first), min(size - 1, last) + 1)
+        origin = float(coords[indices[0]])
+    return indices, origin
+
+
 def tile_and_upload_day(date, wind_file, wind_data_cache):
     """Tile a single day and upload immediately, then delete.
 
@@ -180,7 +198,10 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
       - Wind: 5 6-hourly steps, starting at day_offset*4 within the
         global ECMWF timeline.
 
-    Tile binary layout (unchanged):
+    Tile binary layout version 2:
+      [PRT2][float32 current_lon_origin][float32 current_lat_origin]
+        [float32 wind_lon_origin][float32 wind_lat_origin]
+      Each grid includes a one-cell halo where source data is available.
       [uint32 n_lon][uint32 n_lat][uint32 n_levels][float32 level]
         n_hours * (n_lat*n_lon float16 u, n_lat*n_lon float16 v)
       [uint32 wind_nlon][uint32 wind_nlat][uint32 n_wind_steps]
@@ -239,26 +260,20 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
     for tilex in range(N_LON_TILES):
         lon_min = -180 + TILE_SIZE * tilex
         lon_max = lon_min + TILE_SIZE
-        # For the last longitude tile (tilex=35)
-        if tilex == N_LON_TILES - 1:
-            lon_idx = np.where((lons >= lon_min) & (lons <= 180.0))[0]  # Include 180.0
-        else:
-            lon_idx = np.where((lons >= lon_min) & (lons < lon_max))[0]
+        lon_idx, current_lon_origin = halo_indices(lons, lon_min, lon_max, periodic=True)
         if len(lon_idx) == 0:
             continue
 
         for tiley in range(N_LAT_TILES):
             lat_min = -80 + TILE_SIZE * tiley
             lat_max = lat_min + TILE_SIZE
-            lat_idx = np.where((lats >= lat_min) & (lats < lat_max))[0]
+            lat_idx, current_lat_origin = halo_indices(lats, lat_min, lat_max)
             if len(lat_idx) == 0:
                 continue
 
             # Extract wind for this tile
-            wind_lon_mask = (wind_lons >= lon_min) & (wind_lons < lon_max)
-            wind_lat_mask = (wind_lats >= lat_min) & (wind_lats < lat_max)
-            wind_lon_indices = np.where(wind_lon_mask)[0]
-            wind_lat_indices = np.where(wind_lat_mask)[0]
+            wind_lon_indices, wind_lon_origin = halo_indices(wind_lons, lon_min, lon_max, periodic=True)
+            wind_lat_indices, wind_lat_origin = halo_indices(wind_lats, lat_min, lat_max)
 
             if len(wind_lon_indices) == 0 or len(wind_lat_indices) == 0:
                 print(f"      ⚠️ No wind data for tile ({tilex},{tiley})")
@@ -272,7 +287,11 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
 
             try:
                 with open(tile_path, 'wb') as f:
-                    # Header (unchanged: no n_hours field)
+                    # version 2 stores padded grid origins before the original payload
+                    f.write(b'PRT2')
+                    f.write(struct.pack('<ffff', current_lon_origin, current_lat_origin,
+                                        wind_lon_origin, wind_lat_origin))
+                    # dimensions include the halo cells
                     f.write(struct.pack('<I', len(lon_idx)))   # n_lon
                     f.write(struct.pack('<I', len(lat_idx)))   # n_lat
                     f.write(struct.pack('<I', 1))              # n_levels
