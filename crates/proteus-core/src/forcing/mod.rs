@@ -1,0 +1,397 @@
+// mod.rs coordinates forcing tile fetching, caching, and sampling
+
+mod cache;
+mod format;
+mod grid;
+mod interpolation;
+
+pub use cache::{TileData, TileKey};
+pub use format::parse_tile_data;
+
+use crate::fetch::{FetchError, TileFetcher};
+use crate::utils::{meters_per_degree_lat, meters_per_degree_lon, normalize_lon};
+use grid::GridSample;
+use interpolation::interpolate_time_batch;
+#[cfg(test)]
+use interpolation::{expand_nan_neighbors, interpolate_batch};
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
+use thiserror::Error;
+
+/// generic F allows the same loader to work in WASM
+/// (GlooFetcher) and in the CLI (ReqwestFetcher)
+pub struct DataLoader<F: TileFetcher> {
+    min_lon: f32,
+    min_lat: f32,
+    step: f32,
+    step_wind: f32,
+    tile_size: f32,
+    base_url: String,
+    fetcher: F,
+
+    pub cache: HashMap<TileKey, RefCell<TileData>>,
+    pending: HashSet<TileKey>, // ensures tiles mid-download aren't requested
+}
+
+#[derive(Error, Debug)]
+pub enum LoaderError {
+    #[error("Network request failed: {0}")]
+    Network(String),
+    #[error("Failed to parse tile data: {0}")]
+    Parse(String),
+    #[error("Tile not found: {0}")]
+    NotFound(String),
+    #[error("HTTP error: {0}")]
+    Http(u16),
+}
+
+impl<F: TileFetcher> DataLoader<F> {
+    pub fn new(base_url: &str, min_lon: f32, min_lat: f32, fetcher: F) -> Self {
+        Self {
+            min_lon,
+            min_lat,
+            step: 1.0 / 12.0,
+            step_wind: 1.0 / 4.0,
+            tile_size: 10.0,
+            base_url: base_url.to_string(),
+            fetcher,
+            cache: HashMap::new(),
+            pending: HashSet::new(),
+        }
+    }
+
+    /// group positions from a generic iterator, avoiding extra vec allocation
+    fn group_positions<I>(
+        &self,
+        iter: I,
+        day: usize,
+    ) -> HashMap<TileKey, Vec<(usize, f32, f32, f32)>>
+    where
+        I: IntoIterator<Item = (usize, f32, f32, f32)>,
+    {
+        let mut groups: HashMap<TileKey, Vec<(usize, f32, f32, f32)>> = HashMap::new();
+        for (i, lon, lat, depth) in iter {
+            let lon = normalize_lon(lon);
+            let key = self.get_tile_key(lon, lat, day);
+            groups
+                .entry(key)
+                .or_insert_with(Vec::new)
+                .push((i, lon, lat, depth));
+        }
+        groups
+    }
+
+    // enumerates positions from slice to build iterator to pass to group_positions
+    fn group_positions_slice(
+        &self,
+        positions: &[(f32, f32, f32)],
+        day: usize,
+    ) -> HashMap<TileKey, Vec<(usize, f32, f32, f32)>> {
+        self.group_positions(
+            positions
+                .iter()
+                .enumerate()
+                .map(|(i, &(lon, lat, depth))| (i, lon, lat, depth)),
+            day,
+        )
+    }
+
+    /// sample each tile as a batch before converting current units
+    fn sample_groups(
+        &self,
+        groups: HashMap<TileKey, Vec<(usize, f32, f32, f32)>>,
+        count: usize,
+        hour: f32,
+        want_current: bool,
+        want_wind: bool,
+        want_sst: bool,
+    ) -> Vec<[f32; 5]> {
+        let mut results = vec![[0.0; 5]; count];
+        let mut scratch = Vec::new();
+        for (key, group) in groups {
+            let Some(cached) = self.cache.get(&key) else {
+                continue;
+            };
+            let mut tile = cached.borrow_mut();
+            let (min_lon, min_lat) = self.tile_origin(&key);
+            let samples = |step: f32, origin: Option<(f32, f32)>| -> Vec<GridSample> {
+                let (min_lon, min_lat) = origin.unwrap_or((min_lon, min_lat));
+                group
+                    .iter()
+                    .map(|&(output_index, lon, lat, _)| GridSample {
+                        output_index,
+                        x: (lon - min_lon) / step,
+                        y: (lat - min_lat) / step,
+                    })
+                    .collect()
+            };
+            if want_current {
+                let samples = samples(self.step, tile.current_origin);
+                let (width, height, times, depths) =
+                    (tile.n_lon, tile.n_lat, tile.n_hours, tile.depths.len());
+                // current queries retain the existing surface layer behavior
+                let TileData { u, v, .. } = &mut *tile;
+                for (component, data) in [(0, u), (1, v)] {
+                    let values = interpolate_time_batch(
+                        data,
+                        width,
+                        height,
+                        times,
+                        depths,
+                        hour,
+                        &samples,
+                        &mut scratch,
+                    );
+                    for (sample, value) in samples.iter().zip(values) {
+                        results[sample.output_index][component] = value;
+                    }
+                }
+            }
+            if want_wind || want_sst {
+                let samples = samples(self.step_wind, tile.wind_origin);
+                let TileData {
+                    wind_u,
+                    wind_v,
+                    sst_k,
+                    n_lon_wind,
+                    n_lat_wind,
+                    n_steps,
+                    ..
+                } = &mut *tile;
+                for (component, data, requested) in [
+                    (2, wind_u, want_wind),
+                    (3, wind_v, want_wind),
+                    (4, sst_k, want_sst),
+                ] {
+                    if !requested {
+                        continue;
+                    }
+                    let values = interpolate_time_batch(
+                        data,
+                        *n_lon_wind,
+                        *n_lat_wind,
+                        *n_steps,
+                        1,
+                        hour / 6.0,
+                        &samples,
+                        &mut scratch,
+                    );
+                    for (sample, value) in samples.iter().zip(values) {
+                        results[sample.output_index][component] = value;
+                    }
+                }
+            }
+            if want_current {
+                for &(idx, _, lat, _) in &group {
+                    results[idx][0] = meters_per_degree_lon(results[idx][0], lat);
+                    results[idx][1] = meters_per_degree_lat(results[idx][1], lat);
+                }
+            }
+        }
+        results
+    }
+
+    pub fn get_velocities_wind(
+        &self,
+        positions: impl ExactSizeIterator<Item = (f32, f32, f32)>,
+        day: usize,
+        hour: f32,
+    ) -> Vec<(f32, f32, f32, f32)> {
+        let count = positions.len();
+        self.sample_groups(
+            self.group_positions(
+                positions
+                    .enumerate()
+                    .map(|(i, (lon, lat, depth))| (i, lon, lat, depth)),
+                day,
+            ),
+            count,
+            hour,
+            true,
+            true,
+            false,
+        )
+        .into_iter()
+        .map(|v| (v[0], v[1], v[2], v[3]))
+        .collect()
+    }
+
+    pub fn get_velocities_wind_slice(
+        &self,
+        positions: &[(f32, f32, f32)],
+        day: usize,
+        hour: f32,
+    ) -> Vec<(f32, f32, f32, f32)> {
+        self.sample_groups(
+            self.group_positions_slice(positions, day),
+            positions.len(),
+            hour,
+            true,
+            true,
+            false,
+        )
+        .into_iter()
+        .map(|v| (v[0], v[1], v[2], v[3]))
+        .collect()
+    }
+
+    pub fn get_velocities(
+        &self,
+        positions: &[(f32, f32, f32)],
+        day: usize,
+        hour: f32,
+    ) -> Vec<(f32, f32)> {
+        self.sample_groups(
+            self.group_positions_slice(positions, day),
+            positions.len(),
+            hour,
+            true,
+            false,
+            false,
+        )
+        .into_iter()
+        .map(|v| (v[0], v[1]))
+        .collect()
+    }
+
+    pub fn get_wind_sst(
+        &self,
+        positions: impl ExactSizeIterator<Item = (f32, f32, f32)>,
+        day: usize,
+        hour: f32,
+    ) -> Vec<(f32, f32, f32)> {
+        let count = positions.len();
+        self.sample_groups(
+            self.group_positions(
+                positions
+                    .enumerate()
+                    .map(|(i, (lon, lat, depth))| (i, lon, lat, depth)),
+                day,
+            ),
+            count,
+            hour,
+            false,
+            true,
+            true,
+        )
+        .into_iter()
+        .map(|v| (v[2], v[3], v[4]))
+        .collect()
+    }
+
+    // ===== Loading / tiling =====
+
+    fn tile_url(&self, date: usize, tile: &TileKey) -> String {
+        let year = date / 10000;
+        let month = (date / 100) % 100;
+        let day = date % 100;
+        format!(
+            "{}/{:04}/{:02}/{:02}/{:03}_{:03}.bin",
+            self.base_url, year, month, day, tile.lon_idx, tile.lat_idx,
+        )
+    }
+
+    async fn load_tile(&self, url: &str) -> Result<TileData, LoaderError> {
+        let bytes = if let Some(bytes) = self.fetcher.preloaded(url) {
+            bytes
+        } else {
+            self.fetcher.fetch_bytes(url).await.map_err(|e| match e {
+                FetchError::Network(msg) => LoaderError::Network(msg),
+                FetchError::Http(code) => LoaderError::Http(code),
+            })?
+        };
+        parse_tile_data(&bytes).map_err(|error| LoaderError::Parse(format!("{url}: {error}")))
+    }
+
+    pub fn update_tiles(&mut self, positions: Vec<f32>, current_day: usize) -> HashSet<TileKey> {
+        let mut needed = HashSet::new();
+        let edge_threshold = 0.1;
+
+        for position in positions.chunks_exact(2) {
+            let lon = normalize_lon(position[0]) as f64;
+            let lat = position[1] as f64;
+
+            let lon_idx = ((lon - self.min_lon as f64) / self.tile_size as f64).floor() as i32;
+            let lat_idx = ((lat - self.min_lat as f64) / self.tile_size as f64).floor() as i32;
+
+            let mut add_tile = |lon_idx: i32, lat_idx: i32| {
+                if lon_idx >= 0 && lon_idx < 36 && lat_idx >= 0 && lat_idx < 17 {
+                    needed.insert(TileKey {
+                        lon_idx: lon_idx as usize,
+                        lat_idx: lat_idx as usize,
+                        day: current_day,
+                    });
+                }
+            };
+
+            add_tile(lon_idx, lat_idx);
+
+            let lon_mod = ((lon % 10.0) + 10.0) % 10.0;
+            let lat_mod = ((lat % 10.0) + 10.0) % 10.0;
+
+            if lon_mod < edge_threshold {
+                add_tile(lon_idx - 1, lat_idx);
+            } else if lon_mod > 10.0 - edge_threshold {
+                add_tile(lon_idx + 1, lat_idx);
+            }
+
+            if lat_mod < edge_threshold {
+                add_tile(lon_idx, lat_idx - 1);
+            } else if lat_mod > 10.0 - edge_threshold {
+                add_tile(lon_idx, lat_idx + 1);
+            }
+
+            if (lon_mod < edge_threshold || lon_mod > 10.0 - edge_threshold)
+                && (lat_mod < edge_threshold || lat_mod > 10.0 - edge_threshold)
+            {
+                let lon_dir = if lon_mod < edge_threshold { -1 } else { 1 };
+                let lat_dir = if lat_mod < edge_threshold { -1 } else { 1 };
+                add_tile(lon_idx + lon_dir, lat_idx + lat_dir);
+            }
+        }
+        self.cache.retain(|k, _| needed.contains(k));
+        needed
+    }
+
+    pub async fn load_by_date(
+        &mut self,
+        date: usize,
+        tiles: &HashSet<TileKey>,
+    ) -> Result<(), LoaderError> {
+        for tile in tiles {
+            if self.cache.contains_key(tile) || self.pending.contains(tile) {
+                continue;
+            }
+
+            self.pending.insert(tile.clone());
+            let url = self.tile_url(date, tile);
+
+            match self.load_tile(&url).await {
+                Ok(data) => {
+                    self.cache.insert(tile.clone(), RefCell::new(data));
+                }
+                Err(e) => {
+                    self.pending.remove(tile);
+                    return Err(e);
+                }
+            }
+            self.pending.remove(tile);
+        }
+        Ok(())
+    }
+
+    pub async fn load_ocean_tiles(&mut self, positions: Vec<f32>, current_date_int: usize) {
+        let needed_ocean_tiles = self.update_tiles(positions, current_date_int);
+
+        if let Err(e) = self
+            .load_by_date(current_date_int, &needed_ocean_tiles)
+            .await
+        {
+            log::error!("Failed to load ocean tiles: {:?}", e);
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "tests.rs"]
+mod interpolation_tests;

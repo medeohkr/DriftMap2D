@@ -1,0 +1,271 @@
+#!/usr/bin/env python3
+"""norkyst_cron.py publishes surface forcing on the native projected grid."""
+
+import argparse
+import io
+import json
+import logging
+import math
+import os
+import struct
+import time
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+import netCDF4
+import numpy as np
+import zstandard as zstd
+
+
+SOURCE = 'https://thredds.met.no/thredds/dodsC/fou-hi/norkystv3_800m_m00_be'
+ROOT = Path(__file__).resolve().parent
+CORE = 120
+HALO = 1
+WIDTH = CORE + HALO * 2
+FIELDS = {
+    'u': 'u_eastward',
+    'v': 'v_northward',
+    'wind_u': 'Uwind_eastward',
+    'wind_v': 'Vwind_northward',
+    'temperature_k': 'temperature',
+}
+
+
+def plain(value):
+    """convert netCDF attributes to JSON values."""
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
+
+
+def read(variable, index):
+    """decode packing and masks while retrying transient remote failures."""
+    for attempt in range(4):
+        try:
+            return np.ma.asarray(variable[index], dtype=np.float32).filled(np.nan)
+        except (OSError, RuntimeError):
+            if attempt == 3:
+                raise
+            time.sleep(2 ** attempt)
+
+
+def describe(dataset):
+    """validate native axes and record the actual source timeline."""
+    axes = [read(dataset.variables[name], slice(None)).astype(np.float64) for name in ('X', 'Y')]
+    for name, axis in zip(('X', 'Y'), axes):
+        if len(axis) < 2 or not np.all(np.isfinite(axis)) or not np.allclose(np.diff(axis), 800, atol=0.1):
+            raise ValueError(f'{name} must be an ascending regular 800 m axis')
+    depth = read(dataset.variables['depth'], slice(None))
+    if not np.all(np.isfinite(depth)) or np.any(depth < 0):
+        raise ValueError('expected finite nonnegative depths')
+    surface = int(np.argmin(depth))
+    clock = dataset.variables['time']
+    dates = netCDF4.num2date(clock[:], clock.units, calendar=getattr(clock, 'calendar', 'standard'),
+                            only_use_cftime_datetimes=False, only_use_python_datetimes=True)
+    seconds = np.array([int(d.replace(tzinfo=timezone.utc).timestamp()) for d in dates], dtype=np.int64)
+    if len(seconds) < 2 or np.any(np.diff(seconds) <= 0):
+        raise ValueError('expected a strictly increasing source timeline')
+    xdim, ydim = dataset.variables['X'].dimensions[0], dataset.variables['Y'].dimensions[0]
+    tdim, zdim = clock.dimensions[0], dataset.variables['depth'].dimensions[0]
+    for field, name in FIELDS.items():
+        expected = (tdim, zdim, ydim, xdim) if field in ('u', 'v', 'temperature_k') else (tdim, ydim, xdim)
+        if dataset.variables[name].dimensions != expected:
+            raise ValueError(f'unexpected dimensions for {name}')
+    if dataset.variables['temperature'].units.lower() not in ('celsius', 'degree_celsius', 'degrees_celsius', 'degc'):
+        raise ValueError('expected source temperature in Celsius')
+    projection = dataset.variables['projection_stere']
+    metadata = {
+        'format': 'NKT1', 'source': SOURCE, 'core_cells': CORE, 'halo_cells': HALO,
+        'tile_shape': [WIDTH, WIDTH], 'grid_shape': [len(axes[1]), len(axes[0])],
+        'grid_origin_m': [float(axes[0][0]), float(axes[1][0])], 'grid_spacing_m': [800, 800],
+        'projection': {key: plain(projection.getncattr(key)) for key in projection.ncattrs()},
+        'surface_depth_m': float(depth[surface]), 'vector_basis': 'east_north',
+        'fields': list(FIELDS), 'field_units': ['m/s', 'm/s', 'm/s', 'm/s', 'K'],
+        'dtype': '<f2', 'array_order': 'field,time,y,x', 'compression': 'zstd', 'compression_level': 3,
+        'source_first_time': int(seconds[0]), 'source_last_time': int(seconds[-1]),
+        'attribution': 'Norwegian Meteorological Institute (MET Norway)',
+        'license': 'https://spdx.org/licenses/CC-BY-4.0.html',
+    }
+    return metadata, seconds, surface
+
+
+def day_windows(seconds, today):
+    """include seven prior UTC dates and every available forecast interval."""
+    first = datetime.combine(today - timedelta(days=7), datetime.min.time(), timezone.utc)
+    if seconds[0] > int(first.timestamp()):
+        raise ValueError('source does not cover the requested seven-day hindcast')
+    last = datetime.fromtimestamp(int(seconds[-1]), timezone.utc).date()
+    day = first.date()
+    while day <= last:
+        start = int(datetime.combine(day, datetime.min.time(), timezone.utc).timestamp())
+        indices = np.flatnonzero((seconds >= start) & (seconds <= start + 86400))
+        if len(indices) >= 2:
+            if seconds[indices[0]] != start:
+                raise ValueError(f'missing start of day {day}')
+            if np.any(np.diff(seconds[indices]) != 3600):
+                raise ValueError(f'missing hourly samples on {day}')
+            if day < last and seconds[indices[-1]] != start + 86400:
+                raise ValueError(f'missing end of day {day}')
+            yield day, slice(int(indices[0]), int(indices[-1]) + 1), seconds[indices].tolist()
+        elif day < last:
+            raise ValueError(f'missing forcing day {day}')
+        day += timedelta(days=1)
+
+
+def tile_array(strip, row_start, col_start, grid_shape):
+    """keep a fixed tile shape and mark space outside the source domain as missing."""
+    height, width = grid_shape
+    left, right = max(0, col_start - HALO), min(width, col_start + CORE + HALO)
+    top = max(0, row_start - HALO)
+    result = np.full((strip.shape[0], WIDTH, WIDTH), np.nan, dtype='<f2')
+    yoff, xoff = top - (row_start - HALO), left - (col_start - HALO)
+    result[:, yoff:yoff + strip.shape[1], xoff:xoff + right - left] = strip[:, :, left:right]
+    return result
+
+
+def encode_tile(header, arrays):
+    """wrap a JSON header and field-major float16 arrays in a zstd frame."""
+    encoded = json.dumps(header, separators=(',', ':'), allow_nan=False).encode()
+    buffer = io.BytesIO()
+    buffer.write(b'NKT1')
+    buffer.write(struct.pack('<I', len(encoded)))
+    buffer.write(encoded)
+    for array in arrays:
+        buffer.write(array.astype('<f2', copy=False).tobytes(order='C'))
+    return zstd.ZstdCompressor(level=3).compress(buffer.getvalue())
+
+
+def r2_client():
+    """use the existing R2 credentials without exposing their values."""
+    import boto3
+    names = ('ACCOUNT_ID', 'ACCESS_KEY', 'SECRET_KEY')
+    if not all(os.environ.get(name) for name in names):
+        raise ValueError('missing R2 credentials')
+    return boto3.client('s3', endpoint_url=f'https://{os.environ["ACCOUNT_ID"]}.r2.cloudflarestorage.com',
+                        aws_access_key_id=os.environ['ACCESS_KEY'],
+                        aws_secret_access_key=os.environ['SECRET_KEY'], region_name='auto')
+
+
+def write_json(path, value):
+    """write strict JSON metadata."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, indent=2, allow_nan=False), encoding='utf-8')
+
+
+def generate_day(dataset, metadata, surface, window, timestamps, directory, publish):
+    """fetch one row of tiles at a time to bound memory and remote requests."""
+    height, width = metadata['grid_shape']
+    tiles = []
+    for row in range(0, height, CORE):
+        strips = []
+        y = slice(max(0, row - HALO), min(height, row + CORE + HALO))
+        for field, name in FIELDS.items():
+            variable = dataset.variables[name]
+            index = (window, surface, y, slice(None)) if variable.ndim == 4 else (window, y, slice(None))
+            strip = read(variable, index)
+            if field == 'temperature_k':
+                strip += 273.15
+            strips.append(strip)
+        for col in range(0, width, CORE):
+            name = f'{col // CORE:03}_{row // CORE:03}.bin'
+            header = {
+                'tile_index': [col // CORE, row // CORE], 'shape': [len(timestamps), WIDTH, WIDTH],
+                'core_shape': [min(CORE, height - row), min(CORE, width - col)],
+                'origin_m': [metadata['grid_origin_m'][0] + (col - HALO) * 800,
+                             metadata['grid_origin_m'][1] + (row - HALO) * 800],
+                'timestamps': timestamps, 'fields': list(FIELDS),
+            }
+            payload = encode_tile(header, [tile_array(s, row, col, (height, width)) for s in strips])
+            path = directory / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(payload)
+            publish(path, 'application/zstd')
+            tiles.append(name)
+            # hosted runs retain only the current tile on disk
+            if publish.remote:
+                path.unlink()
+        logging.info('completed tile row %s of %s', row // CORE + 1, math.ceil(height / CORE))
+    return dict(timestamps=timestamps, tiles=tiles)
+
+
+def cleanup(client, bucket, prefix, cutoff):
+    """remove only dated NorKyst objects outside the hindcast window."""
+    for page in client.get_paginator('list_objects_v2').paginate(Bucket=bucket, Prefix=prefix + '/'):
+        expired = []
+        for obj in page.get('Contents', []):
+            relative = obj['Key'][len(prefix) + 1:]
+            try:
+                day = datetime.strptime('/'.join(relative.split('/')[:3]), '%Y/%m/%d').date()
+            except ValueError:
+                continue
+            if day < cutoff:
+                expired.append({'Key': obj['Key']})
+        if expired:
+            response = client.delete_objects(Bucket=bucket, Delete={'Objects': expired})
+            if response.get('Errors'):
+                raise RuntimeError('R2 failed to delete some expired objects')
+
+
+def main():
+    """generate forcing locally or publish complete days to the NorKyst prefix."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--source', default=SOURCE)
+    parser.add_argument('--output', type=Path, default=ROOT / 'data' / 'norkyst')
+    parser.add_argument('--local-only', action='store_true')
+    parser.add_argument('--inspect', action='store_true')
+    parser.add_argument('--refresh-hindcast', action='store_true')
+    args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s')
+    today = datetime.now(timezone.utc).date()
+    with netCDF4.Dataset(args.source) as dataset:
+        metadata, seconds, surface = describe(dataset)
+        metadata['source'] = args.source
+        windows = list(day_windows(seconds, today))
+        logging.info('grid=%s days=%s surface_depth=%s', metadata['grid_shape'], len(windows), metadata['surface_depth_m'])
+        if args.inspect:
+            print(json.dumps(metadata, indent=2))
+            print([(str(day), len(times)) for day, _, times in windows])
+            return
+        bucket, prefix = 'driftmap-tiles', 'norkyst'
+        client = None if args.local_only else r2_client()
+
+        def publish(path, content_type):
+            if client:
+                key = prefix + '/' + path.relative_to(args.output).as_posix()
+                client.upload_file(str(path), bucket, key,
+                                   ExtraArgs={'ContentType': content_type, 'CacheControl': 'no-cache'})
+
+        publish.remote = client is not None
+        days = []
+        for day, window, times in windows:
+            directory = args.output / day.strftime('%Y/%m/%d')
+            key = f'{prefix}/{day:%Y/%m/%d}/manifest.json'
+            previous = None
+            if client and not args.refresh_hindcast and day < today - timedelta(days=1):
+                from botocore.exceptions import ClientError
+                try:
+                    previous = json.loads(client.get_object(Bucket=bucket, Key=key)['Body'].read())
+                except ClientError as error:
+                    if error.response['Error']['Code'] not in ('NoSuchKey', '404'):
+                        raise
+            stable_grid = lambda grid: {k: v for k, v in grid.items()
+                                        if k not in ('source_first_time', 'source_last_time')}
+            if previous and stable_grid(previous.get('grid', {})) == stable_grid(metadata) and previous.get('timestamps') == times:
+                logging.info('retaining complete hindcast day %s', day)
+            else:
+                details = generate_day(dataset, metadata, surface, window, times, directory, publish)
+                manifest = directory / 'manifest.json'
+                write_json(manifest, dict(grid=metadata, **details))
+                publish(manifest, 'application/json')
+            days.append(dict(date=str(day), manifest=f'{day:%Y/%m/%d}/manifest.json', timestamps=times))
+        manifest = args.output / 'manifest.json'
+        write_json(manifest, dict(grid=metadata, generated_at=datetime.now(timezone.utc).isoformat(), days=days))
+        publish(manifest, 'application/json')
+        if client:
+            cleanup(client, bucket, prefix, today - timedelta(days=7))
+
+
+if __name__ == '__main__':
+    main()

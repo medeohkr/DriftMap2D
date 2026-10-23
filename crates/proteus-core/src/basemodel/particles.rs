@@ -85,7 +85,7 @@ impl ParticleView<'_> {
         self.depths[self.indices[i]]
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (usize, f32, f32, f32)> + '_ {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (usize, f32, f32, f32)> + '_ {
         self.indices
             .iter()
             .enumerate()
