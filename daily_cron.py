@@ -10,10 +10,12 @@ Temporal interpolation support:
     overlapping the next day by 1 step.
 """
 import os
+import io
 import sys
 import struct
 import shutil
 import numpy as np
+import zstandard as zstd
 import xarray as xr
 import boto3
 from pathlib import Path
@@ -198,7 +200,8 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
       - Wind: 5 6-hourly steps, starting at day_offset*4 within the
         global ECMWF timeline.
 
-    Tile binary layout version 2:
+    Zstandard level 3 wraps the complete tile without changing its .bin URL.
+    Decompressed tile binary layout version 2:
       [PRT2][float32 current_lon_origin][float32 current_lat_origin]
         [float32 wind_lon_origin][float32 wind_lat_origin]
       Each grid includes a one-cell halo where source data is available.
@@ -286,7 +289,7 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
             tile_path = day_dir / f"{tilex:03d}_{tiley:03d}.bin"
 
             try:
-                with open(tile_path, 'wb') as f:
+                with io.BytesIO() as f:
                     # version 2 stores padded grid origins before the original payload
                     f.write(b'PRT2')
                     f.write(struct.pack('<ffff', current_lon_origin, current_lat_origin,
@@ -301,8 +304,8 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
                     for h in range(n_hours):
                         u_tile = u_day[h, :, :][np.ix_(lat_idx, lon_idx)]
                         v_tile = v_day[h, :, :][np.ix_(lat_idx, lon_idx)]
-                        u_tile.astype(np.float16).tofile(f)
-                        v_tile.astype(np.float16).tofile(f)
+                        f.write(u_tile.astype('<f2').tobytes())
+                        f.write(v_tile.astype('<f2').tobytes())
 
                     # Wind header
                     f.write(struct.pack('<I', wind_nlon))
@@ -316,9 +319,11 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
                             v_w = v_wind_global[h][np.ix_(wind_lat_indices, wind_lon_indices)]
                             s = sst_global[h][np.ix_(wind_lat_indices, wind_lon_indices)]
 
-                            u_w.astype(np.float16).tofile(f)
-                            v_w.astype(np.float16).tofile(f)
-                            s.astype(np.float16).tofile(f)
+                            f.write(u_w.astype('<f2').tobytes())
+                            f.write(v_w.astype('<f2').tobytes())
+                            f.write(s.astype('<f2').tobytes())
+
+                    tile_path.write_bytes(zstd.ZstdCompressor(level=3).compress(f.getvalue()))
 
                 tiles += 1
             except Exception as e:
