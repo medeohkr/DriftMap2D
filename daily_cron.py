@@ -282,8 +282,8 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
                     for h in range(n_hours):
                         u_tile = u_day[h, :, :][np.ix_(lat_idx, lon_idx)]
                         v_tile = v_day[h, :, :][np.ix_(lat_idx, lon_idx)]
-                        u_tile.tofile(f)
-                        v_tile.tofile(f)
+                        u_tile.astype(np.float16).tofile(f)
+                        v_tile.astype(np.float16).tofile(f)
 
                     # Wind header
                     f.write(struct.pack('<I', wind_nlon))
@@ -297,9 +297,9 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
                             v_w = v_wind_global[h][np.ix_(wind_lat_indices, wind_lon_indices)]
                             s = sst_global[h][np.ix_(wind_lat_indices, wind_lon_indices)]
 
-                            u_w.tofile(f)
-                            v_w.tofile(f)
-                            s.tofile(f)
+                            u_w.astype(np.float16).tofile(f)
+                            v_w.astype(np.float16).tofile(f)
+                            s.astype(np.float16).tofile(f)
 
                 tiles += 1
             except Exception as e:
