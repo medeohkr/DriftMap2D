@@ -112,7 +112,6 @@ export function updateMarkerSelection() {
         marker.setOpacity(active ? 1 : 0.5);
         const element = marker.getElement();
         element.setAttribute("aria-pressed", String(active));
-        element.style.zIndex = active ? "1" : "0";
     });
     visualization.currentMarker = releaseMarkers[releaseConfig.activeReleaseIndex] ?? null;
 }
@@ -150,7 +149,11 @@ export function awaitLandmaskPreload(): Promise<void> {
 
 export function zoom() {
     if (!visualization.autoZoom || !map) return;
-    const bounds = getReleaseBounds(releaseConfig.releases, map.getCenter().lng);
+    const activeLongitude = releaseConfig.activeRelease?.lon;
+    const referenceLongitude = Number.isFinite(activeLongitude)
+        ? activeLongitude
+        : map.getCenter().lng;
+    const bounds = getReleaseBounds(releaseConfig.releases, referenceLongitude);
     if (!bounds) return;
     const { width, height } = map.getContainer().getBoundingClientRect();
     if (width <= 0 || height <= 0) return;
