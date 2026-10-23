@@ -1,5 +1,25 @@
 import { config, releaseConfig } from "../stores/index.svelte";
 
+let releaseColors = new WeakMap<object, string>();
+let nextReleaseColor = 0;
+
+export function resetReleaseColors() {
+    releaseColors = new WeakMap<object, string>();
+    nextReleaseColor = 0;
+    releaseConfig.releases.forEach(getReleaseColor);
+}
+
+export function getReleaseColor(release: object) {
+    let color = releaseColors.get(release);
+    if (!color) {
+        const index = nextReleaseColor++;
+        const hue = (220 + index * 30) % 360;
+        color = `hsl(${hue} 50% 40%)`;
+        releaseColors.set(release, color);
+    }
+    return color;
+}
+
 export function getTotalReleaseMass() {
     return releaseConfig.releases.reduce(
         (total, release) => total + release.schedule.reduce(

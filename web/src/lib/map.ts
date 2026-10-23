@@ -2,7 +2,7 @@
 import * as maplibregl from 'https://unpkg.com/maplibre-gl@^6.6.0/dist/maplibre-gl.mjs';
 import { simulation, config, visualization, releaseConfig } from "./stores/index.svelte";
 import { preloader } from "./preloader";
-import { getReleasePositions, normalizeLongitude, getReleaseBounds } from "./utils";
+import { getReleasePositions, normalizeLongitude, getReleaseBounds, getReleaseColor } from "./utils";
 
 
 
@@ -40,19 +40,43 @@ export function initMap() {
 
 let landmaskPreloadInFlight = false;
 let pendingLandmaskPreload: Float32Array | null = null;
+let releaseMarkers: any[] = [];
 
-export async function updateMarker(lon: number, lat: number) {
+export async function updateMarker() {
     // A reused marker can retain its previous world-copy position through
     // MapLibre's smart wrapping. Start fresh at the unwrapped release longitude.
-    const previousMarker = visualization.currentMarker;
-    const display = previousMarker?.getElement().style.display ?? "";
-    previousMarker?.remove();
-    const marker = new maplibregl.Marker({
-        color: "#37579b",
-        scale: 0.9,
-    }).setLngLat([lon, lat]);
-    marker.getElement().style.display = display;
-    visualization.currentMarker = marker.addTo(map);
+    releaseMarkers.forEach(marker => marker.remove());
+    releaseMarkers = releaseConfig.releases.map((release, index) => {
+        const active = index === releaseConfig.activeReleaseIndex;
+        const marker = new maplibregl.Marker({
+            color: getReleaseColor(release),
+            scale: 0.9,
+            opacity: active ? 1 : 0.5,
+        }).setLngLat([release.lon, release.lat]);
+        const element = marker.getElement();
+        element.style.display = simulation.simulationActive ? "none" : "";
+        element.style.cursor = "pointer";
+        element.setAttribute("role", "button");
+        element.setAttribute("aria-label", `Edit release ${index + 1}`);
+        element.setAttribute("aria-pressed", String(active));
+        element.tabIndex = 0;
+        const select = () => {
+            if (!simulation.simulationActive) releaseConfig.activeReleaseIndex = index;
+        };
+        element.addEventListener("click", (event: MouseEvent) => {
+            event.stopPropagation();
+            select();
+        });
+        element.addEventListener("keydown", (event: KeyboardEvent) => {
+            if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                event.stopPropagation();
+                select();
+            }
+        });
+        return marker.addTo(map);
+    });
+    visualization.currentMarker = releaseMarkers[releaseConfig.activeReleaseIndex] ?? null;
 
     const positions = new Float32Array(getReleasePositions());
     const currentDate = parseInt(config.startDate.replace(/-/g, ""));
@@ -116,11 +140,7 @@ export function zoom() {
 }
 
 export function setMarkerVisible(visible: boolean) {
-    const marker = visualization.currentMarker;
-    if (!marker) return;
-
-    const el = marker.getElement();
-    if (!el) return;
-
-    el.style.display = visible ? "" : "none";
+    releaseMarkers.forEach(marker => {
+        marker.getElement().style.display = visible ? "" : "none";
+    });
 }

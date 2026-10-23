@@ -1,17 +1,17 @@
 <script lang="ts">
     import { config, releaseConfig } from "$lib/stores/index.svelte";
     import { map, updateMarker } from "$lib/map";
-    import { normalizeLongitude, numberInput } from "$lib/utils";
+    import { normalizeLongitude, numberInput, getReleasePositions, getReleaseColor } from "$lib/utils";
 
     import trash from "$lib/assets/images/TrashCan.webp";
     import { untrack } from 'svelte'
 
     $effect(() => {
-        const lon = releaseConfig.activeRelease.lon;
-        const lat = releaseConfig.activeRelease.lat;
+        getReleasePositions();
+        releaseConfig.activeReleaseIndex;
         untrack(() => {
             if (map) {
-                updateMarker(lon, lat);
+                updateMarker();
             }
         });
     })
@@ -160,6 +160,7 @@
                 <input
                     type="radio"
                     class="release-toggle"
+                    style:background-color={getReleaseColor(release)}
                     onclick={(e) => {
                         releaseConfig.activeReleaseIndex = index;
                     }}

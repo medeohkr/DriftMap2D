@@ -2,7 +2,7 @@
     import { exportScenario } from "$lib/io/exportScenario";
 import { importScenario } from "$lib/io/importScenario";
     import { config, releaseConfig, visualization, genericOverrides, objectOverrides, oilOverrides, simulation } from "$lib/stores/index.svelte";
-    import { dateOffset } from "$lib/utils";
+    import { dateOffset, resetReleaseColors } from "$lib/utils";
     let fileInput = $state<HTMLInputElement | undefined>(undefined);
 
     function openFilePicker() {
@@ -47,6 +47,7 @@ import { importScenario } from "$lib/io/importScenario";
             },
         ],
         releaseConfig.activeReleaseIndex = 0;
+        resetReleaseColors();
 
         visualization.particleRadius = 1.5;
         visualization.gridUpdateInterval = 100;
