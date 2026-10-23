@@ -1,6 +1,11 @@
+// data_loader.rs
+// maps particles to tiles (0.1° buffer for intermediate steps)
+// fetches and caches needed tiles from Cloudflare bucket
+// groups tiles for cache friendliness
+// bilinear + temporal interpolation
+
 use super::{
-    lerp, bilerp, meters_per_degree_lat, meters_per_degree_lon, normalize_lon,
-    ParticleView
+    bilerp, lerp, meters_per_degree_lat, meters_per_degree_lon, normalize_lon, ParticleView,
 };
 use crate::fetch::{FetchError, TileFetcher};
 use half::f16;
@@ -13,6 +18,12 @@ pub struct TileKey {
     pub day: usize,
 }
 
+/// parsed tile data
+/// x and y ocean current in m/s (u, v)
+/// x and y surface wind in m/s (wind_u, wind_v)
+/// sea surface temperature in K (sst_k) 
+/// usize fields are tile header data
+/// see daily_cron.py at project root for more info
 pub struct TileData {
     pub u: Vec<f32>,
     pub v: Vec<f32>,
@@ -28,6 +39,8 @@ pub struct TileData {
     pub n_steps: usize,
 }
 
+/// generic F allows the same loader to work in WASM
+/// (GlooFetcher) and in the CLI (ReqwestFetcher)
 pub struct DataLoader<F: TileFetcher> {
     min_lon: f32,
     min_lat: f32,
@@ -38,7 +51,7 @@ pub struct DataLoader<F: TileFetcher> {
     fetcher: F,
 
     pub cache: HashMap<TileKey, TileData>,
-    pending: HashSet<TileKey>,
+    pending: HashSet<TileKey>, // ensures tiles mid-download aren't requested
 }
 
 #[derive(Error, Debug)]
@@ -68,14 +81,12 @@ impl<F: TileFetcher> DataLoader<F> {
         }
     }
 
-    // ===== Shared helpers =====
-
-    /// Group positions `(idx, lon, lat, depth)` by the tile they belong to.
-    ///
-    /// Generic over the iterator so both `ParticleView::iter()` and a plain
-    /// slice of `(f32, f32, f32)` can feed into it without an intermediate
-    /// allocation.
-    fn group_positions<I>(&self, iter: I, day: usize) -> HashMap<TileKey, Vec<(usize, f32, f32, f32)>>
+    /// group positions from a generic iterator, avoiding extra vec allocation
+    fn group_positions<I>(
+        &self,
+        iter: I,
+        day: usize,
+    ) -> HashMap<TileKey, Vec<(usize, f32, f32, f32)>>
     where
         I: IntoIterator<Item = (usize, f32, f32, f32)>,
     {
@@ -91,8 +102,7 @@ impl<F: TileFetcher> DataLoader<F> {
         groups
     }
 
-    /// Convenience overload for a slice of `(lon, lat, depth)` positions,
-    /// enumerating them to `(idx, lon, lat, depth)` first.
+    // enumerates positions from slice to build iterator to pass to group_positions
     fn group_positions_slice(
         &self,
         positions: &[(f32, f32, f32)],
@@ -151,7 +161,6 @@ impl<F: TileFetcher> DataLoader<F> {
             return (u, v);
         }
 
-
         let hour_offset_0 = hour as usize * cells_per_hour;
         let hour_offset_1 = (hour + 1.0) as usize * cells_per_hour;
         let hour_frac = hour - hour.floor();
@@ -208,9 +217,8 @@ impl<F: TileFetcher> DataLoader<F> {
         // Last wind step of the tile: no step+1 to interpolate toward.
         // Use the last step's value directly.
         if wind_step >= tile.n_steps - 1 {
-            let widx = (tile.n_steps - 1) * cells_per_wind_step
-                + wlat_cell * tile.n_lon_wind
-                + wlon_cell;
+            let widx =
+                (tile.n_steps - 1) * cells_per_wind_step + wlat_cell * tile.n_lon_wind + wlon_cell;
 
             let wind_u = bilerp(&tile.wind_u, wfrac_lon, wfrac_lat, widx, tile.n_lon_wind);
             let wind_v = bilerp(&tile.wind_v, wfrac_lon, wfrac_lat, widx, tile.n_lon_wind);
@@ -354,12 +362,7 @@ impl<F: TileFetcher> DataLoader<F> {
         results
     }
 
-    pub fn get_wind_sst(
-        &self,
-        view: &ParticleView,
-        day: usize,
-        hour: f32,
-    ) -> Vec<(f32, f32, f32)> {
+    pub fn get_wind_sst(&self, view: &ParticleView, day: usize, hour: f32) -> Vec<(f32, f32, f32)> {
         let groups = self.group_positions(view.iter(), day);
         let mut results = vec![(0.0, 0.0, 0.0); view.indices.len()];
 

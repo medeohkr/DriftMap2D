@@ -16,7 +16,9 @@ import {
     captureSnapshot,
 } from "./visualization";
 import { Proteus } from "../pkg/proteus_wasm";
-import { getTotalDays, startDateTime, releasesToJson, getAveragePosition, getTracerJson} from "./utils";
+import { getTotalDays, startDateTime, releasesToJson, getTracerJson } from "./utils";
+
+
 
 export function createProteus() {
     simulation.proteus = new Proteus(

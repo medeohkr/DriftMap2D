@@ -2,6 +2,7 @@
     import { config, releaseConfig } from "$lib/stores/index.svelte";
     import { map, updateMarker } from "$lib/map";
     import { normalizeLongitude, numberInput } from "$lib/utils";
+
     import trash from "$lib/assets/images/TrashCan.webp";
     import { untrack } from 'svelte'
 
