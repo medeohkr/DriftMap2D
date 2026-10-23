@@ -11,6 +11,7 @@ import { timeline } from '$lib/stores/timeline.svelte';
 import { resetSimulation } from '$lib/simulation';
 import { zoom } from '$lib/map';
 import { simulation } from '$lib/stores/simulation.svelte';
+import { getScaledConcentrations, updateConcentrationLayer } from '$lib/visualization';
 
 export function applyConfig(cfg: DriftMap2DConfig): void {
     // Tracer
@@ -121,6 +122,7 @@ export async function importScenario(file: File): Promise<void> {
             timeline.playbackMode = true;
             loadSnapshots(data);
             zoom();
+            updateConcentrationLayer();
             showToast(`Loaded scenario with ${data.features.length} snapshots`);
         } else {
             showToast("Loaded scenario config");

@@ -169,13 +169,10 @@ function formatCoord(value: number, pos: string, neg: string): string {
  * Build a descriptive filename from the current scenario state.
  *
  * Examples:
- *   driftmap2d-oil-48N125W-scenario-2026-10-17.geojson
- *   driftmap2d-config-sar-26N56E-2026-10-17.geojson
- *   driftmap2d-generic-unnamed-scenario-2026-10-17.geojson
+ *   driftmap2d-scenario-sar-48N125W-2026-10-17.geojson
+ *   driftmap2d-config-oil-26N56E-2026-10-17.geojson
  */
 export function buildFilename(hasSnapshots: boolean): string {
-    const tracer = config.tracerType.replace(/[^a-z0-9_-]/gi, "").toLowerCase() || "generic";
-
     const firstRelease = releaseConfig.releases[0];
     const location = firstRelease
         ? `${formatCoord(firstRelease.lat, "N", "S")}${formatCoord(firstRelease.lon, "E", "W")}`
@@ -184,9 +181,9 @@ export function buildFilename(hasSnapshots: boolean): string {
     const stamp = new Date().toISOString().slice(0, 10);
 
     if (hasSnapshots) {
-        return `driftmap2d-${tracer}-${location}-scenario-${stamp}.geojson`;
+        return `driftmap2d-scenario-${config.tracerType}-${location}-${stamp}.geojson`;
     } else {
-        return `driftmap2d-config-${tracer}-${location}-${stamp}.geojson`;
+        return `driftmap2d-config-${config.tracerType}-${location}-${stamp}.geojson`;
     }
 }
 

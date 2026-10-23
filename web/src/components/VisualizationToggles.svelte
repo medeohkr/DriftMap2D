@@ -7,9 +7,9 @@
         toggleHeatmapMode,
     } from "../lib/visualization";
     $effect(() => {
-        if (simulation.simulationActive) {
+        if (simulation.simulationActive && map) {
             map.setPaintProperty("overlay-layer", "raster-opacity", 0.1);
-        } else {
+        } else if (map) {
             map.setPaintProperty("overlay-layer", "raster-opacity", 0.4);
         }
 
@@ -21,18 +21,18 @@
         class="visualization-toggle"
         id="particle-toggle"
         class:active={visualization.visualizationMode === "particles"}
-        on:click={toggleParticleMode}>Particles</button
+        onclick={toggleParticleMode}>Particles</button
     >
     <button
         class="visualization-toggle"
         id="heatmap-toggle"
         class:active={visualization.visualizationMode === "heatmap"}
-        on:click={toggleHeatmapMode}>Heatmap</button
+        onclick={toggleHeatmapMode}>Heatmap</button
     >
     <div class="overlay-container">
         <input
             type="checkbox"
-            on:change={(e) => updateOverlay(e.currentTarget.checked)}
+            onchange={(e) => updateOverlay(e.currentTarget.checked)}
             id="overlay-checkbox"
         />
         <span>Show Today's Currents</span>

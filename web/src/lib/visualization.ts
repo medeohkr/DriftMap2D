@@ -8,7 +8,7 @@ import {
     history,
 } from "./stores/index.svelte";
 import { HeatmapGenerator } from "../pkg/proteus_wasm";;
-import { getAverageReleasePosition } from "./utils";
+import { getAverageReleasePosition, getTotalReleaseMass } from "./utils";
 
 export const COLORS = [
     "rgb(255, 255, 255)",
@@ -109,7 +109,7 @@ export function updateOverlay(checked: boolean) {
 }
 
 export function getScaledConcentrations() {
-    const scale = (simulation.proteus?.get_total_mass() ?? 0.0) * 0.0025;
+    const scale = getTotalReleaseMass() * 0.0025;
     return CONCENTRATIONS.map((c) => c * scale);
 }
 
