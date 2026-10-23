@@ -17,6 +17,7 @@ chrono = { workspace = true }
 rand = { workspace = true }
 rand_distr = { workspace = true }
 log = { workspace = true }
+ruzstd = "0.9.1"
 
 [dev-dependencies]
 # For unit tests using a mock fetcher

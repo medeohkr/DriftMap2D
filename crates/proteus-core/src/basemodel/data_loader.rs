@@ -11,6 +11,7 @@ use crate::fetch::{FetchError, TileFetcher};
 use half::f16;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::io::Read;
 use thiserror::Error;
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct TileKey {
@@ -873,6 +874,26 @@ mod interpolation_tests {
         }
     }
 
+    #[test]
+    fn parses_python_zstd_tiles_without_changing_origins_nans_or_zeros() {
+        // fixture compressed by Python zstandard at level 3
+        let bytes: &[u8] = &[
+            40, 181, 47, 253, 96, 180, 0, 181, 1, 0, 148, 2, 80, 82, 84, 50, 85, 213, 219, 66, 85,
+            85, 159, 65, 0, 128, 219, 66, 0, 0, 158, 65, 2, 0, 0, 0, 1, 0, 126, 0, 0, 0, 192, 0,
+            66, 0, 68, 0, 69, 0, 70, 0, 71, 3, 0, 125, 51, 85, 197, 121, 227, 213, 225, 1,
+        ];
+        let tile = parse_tile_data(bytes).unwrap();
+        assert_eq!(tile.current_origin, Some((109.916664, 19.916666)));
+        assert_eq!(tile.wind_origin, Some((109.75, 19.75)));
+        assert_eq!(tile.n_hours, 25);
+        assert!(tile.u[0].is_nan());
+        assert_eq!(tile.u[1], 0.0);
+        assert_eq!(tile.u[2], -2.0);
+        assert_eq!(tile.v[0], 4.0);
+        assert!(parse_tile_data(&[0x28, 0xb5, 0x2f, 0xfd]).is_err());
+        assert!(parse_tile_data(&bytes[..bytes.len() - 3]).is_err());
+    }
+
     struct UnusedFetcher;
     impl TileFetcher for UnusedFetcher {
         fn fetch_bytes<'a>(&'a self, _url: &'a str) -> BoxFuture<'a, Result<Vec<u8>, FetchError>> {
@@ -937,6 +958,19 @@ mod interpolation_tests {
 }
 
 pub fn parse_tile_data(bytes: &[u8]) -> Result<TileData, String> {
+    let decoded;
+    let bytes = if bytes.starts_with(&[0x28, 0xb5, 0x2f, 0xfd]) {
+        let mut decoder = ruzstd::decoding::StreamingDecoder::new(bytes)
+            .map_err(|e| format!("Invalid zstd tile header: {e}"))?;
+        let mut output = Vec::new();
+        decoder
+            .read_to_end(&mut output)
+            .map_err(|e| format!("Failed to decompress zstd tile: {e}"))?;
+        decoded = output;
+        decoded.as_slice()
+    } else {
+        bytes
+    };
     let (bytes, current_origin, wind_origin) = if bytes.starts_with(b"PRT2") {
         if bytes.len() < 20 {
             return Err("File too short for padded tile header".to_string());
