@@ -316,7 +316,7 @@ impl<F: TileFetcher> DataLoader<F> {
                 FetchError::Http(code) => LoaderError::Http(code),
             })?
         };
-        parse_tile_data(&bytes).map_err(LoaderError::Parse)
+        parse_tile_data(&bytes).map_err(|error| LoaderError::Parse(format!("{url}: {error}")))
     }
 
     pub fn update_tiles(&mut self, positions: Vec<f32>, current_day: usize) -> HashSet<TileKey> {
@@ -529,7 +529,10 @@ fn interpolate_batch(
         values.fill(f32::NAN);
         return values;
     }
+    let initially_missing = missing.len();
+    let mut rounds = 0;
     for _ in 0..10 {
+        rounds += 1;
         expand_nan_neighbors(grid, width, height, scratch);
         missing.retain(|&i| {
             values[i] = sample_spatial(grid, width, height, &samples[i], true);
@@ -539,6 +542,18 @@ fn interpolate_batch(
             break;
         }
     }
+    if rounds > 1 {
+        log::debug!(
+            "nan expansion rounds={} grid={}x{} samples={} initially_missing={} remaining={}",
+            rounds,
+            width,
+            height,
+            samples.len(),
+            initially_missing,
+            missing.len()
+        );
+    }
+
     values
 }
 
@@ -894,6 +909,35 @@ mod interpolation_tests {
         assert!(parse_tile_data(&bytes[..bytes.len() - 3]).is_err());
     }
 
+    #[test]
+    fn malformed_and_truncated_tiles_return_errors_without_panicking() {
+        let mut bytes = Vec::new();
+        for value in [2u32, 2, 1] {
+            bytes.extend(value.to_le_bytes());
+        }
+        bytes.extend(0.0f32.to_le_bytes());
+        bytes.extend(vec![0; 25 * 2 * 4 * 2]);
+        let current_end = bytes.len();
+        for value in [2u32, 2, 1] {
+            bytes.extend(value.to_le_bytes());
+        }
+        bytes.extend(vec![0; 3 * 4 * 2]);
+        assert!(parse_tile_data(&bytes).is_ok());
+        for len in 0..bytes.len() {
+            if len != current_end {
+                assert!(
+                    parse_tile_data(&bytes[..len]).is_err(),
+                    "accepted truncated length {len}"
+                );
+            }
+        }
+        for header in [[2u32, 2, u32::MAX], [u32::MAX, u32::MAX, 1], [0, 2, 1]] {
+            let mut invalid: Vec<_> = header.into_iter().flat_map(u32::to_le_bytes).collect();
+            invalid.extend(0.0f32.to_le_bytes());
+            assert!(parse_tile_data(&invalid).is_err());
+        }
+    }
+
     struct UnusedFetcher;
     impl TileFetcher for UnusedFetcher {
         fn fetch_bytes<'a>(&'a self, _url: &'a str) -> BoxFuture<'a, Result<Vec<u8>, FetchError>> {
@@ -996,6 +1040,33 @@ pub fn parse_tile_data(bytes: &[u8]) -> Result<TileData, String> {
     let n_lat = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]) as usize;
     let n_depths = u32::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]) as usize;
 
+    if n_lon < 2 || n_lat < 2 || n_depths == 0 {
+        return Err(format!(
+            "Invalid current grid dimensions: {n_lon} x {n_lat} x {n_depths}"
+        ));
+    }
+    if n_depths > (bytes.len() - 12) / 4 {
+        return Err("Truncated depth header or incompatible tile format".to_string());
+    }
+    let n_hours = 25usize;
+    let n_cells = n_lon
+        .checked_mul(n_lat)
+        .ok_or("Current grid dimensions overflow")?;
+    let current_values = n_hours
+        .checked_mul(n_depths)
+        .and_then(|n| n.checked_mul(n_cells))
+        .ok_or("Current payload dimensions overflow")?;
+    let depth_end = 12 + n_depths * 4;
+    let current_bytes = current_values
+        .checked_mul(4)
+        .ok_or("Current payload size overflow")?;
+    if current_bytes > bytes.len() - depth_end {
+        return Err(format!(
+            "Truncated current payload: expected {current_bytes} bytes for 25 hours, found {}",
+            bytes.len() - depth_end
+        ));
+    }
+
     let mut depths = Vec::with_capacity(n_depths);
     let mut offset = 12;
     for _ in 0..n_depths {
@@ -1009,11 +1080,8 @@ pub fn parse_tile_data(bytes: &[u8]) -> Result<TileData, String> {
         offset += 4;
     }
 
-    let n_cells = n_lon * n_lat;
-    let n_hours = 25;
-
-    let mut u = Vec::with_capacity(n_hours * n_depths * n_cells);
-    let mut v = Vec::with_capacity(n_hours * n_depths * n_cells);
+    let mut u = Vec::with_capacity(current_values);
+    let mut v = Vec::with_capacity(current_values);
 
     for _ in 0..n_hours {
         for _ in 0..n_depths {
@@ -1036,7 +1104,7 @@ pub fn parse_tile_data(bytes: &[u8]) -> Result<TileData, String> {
     }
 
     // Check if wind data is present (need at least 12 bytes for wind header)
-    if offset + 12 > bytes.len() {
+    if offset == bytes.len() {
         // No wind data — return with empty wind/SST vectors
         return Ok(TileData {
             current_origin,
@@ -1056,6 +1124,9 @@ pub fn parse_tile_data(bytes: &[u8]) -> Result<TileData, String> {
         });
     }
 
+    if bytes.len() - offset < 12 {
+        return Err("Truncated wind header".to_string());
+    }
     // Parse wind header
     let n_lon_wind = u32::from_le_bytes([
         bytes[offset],
@@ -1078,11 +1149,24 @@ pub fn parse_tile_data(bytes: &[u8]) -> Result<TileData, String> {
 
     offset += 12;
 
-    let n_cells_wind = n_lon_wind * n_lat_wind;
-    let wind_bytes_needed = n_steps * n_cells_wind * 2 * 3; // u + v + sst, 2 bytes each
+    let n_cells_wind = n_lon_wind
+        .checked_mul(n_lat_wind)
+        .ok_or("Wind grid dimensions overflow")?;
+    let wind_values = n_steps
+        .checked_mul(n_cells_wind)
+        .ok_or("Wind payload dimensions overflow")?;
+    let wind_bytes_needed = wind_values
+        .checked_mul(6)
+        .ok_or("Wind payload size overflow")?;
 
     // Check if we have enough bytes for wind data
-    if offset + wind_bytes_needed > bytes.len() {
+    if wind_bytes_needed > bytes.len() - offset {
+        return Err(format!(
+            "Truncated wind payload: expected {wind_bytes_needed} bytes, found {}",
+            bytes.len() - offset
+        ));
+    }
+    if wind_values == 0 {
         // Incomplete wind data — return without wind
         return Ok(TileData {
             current_origin,
@@ -1100,6 +1184,10 @@ pub fn parse_tile_data(bytes: &[u8]) -> Result<TileData, String> {
             n_hours,
             n_steps: 0,
         });
+    }
+
+    if n_lon_wind < 2 || n_lat_wind < 2 {
+        return Err("Invalid wind grid dimensions".to_string());
     }
 
     let mut wind_u = Vec::with_capacity(n_steps * n_cells_wind);
