@@ -3,7 +3,6 @@ import { initGridLayer } from "./visualization";
 import { loadOilCatalog} from "./tracers/oils";
 import { createProteus } from "./simulation";
 import init, { setup_panic_hook } from "../pkg/proteus_wasm";
-import { releaseConfig } from "./stores/index.svelte";
 
 export async function initialize() {
     await init();
@@ -12,5 +11,5 @@ export async function initialize() {
     initGridLayer();
     loadOilCatalog();
     createProteus();
-    updateMarker(releaseConfig.activeRelease.lon, releaseConfig.activeRelease.lat);
+    updateMarker();
 }

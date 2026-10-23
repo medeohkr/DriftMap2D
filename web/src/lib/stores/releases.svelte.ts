@@ -32,8 +32,8 @@ export const releaseConfig = $state({
 
     addRelease(release: any) {
         releaseConfig.releases.push({
-            lat: releaseConfig.activeRelease.lat + 0.02,
-            lon: releaseConfig.activeRelease.lon + 0.02,
+            lat: releaseConfig.activeRelease.lat - 0.2,
+            lon: releaseConfig.activeRelease.lon - 0.2,
             radius: releaseConfig.activeRelease.radius,
             schedule: [
                 {

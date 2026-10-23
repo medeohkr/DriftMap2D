@@ -11,6 +11,7 @@ import { timeline } from '$lib/stores/timeline.svelte';
 import { resetSimulation } from '$lib/simulation';
 import { zoom } from '$lib/map';
 import { simulation } from '$lib/stores/simulation.svelte';
+import { resetReleaseColors } from '$lib/utils';
 import { getScaledConcentrations, updateConcentrationLayer } from '$lib/visualization';
 
 export function applyConfig(cfg: DriftMap2DConfig): void {
@@ -43,6 +44,8 @@ export function applyConfig(cfg: DriftMap2DConfig): void {
         })),
     }));
     
+    resetReleaseColors();
+
     // Oil
     oilOverrides.id = cfg.oil.id;
     oilOverrides.query = cfg.oil.query;
