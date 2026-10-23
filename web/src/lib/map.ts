@@ -24,8 +24,10 @@ export function initMap() {
         new maplibregl.ScaleControl({ maxWidth: 100, unit: "metric" }),
         "bottom-right",
     );
+    map.getCanvas().style.cursor = simulation.simulationActive ? "" : "crosshair";
 
     map.on("click", (e: any) => {
+        if (e.originalEvent.target.closest?.(".maplibregl-marker")) return;
         if (!simulation.simulationActive) {
             releaseConfig.activeRelease.lon = parseFloat(e.lngLat.lng.toFixed(3));
             releaseConfig.activeRelease.lat = parseFloat(e.lngLat.lat.toFixed(3));
@@ -52,17 +54,32 @@ export async function updateMarker() {
             color: getReleaseColor(release),
             scale: 0.9,
             opacity: active ? 1 : 0.5,
+            draggable: !simulation.simulationActive,
         }).setLngLat([release.lon, release.lat]);
         const element = marker.getElement();
         element.style.display = simulation.simulationActive ? "none" : "";
-        element.style.cursor = "pointer";
+        element.style.cursor = "grab";
         element.setAttribute("role", "button");
         element.setAttribute("aria-label", `Edit release ${index + 1}`);
         element.setAttribute("aria-pressed", String(active));
         element.tabIndex = 0;
         const select = () => {
-            if (!simulation.simulationActive) releaseConfig.activeReleaseIndex = index;
+            if (!simulation.simulationActive) {
+                releaseConfig.activeReleaseIndex = index;
+                updateMarkerSelection();
+            }
         };
+        marker.on("dragstart", () => {
+            select();
+            element.style.cursor = "grabbing";
+        });
+        marker.on("dragend", () => {
+            element.style.cursor = "grab";
+            if (simulation.simulationActive) return;
+            const position = marker.getLngLat();
+            release.lon = parseFloat(position.lng.toFixed(3));
+            release.lat = parseFloat(position.lat.toFixed(3));
+        });
         element.addEventListener("click", (event: MouseEvent) => {
             event.stopPropagation();
             select();
@@ -76,7 +93,7 @@ export async function updateMarker() {
         });
         return marker.addTo(map);
     });
-    visualization.currentMarker = releaseMarkers[releaseConfig.activeReleaseIndex] ?? null;
+    updateMarkerSelection();
 
     const positions = new Float32Array(getReleasePositions());
     const currentDate = parseInt(config.startDate.replace(/-/g, ""));
@@ -87,6 +104,17 @@ export async function updateMarker() {
     if (!landmaskPreloadInFlight) {
         runPendingLandmaskPreload();
     }
+}
+
+export function updateMarkerSelection() {
+    releaseMarkers.forEach((marker, index) => {
+        const active = index === releaseConfig.activeReleaseIndex;
+        marker.setOpacity(active ? 1 : 0.5);
+        const element = marker.getElement();
+        element.setAttribute("aria-pressed", String(active));
+        element.style.zIndex = active ? "1" : "0";
+    });
+    visualization.currentMarker = releaseMarkers[releaseConfig.activeReleaseIndex] ?? null;
 }
 
 async function runPendingLandmaskPreload() {
@@ -140,7 +168,10 @@ export function zoom() {
 }
 
 export function setMarkerVisible(visible: boolean) {
+    if (map) map.getCanvas().style.cursor = simulation.simulationActive ? "" : "crosshair";
     releaseMarkers.forEach(marker => {
+        const draggable = visible && !simulation.simulationActive;
+        if (marker.isDraggable() !== draggable) marker.setDraggable(draggable);
         marker.getElement().style.display = visible ? "" : "none";
     });
 }

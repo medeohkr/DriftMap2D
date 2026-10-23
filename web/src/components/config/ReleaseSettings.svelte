@@ -1,6 +1,6 @@
 <script lang="ts">
     import { config, releaseConfig } from "$lib/stores/index.svelte";
-    import { map, updateMarker } from "$lib/map";
+    import { map, updateMarker, updateMarkerSelection } from "$lib/map";
     import { normalizeLongitude, numberInput, getReleasePositions, getReleaseColor } from "$lib/utils";
 
     import trash from "$lib/assets/images/TrashCan.webp";
@@ -8,13 +8,17 @@
 
     $effect(() => {
         getReleasePositions();
-        releaseConfig.activeReleaseIndex;
         untrack(() => {
             if (map) {
                 updateMarker();
             }
         });
     })
+
+    $effect(() => {
+        releaseConfig.activeReleaseIndex;
+        untrack(updateMarkerSelection);
+    });
 
     function updateReleaseLat(e: Event) {
         const value = parseFloat((e.target as HTMLInputElement).value);
