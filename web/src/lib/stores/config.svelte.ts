@@ -12,6 +12,7 @@ export interface Config {
     endTime: string;
     totalDays: number;
     tracerType: string;
+    forcingModel: "global" | "norkyst"
 }
 
 export const config: Config = $state({
@@ -28,4 +29,5 @@ export const config: Config = $state({
     totalDays: 7,
 
     tracerType: "generic",
+    forcingModel: "global"
 });

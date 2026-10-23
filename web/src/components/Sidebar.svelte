@@ -1,7 +1,7 @@
 <script lang="ts">
     import { sidebarState, simulation } from '$lib/stores/index.svelte';
     import UtilityBar from './UtilityBar.svelte';
-    import ModelSelection from './config/ModelSelection.svelte';
+    import ModuleSelection from './config/ModuleSelection.svelte';
     import SimulationTime from './config/SimulationTime.svelte';
     import ReleaseSettings from './config/ReleaseSettings.svelte';
     import ActionBar from './ActionBar.svelte';
@@ -9,6 +9,7 @@
     import AdvancedConfig from './config/AdvancedConfig.svelte';
     import TracerConfig from './config/TracerConfig.svelte';
     import VisualizationConfig from './config/VisualizationConfig.svelte';
+    import ForcingSelection from './config/ForcingSelection.svelte';
 
     let collapseTimeout: ReturnType<typeof setTimeout>;
     let transitionTimeout: ReturnType<typeof setTimeout>;
@@ -56,10 +57,11 @@
         
         <div class="sidebar-content">
                 <div class="model-selection">
-                    <ModelSelection />
+                    <ModuleSelection />
                     <details class="floating-container">
                         <TracerConfig />
                     </details>
+                    <ForcingSelection />
                 </div>
 
                 <SimulationTime />

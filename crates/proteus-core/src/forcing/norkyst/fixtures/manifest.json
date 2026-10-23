@@ -1,0 +1,61 @@
+{
+  "grid": {
+    "format": "NKT1",
+    "core_cells": 120,
+    "halo_cells": 1,
+    "tile_shape": [
+      122,
+      122
+    ],
+    "grid_shape": [
+      1148,
+      2747
+    ],
+    "grid_origin_m": [
+      0,
+      0
+    ],
+    "grid_spacing_m": [
+      800,
+      800
+    ],
+    "projection": {
+      "grid_mapping_name": "polar_stereographic",
+      "straight_vertical_longitude_from_pole": 70,
+      "latitude_of_projection_origin": 90,
+      "false_northing": 1844800,
+      "false_easting": 3369600,
+      "semi_major_axis": 6378137,
+      "semi_minor_axis": 6356752.3142,
+      "standard_parallel": 60
+    },
+    "fields": [
+      "u",
+      "v",
+      "wind_u",
+      "wind_v",
+      "temperature_k"
+    ],
+    "field_units": [
+      "m/s",
+      "m/s",
+      "m/s",
+      "m/s",
+      "K"
+    ],
+    "vector_basis": "east_north",
+    "dtype": "<f2",
+    "array_order": "field,time,y,x",
+    "compression": "zstd"
+  },
+  "days": [
+    {
+      "date": "2026-10-23",
+      "timestamps": [
+        1792713600,
+        1792717200,
+        1792720800
+      ]
+    }
+  ]
+}

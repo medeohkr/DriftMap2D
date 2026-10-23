@@ -17,6 +17,7 @@ import { getScaledConcentrations, updateConcentrationLayer } from '$lib/visualiz
 export function applyConfig(cfg: DriftMap2DConfig): void {
     // Tracer
     config.tracerType = cfg.tracerType;
+    config.forcingModel = cfg.forcingModel === "norkyst" ? "norkyst" : "global";
     
     // Simulation
     config.particleCount = cfg.particleCount;

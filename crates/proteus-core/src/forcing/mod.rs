@@ -4,6 +4,8 @@ mod cache;
 mod format;
 mod grid;
 mod interpolation;
+mod norkyst;
+mod projection;
 
 pub use cache::{TileData, TileKey};
 pub use format::parse_tile_data;
@@ -21,6 +23,7 @@ use thiserror::Error;
 /// generic F allows the same loader to work in WASM
 /// (GlooFetcher) and in the CLI (ReqwestFetcher)
 pub struct DataLoader<F: TileFetcher> {
+    norkyst: Option<norkyst::Norkyst>,
     min_lon: f32,
     min_lat: f32,
     step: f32,
@@ -48,6 +51,7 @@ pub enum LoaderError {
 impl<F: TileFetcher> DataLoader<F> {
     pub fn new(base_url: &str, min_lon: f32, min_lat: f32, fetcher: F) -> Self {
         Self {
+            norkyst: None,
             min_lon,
             min_lat,
             step: 1.0 / 12.0,
@@ -58,6 +62,13 @@ impl<F: TileFetcher> DataLoader<F> {
             cache: HashMap::new(),
             pending: HashSet::new(),
         }
+    }
+
+    /// load native NorKyst tiles using the projection in their manifest
+    pub fn new_norkyst(base_url: &str, fetcher: F) -> Self {
+        let mut loader = Self::new(base_url.trim_end_matches('/'), 0.0, 0.0, fetcher);
+        loader.norkyst = Some(norkyst::Norkyst::default());
+        loader
     }
 
     /// group positions from a generic iterator, avoiding extra vec allocation
@@ -72,7 +83,14 @@ impl<F: TileFetcher> DataLoader<F> {
         let mut groups: HashMap<TileKey, Vec<(usize, f32, f32, f32)>> = HashMap::new();
         for (i, lon, lat, depth) in iter {
             let lon = normalize_lon(lon);
-            let key = self.get_tile_key(lon, lat, day);
+            let key = if let Some(native) = &self.norkyst {
+                let Some(key) = native.key(lon, lat, day) else {
+                    continue;
+                };
+                key
+            } else {
+                self.get_tile_key(lon, lat, day)
+            };
             groups
                 .entry(key)
                 .or_insert_with(Vec::new)
@@ -106,6 +124,9 @@ impl<F: TileFetcher> DataLoader<F> {
         want_wind: bool,
         want_sst: bool,
     ) -> Vec<[f32; 5]> {
+        if let Some(native) = &self.norkyst {
+            return native.sample(groups, count, hour, want_current, want_wind, want_sst);
+        }
         let mut results = vec![[0.0; 5]; count];
         let mut scratch = Vec::new();
         for (key, group) in groups {
@@ -304,6 +325,12 @@ impl<F: TileFetcher> DataLoader<F> {
     }
 
     pub fn update_tiles(&mut self, positions: Vec<f32>, current_day: usize) -> HashSet<TileKey> {
+        if let Some(native) = &self.norkyst {
+            return positions
+                .chunks_exact(2)
+                .filter_map(|p| native.key(p[0], p[1], current_day))
+                .collect();
+        }
         let mut needed = HashSet::new();
         let edge_threshold = 0.1;
 
@@ -358,6 +385,11 @@ impl<F: TileFetcher> DataLoader<F> {
         date: usize,
         tiles: &HashSet<TileKey>,
     ) -> Result<(), LoaderError> {
+        if self.norkyst.is_some() {
+            return Err(LoaderError::Parse(
+                "use try_load_ocean_tiles for native forcing".into(),
+            ));
+        }
         for tile in tiles {
             if self.cache.contains_key(tile) || self.pending.contains(tile) {
                 continue;
@@ -381,13 +413,69 @@ impl<F: TileFetcher> DataLoader<F> {
     }
 
     pub async fn load_ocean_tiles(&mut self, positions: Vec<f32>, current_date_int: usize) {
-        let needed_ocean_tiles = self.update_tiles(positions, current_date_int);
-
-        if let Err(e) = self
-            .load_by_date(current_date_int, &needed_ocean_tiles)
-            .await
-        {
+        if let Err(e) = self.try_load_ocean_tiles(positions, current_date_int).await {
             log::error!("Failed to load ocean tiles: {:?}", e);
+        }
+    }
+
+    /// return forcing errors to callers that must stop an invalid simulation
+    pub async fn try_load_ocean_tiles(
+        &mut self,
+        positions: Vec<f32>,
+        date: usize,
+    ) -> Result<(), LoaderError> {
+        if let Some(native) = &mut self.norkyst {
+            return native
+                .load(&self.fetcher, &self.base_url, &positions, date, 0.0, 0.0)
+                .await;
+        }
+        let needed = self.update_tiles(positions, date);
+        self.load_by_date(date, &needed).await
+    }
+
+    /// return the physical grid cell area used by the diffusion scheme
+    pub fn cell_area_m2(&self, lat: f32) -> f32 {
+        if let Some(native) = &self.norkyst {
+            native.cell_area_m2(lat)
+        } else {
+            (1.0 / 144.0) * (111_120.0f32.powi(2) * lat.to_radians().cos())
+        }
+    }
+
+    /// preload every native date needed by intermediate integration stages
+    pub async fn prepare_forcing(
+        &mut self,
+        positions: Vec<f32>,
+        date: usize,
+        hour: f32,
+        duration_hours: f32,
+    ) -> Result<(), LoaderError> {
+        if let Some(native) = &mut self.norkyst {
+            return native
+                .load(
+                    &self.fetcher,
+                    &self.base_url,
+                    &positions,
+                    date,
+                    hour,
+                    duration_hours,
+                )
+                .await;
+        }
+        self.try_load_ocean_tiles(positions, date).await
+    }
+
+    /// reject advances beyond the final available native forecast sample
+    pub fn validate_forcing_interval(
+        &self,
+        date: usize,
+        hour: f32,
+        duration_hours: f32,
+    ) -> Result<(), LoaderError> {
+        if let Some(native) = &self.norkyst {
+            native.validate_interval(date, hour, duration_hours)
+        } else {
+            Ok(())
         }
     }
 }

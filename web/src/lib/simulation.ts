@@ -16,6 +16,7 @@ import {
     captureSnapshot,
 } from "./visualization";
 import { Proteus } from "../pkg/proteus_wasm";
+import { showToast } from "./stores/toast.svelte";
 import { getTotalDays, startDateTime, releasesToJson, getTracerJson } from "./utils";
 
 
@@ -30,7 +31,8 @@ export function createProteus() {
         config.timeStepMin,
         config.advectionScheme,
         config.diffusionScheme,
-        new Float32Array(config.diffusionCoeffs)
+        new Float32Array(config.diffusionCoeffs),
+        config.forcingModel
     );
 }
 
@@ -43,7 +45,15 @@ export async function simulationStep(version: number) {
     )
         return;
 
-    await simulation.proteus?.step(simulation.stepCount);
+    try {
+        await simulation.proteus?.step(simulation.stepCount);
+    } catch (error) {
+        if (simulation.simulationVersion !== version) return;
+        stopSimulation();
+        simulation.simulationActive = false;
+        showToast(String(error), 7000);
+        return;
+    }
 
     if (simulation.simulationVersion !== version) {
         return;
@@ -51,7 +61,7 @@ export async function simulationStep(version: number) {
 
     try {
         const todayDateInt = simulation.proteus.get_current_date_int();
-        if (simulation.stepCount % Math.floor(1440 / config.timeStepMin) === 0) {
+        if (config.forcingModel === "global" && simulation.stepCount % Math.floor(1440 / config.timeStepMin) === 0) {
             const oceanTiles = preloader.getTileIndicesForOcean(
                 simulation.proteus.get_positions(),
             );
@@ -120,7 +130,14 @@ export async function startSimulation() {
     map.setPaintProperty("unstranded-particles-layer", "circle-radius", visualization.particleRadius)
     map.setPaintProperty("stranded-particles-layer", "circle-radius", visualization.particleRadius)
 
-    createProteus();
+    try {
+        createProteus();
+    } catch (error) {
+        stopSimulation();
+        simulation.simulationActive = false;
+        showToast(String(error), 7000);
+        return;
+    }
     updateConcentrationLayer();
     zoom();
     

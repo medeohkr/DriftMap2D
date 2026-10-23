@@ -21,6 +21,13 @@ impl<F: TileFetcher> DataLoader<F> {
     }
 
     pub fn get_tile_key(&self, lon: f32, lat: f32, day: usize) -> TileKey {
+        if let Some(native) = &self.norkyst {
+            return native.key(lon, lat, day).unwrap_or(TileKey {
+                lon_idx: usize::MAX,
+                lat_idx: usize::MAX,
+                day,
+            });
+        }
         let lon_idx = ((lon - self.min_lon) / self.tile_size).floor() as i32;
         let lat_idx = ((lat - self.min_lat) / self.tile_size).floor() as i32;
 

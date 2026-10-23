@@ -6,7 +6,7 @@
 
 
 <div class="floating-container" id="model-selector-container-basic">
-    <span>Select a Model</span>
+    <span>Physics Module</span>
     <select bind:value={config.tracerType} name="model-selector-basic" class="selector-primary" id="model-selector-basic">
         <option value="generic">Generic Drift</option>
         <option value="oil">Oil Weathering</option>

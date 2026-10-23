@@ -32,6 +32,7 @@ import { importScenario } from "$lib/io/importScenario";
         config.endTime = "00:00";
         config.totalDays = 7;
         config.tracerType = "generic";
+        config.forcingModel = "global";
 
         releaseConfig.releases = [
             {
