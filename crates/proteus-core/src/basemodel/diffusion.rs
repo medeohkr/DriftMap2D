@@ -5,7 +5,6 @@ use rand::prelude::*;
 use rand_distr::{Distribution, Normal};
 
 const METERS_PER_DEGREE: f32 = 111_120.0;
-const CELL_AREA_DEG2: f32 = 1.0 / 144.0;
 pub enum DiffusionScheme {
     Constant(f32),
     Smagorinsky(f32)
@@ -115,8 +114,7 @@ impl Diffusion {
 
             let strain = (dudx.powi(2) + 0.5 * (dudy + dvdx).powi(2) + dvdy.powi(2)).sqrt();
 
-            let deg2_to_m2 = METERS_PER_DEGREE.powi(2) * lat.to_radians().cos();
-            let cell_area_m2 = CELL_AREA_DEG2 * deg2_to_m2;
+            let cell_area_m2 = loader.cell_area_m2(lat);
             let k = cs * cell_area_m2 * strain;
             let dt_seconds = dt_days * 86400.0;
             let sigma = (2.0 * k * dt_seconds).sqrt();

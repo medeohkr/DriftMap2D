@@ -9,6 +9,7 @@ import { history } from '$lib/stores/history.svelte';
 export interface DriftMap2DConfig {
     // Tracer
     tracerType: string;
+    forcingModel?: "global" | "norkyst";
 
     // Simulation
     particleCount: number;
@@ -97,6 +98,7 @@ export interface DriftMap2DGeoJson {
 export function getCurrentConfig(): DriftMap2DConfig {
     return {
         tracerType: config.tracerType,
+        forcingModel: config.forcingModel,
 
         particleCount: config.particleCount,
         timeStepMin: config.timeStepMin,

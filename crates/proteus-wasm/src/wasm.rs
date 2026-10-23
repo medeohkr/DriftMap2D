@@ -1,10 +1,10 @@
-use proteus_core::basemodel::{LandMaskLoader, Simulation};
-use proteus_core::forcing::DataLoader;
-use proteus_core::tracers::{TracerKind};
 use super::fetch::GlooFetcher;
 use chrono::Duration;
 use chrono::Timelike;
-use chrono::{Datelike, Days, NaiveDateTime};
+use chrono::{Datelike, NaiveDateTime};
+use proteus_core::basemodel::{LandMaskLoader, Simulation};
+use proteus_core::forcing::DataLoader;
+use proteus_core::tracers::TracerKind;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -34,13 +34,20 @@ impl Proteus {
         time_step_minutes: f32,
         advection_scheme: &str,
         diffusion_scheme: &str,
-        diffusion_coeffs: Vec<f32>
-    ) -> Self {
+        diffusion_coeffs: Vec<f32>,
+        forcing_model: &str,
+    ) -> Result<Self, JsValue> {
         console_log::init_with_level(log::Level::Debug).ok();
         console_error_panic_hook::set_once();
 
         let start_date = NaiveDateTime::parse_from_str(start_date_str, "%Y-%m-%d %H:%M")
-            .expect("Invalid date format");
+            .map_err(|_| JsValue::from_str("invalid start date"))?;
+        if !time_step_minutes.is_finite() || time_step_minutes <= 0.0 || time_step_minutes > 1440.0
+        {
+            return Err(JsValue::from_str(
+                "time step must be between zero and 1440 minutes",
+            ));
+        }
         let steps_per_day = (1440.0 / time_step_minutes) as u32;
 
         let simulation = Simulation::new(
@@ -51,15 +58,21 @@ impl Proteus {
             steps_per_day,
             advection_scheme,
             diffusion_scheme,
-            diffusion_coeffs
+            diffusion_coeffs,
         );
 
-        let loader = DataLoader::new(
-            "https://tiles.driftmap2d.com/tiles",
-            -180.0,
-            -80.0,
-            GlooFetcher,
-        );
+        let loader = match forcing_model {
+            "global" => DataLoader::new(
+                "https://tiles.driftmap2d.com/tiles",
+                -180.0,
+                -80.0,
+                GlooFetcher,
+            ),
+            "norkyst" => {
+                DataLoader::new_norkyst("https://tiles.driftmap2d.com/norkyst", GlooFetcher)
+            }
+            _ => return Err(JsValue::from_str("forcing model must be global or norkyst")),
+        };
         let landmask = LandMaskLoader::new(
             "https://tiles.driftmap2d.com/roaring_landmask",
             -180.0,
@@ -68,14 +81,14 @@ impl Proteus {
             GlooFetcher,
         );
 
-        Self {
+        Ok(Self {
             simulation,
             loader,
             landmask,
             start_date,
             steps_per_day,
             last_step_count: 0,
-        }
+        })
     }
 
     pub async fn step(&mut self, step_count: u32) -> Result<(), JsValue> {
@@ -89,18 +102,33 @@ impl Proteus {
 
         self.simulation.release_particles(step_count);
 
-        let hour = (24.0 * step_count.saturating_sub(1) as f32 / self.steps_per_day as f32) % 24.0;
+        let elapsed = simulation_time(
+            self.start_date,
+            step_count.saturating_sub(1),
+            self.steps_per_day,
+        );
+        let hour = elapsed.hour() as f32
+            + elapsed.minute() as f32 / 60.0
+            + elapsed.second() as f32 / 3600.0;
 
         // Forcing date: the day containing the START of the advance, (step_count - 1) * dt
-        let forcing_day_offset = step_count.saturating_sub(1) / self.steps_per_day;
-        let forcing_date = self.start_date + Days::new(forcing_day_offset as u64);
+        let forcing_date = elapsed;
         let current_date_int = forcing_date.year() as usize * 10000
             + forcing_date.month() as usize * 100
             + forcing_date.day() as usize;
 
         self.loader
-            .load_ocean_tiles(self.get_unstranded_positions(), current_date_int)
-            .await;
+            .prepare_forcing(
+                self.get_unstranded_positions(),
+                current_date_int,
+                hour,
+                dt_days * 24.0,
+            )
+            .await
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        self.loader
+            .validate_forcing_interval(current_date_int, hour, dt_days * 24.0)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
         self.landmask
             .load_landmask_tiles(self.get_unstranded_positions())
             .await;
@@ -168,16 +196,13 @@ impl Proteus {
     }
 
     pub fn get_current_date_int(&self) -> usize {
-        let day_offset = self.last_step_count / self.steps_per_day;
-        let date = self.start_date + Days::new(day_offset as u64);
-        date.year() as usize * 10000
-            + date.month() as usize * 100
-            + date.day() as usize
+        let date = simulation_time(self.start_date, self.last_step_count, self.steps_per_day);
+        date.year() as usize * 10000 + date.month() as usize * 100 + date.day() as usize
     }
-    
+
     pub fn current_time_str(&self) -> String {
-        let seconds = (self.current_day() * 86400.0) as i64;
-        let current_date = self.start_date + Duration::seconds(seconds);
+        let current_date =
+            simulation_time(self.start_date, self.last_step_count, self.steps_per_day);
 
         format!(
             "{:04}-{:02}-{:02} {:02}:{:02}",
@@ -330,5 +355,29 @@ impl Proteus {
 
     pub fn is_on_land(&self, lon: f32, lat: f32) -> bool {
         self.landmask.is_on_land(lon, lat)
+    }
+}
+
+fn simulation_time(start: NaiveDateTime, step: u32, steps_per_day: u32) -> NaiveDateTime {
+    start + Duration::seconds((86400.0 * step as f64 / steps_per_day as f64).round() as i64)
+}
+
+#[cfg(test)]
+mod clock_tests {
+    use super::simulation_time;
+    use chrono::NaiveDateTime;
+
+    #[test]
+    fn forcing_clock_keeps_start_time_and_rolls_over_at_midnight() {
+        let start = NaiveDateTime::parse_from_str("2026-10-23 23:45", "%Y-%m-%d %H:%M").unwrap();
+        assert_eq!(simulation_time(start, 0, 96), start);
+        assert_eq!(
+            simulation_time(start, 1, 96).to_string(),
+            "2026-10-24 00:00:00"
+        );
+        assert_eq!(
+            simulation_time(start, 96, 96).to_string(),
+            "2026-10-24 23:45:00"
+        );
     }
 }
