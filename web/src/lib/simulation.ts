@@ -117,7 +117,6 @@ export async function startSimulation() {
     simulation.simulationVersion++;
     visualization.lastGridUpdate = 0;
 
-    map.setPaintProperty("overlay-layer", "raster-opacity", 0.05);
     map.setPaintProperty("unstranded-particles-layer", "circle-radius", visualization.particleRadius)
     map.setPaintProperty("stranded-particles-layer", "circle-radius", visualization.particleRadius)
 

@@ -1,10 +1,19 @@
 <script lang="ts">
-    import { visualization } from "$lib/stores/index.svelte";
+    import { map } from "$lib/map";
+    import { simulation, visualization } from "$lib/stores/index.svelte";
     import {
         updateOverlay,
         toggleParticleMode,
         toggleHeatmapMode,
     } from "../lib/visualization";
+    $effect(() => {
+        if (simulation.simulationActive) {
+            map.setPaintProperty("overlay-layer", "raster-opacity", 0.1);
+        } else {
+            map.setPaintProperty("overlay-layer", "raster-opacity", 0.4);
+        }
+
+    })
 </script>
 
 <div class="visualization-toggle-container">
