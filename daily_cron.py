@@ -33,7 +33,7 @@ else:
 
 BUCKET = "driftmap-tiles"
 FORECAST_DAYS = 10  # Yesterday + 10 forecast days
-HINDCAST_DAYS = 30
+HINDCAST_DAYS = 7
 
 TILE_SIZE = 10.0
 N_LON_TILES = 36
@@ -81,12 +81,25 @@ def delete_prefix(prefix):
 
 
 def delete_oldest_day():
-    for i in range(3):
-        oldest = datetime.utcnow() - timedelta(days=HINDCAST_DAYS + 1 + i)
+    cutoff = datetime.utcnow().date() - timedelta(days=HINDCAST_DAYS)
+    expired = set()
+    paginator = s3.get_paginator('list_objects_v2')
+    for page in paginator.paginate(Bucket=BUCKET, Prefix='tiles/'):
+        for obj in page.get('Contents', []):
+            parts = obj['Key'].split('/')
+            if len(parts) < 5:
+                continue
+            try:
+                day = datetime.strptime('/'.join(parts[1:4]), '%Y/%m/%d').date()
+            except ValueError:
+                continue
+            if day < cutoff:
+                expired.add(day)
+    for oldest in sorted(expired):
         prefix = f"tiles/{oldest.strftime('%Y/%m/%d')}/"
         deleted = delete_prefix(prefix)
         if deleted > 0:
-            print(f"  Deleted oldest days {oldest.date()}: {deleted} tiles")
+            print(f"  Deleted expired day {oldest}: {deleted} tiles")
 
 
 def download_ecmwf():

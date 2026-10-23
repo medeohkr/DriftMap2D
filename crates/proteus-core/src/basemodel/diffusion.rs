@@ -107,19 +107,6 @@ impl Diffusion {
             let vel_lat_minus = velocities[base + 2];
             let vel_lat_plus = velocities[base + 3];
 
-            if vel_lon_minus.0 == 0.0
-                || vel_lon_minus.1 == 0.0
-                || vel_lon_plus.0 == 0.0
-                || vel_lon_plus.1 == 0.0
-                || vel_lat_minus.0 == 0.0
-                || vel_lat_minus.1 == 0.0
-                || vel_lat_plus.0 == 0.0
-                || vel_lat_plus.1 == 0.0
-            {
-                final_positions.push((lon, lat));
-                continue;
-            }
-
             let dudx = (vel_lon_plus.0 - vel_lon_minus.0) / (2.0 * dx);
             let dudy = (vel_lat_plus.0 - vel_lat_minus.0) / (2.0 * dy);
             let dvdx = (vel_lon_plus.1 - vel_lon_minus.1) / (2.0 * dx);
