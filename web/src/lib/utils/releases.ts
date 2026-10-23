@@ -1,5 +1,15 @@
 import { config, releaseConfig } from "../stores/index.svelte";
 
+export function getTotalReleaseMass() {
+    return releaseConfig.releases.reduce(
+        (total, release) => total + release.schedule.reduce(
+            (mass, interval) => mass + interval.amount,
+            0,
+        ),
+        0,
+    );
+}
+
 export function getReleasePositions() {
     let positions = [];
     for (let index = 0; index < releaseConfig.releases.length; index++) {
