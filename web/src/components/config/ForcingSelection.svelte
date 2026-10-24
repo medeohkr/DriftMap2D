@@ -18,8 +18,8 @@
             if (config.forcingModel !== "norkyst") return;
             map.fitBounds(coverage.bounds, {
                 padding: {
-                    bottom: 100,
-                    top: 100,
+                    bottom: 30,
+                    top: 30,
                     left: 200,
                 },
                 duration: 2000,
