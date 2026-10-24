@@ -139,7 +139,13 @@
     @media (max-width: 768px) {
         .timeline-container {
             position: fixed;
+            left: var(--spacing-sm);
+            width: min(75%, calc(100% - 140px));
+            transform: none;
+            padding: var(--spacing-sm);
         }
+        .timeline-container .timeline-controls { column-gap: var(--spacing-xs); }
+        .timeline-container .timeline-btn { width: 40px; }
     }
     .timeline-controls {
         display: flex;

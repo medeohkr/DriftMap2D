@@ -12,8 +12,6 @@ export interface Visualization {
     boundingBox: Float32Array;
     currentMarker: any;
     autoZoom: boolean;
-    mapLon: string | null;
-    mapLat: string | null;
 }
 
 export const visualization: Visualization = $state({
@@ -30,6 +28,4 @@ export const visualization: Visualization = $state({
     currentMarker: null,
     autoZoom: true,
 
-    mapLon: null,
-    mapLat: null,
 });
