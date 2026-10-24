@@ -15,7 +15,7 @@ def main():
         HERE / "error_vs_step_pct.csv",
         HERE / "error_vs_step_abs.csv",
         HERE / "error_vs_step.png",
-        "Proteus vs Opendrift Ocean Drift: centroid error "
+        "Proteus vs OpenDrift Ocean Drift: centroid error "
         "across {n_runs} runs, no windage, RK4 scheme",
         "simulation step (hours since release)",
     )

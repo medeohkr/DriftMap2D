@@ -5,6 +5,9 @@ mod leeway;
 pub use generic::{GenericTracer, GenericData};
 pub use oil::{OilTracer, OilData};
 pub use leeway::{LeewayTracer, LeewayData};
+pub use generic::GenericProperties;
+pub use oil::OilPropertiesJson;
+pub use leeway::LeewayProperties;
 
 pub enum TracerKind {
     Generic(GenericTracer),

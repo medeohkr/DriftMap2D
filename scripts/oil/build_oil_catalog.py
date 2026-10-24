@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import gzip
 import json
+import lzma
 from importlib.metadata import version
 from importlib.resources import files
 from pathlib import Path
@@ -96,20 +97,24 @@ def convert_oil(path: Path, water_limits: dict | None = None) -> dict:
                           load_water_fraction_limits() if water_limits is None else water_limits)
 
 
-def build_catalog(input_dir: Path, output_path: Path, water_limits_path: Path | None = None) -> dict:
+def build_catalog(input_dir: Path | None, output_path: Path, water_limits_path: Path | None = None) -> dict:
     """write a catalog and reproducible gzip copy, recording unsupported oils."""
     limits = load_water_fraction_limits(water_limits_path)
     records = {}
     skipped = []
-    paths = sorted(input_dir.rglob("*.json"))
-    for index, path in enumerate(paths, 1):
+    if input_dir is None:
+        with lzma.open(files("opendrift.models.openoil.adios").joinpath("oils.xz"), "rt", encoding="utf-8") as stream:
+            sources = [(f"opendrift:oils.xz/{raw['oil_id']}", raw) for raw in json.load(stream)]
+    else:
+        sources = [(str(path), path) for path in sorted(input_dir.rglob("*.json"))]
+    for index, (source, raw) in enumerate(sources, 1):
         try:
-            record = convert_oil(path, limits)
+            record = convert_oil(raw, limits) if isinstance(raw, Path) else convert_record(raw, source, limits)
             records[record["oil_id"]] = record
         except Exception as error:
-            skipped.append({"file": str(path), "error": f"{type(error).__name__}: {error}"})
+            skipped.append({"file": source, "error": f"{type(error).__name__}: {error}"})
         if index % 100 == 0:
-            print(f"processed {index}/{len(paths)} oil records", flush=True)
+            print(f"processed {index}/{len(sources)} oil records", flush=True)
     if not records:
         raise ValueError("no GNOME suitable oils were converted")
     output = {
@@ -136,12 +141,12 @@ def build_catalog(input_dir: Path, output_path: Path, water_limits_path: Path | 
 def main():
     """build the catalog from a directory of NOAA oil JSON files."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input_dir", type=Path)
+    parser.add_argument("input_dir", type=Path, nargs="?", help="NOAA source directory, defaults to OpenDrift's bundled archive")
     parser.add_argument("-o", "--output", type=Path, default=Path("oil_catalog.json"))
     parser.add_argument("--water-fraction-limits", type=Path,
                         help="override OpenDrift's max_water_fraction.json")
     args = parser.parse_args()
-    if not args.input_dir.is_dir():
+    if args.input_dir is not None and not args.input_dir.is_dir():
         parser.error(f"not a directory {args.input_dir}")
     build_catalog(args.input_dir, args.output, args.water_fraction_limits)
 
