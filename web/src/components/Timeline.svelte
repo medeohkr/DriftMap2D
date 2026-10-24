@@ -140,7 +140,8 @@
         .timeline-container {
             position: fixed;
             left: var(--spacing-sm);
-            width: min(75%, calc(100% - 140px));
+            right: var(--spacing-md);
+            width: auto;
             transform: none;
             padding: var(--spacing-sm);
         }

@@ -113,4 +113,7 @@
     }
 
 
+    @media (max-width: 768px) {
+        .map-display { display: none; }
+    }
 </style>
