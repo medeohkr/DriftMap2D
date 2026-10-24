@@ -50,8 +50,7 @@ export async function simulationStep(version: number) {
         await simulation.proteus?.step(simulation.stepCount);
     } catch (error) {
         if (!simulation.simulationRunning || simulation.simulationVersion !== version) return;
-        stopSimulation();
-        simulation.simulationActive = false;
+        resetSimulation();
         showToast(String(error), 7000);
         return;
     }
