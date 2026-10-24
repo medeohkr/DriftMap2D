@@ -1,21 +1,33 @@
 <script lang="ts">
     import { map } from "$lib/map";
-    import { config } from "$lib/stores/index.svelte"
+    import { config, simulation } from "$lib/stores/index.svelte"
+    import { loadNorkystCoverage, updateDefaultReleaseLocation } from "$lib/utils";
+    import { showToast } from "$lib/stores/toast.svelte";
+    import { untrack } from "svelte";
 
-    function flyToNorKystCoverage() {
-        const norkystBounds = [
-            [-1.56, 55.8],
-            [37.94, 75.2],
-        ];
-
-        map.fitBounds(norkystBounds, {
-            padding: {
-                bottom: 200,
-                left: 300,
-            },
-            duration: 2000,
-            essential: true,
+    $effect(() => {
+        const model = config.forcingModel;
+        untrack(() => {
+            if (!simulation.simulationActive) updateDefaultReleaseLocation(model);
         });
+    });
+
+    async function flyToNorKystCoverage() {
+        try {
+            const coverage = await loadNorkystCoverage();
+            if (config.forcingModel !== "norkyst") return;
+            map.fitBounds(coverage.bounds, {
+                padding: {
+                    bottom: 100,
+                    top: 100,
+                    left: 200,
+                },
+                duration: 2000,
+                essential: true,
+            });
+        } catch (error) {
+            showToast(String(error));
+        }
     }
 </script>
 

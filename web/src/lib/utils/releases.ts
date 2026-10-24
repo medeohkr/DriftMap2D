@@ -1,4 +1,22 @@
 import { config, releaseConfig } from "../stores/index.svelte";
+import type { ForcingModel } from "./forcing";
+
+const defaultLocations = {
+    global: { lat: 48.4, lon: -125.0 },
+    norkyst: { lat: 60.0, lon: 4.5 },
+};
+const automaticLocations = new WeakMap<object, { lat: number; lon: number }>();
+
+export function updateDefaultReleaseLocation(model: ForcingModel) {
+    if (releaseConfig.releases.length !== 1) return;
+    const release = releaseConfig.releases[0];
+    const previous = automaticLocations.get(release) ?? defaultLocations.global;
+    if (release.lat !== previous.lat || release.lon !== previous.lon) return;
+    const next = defaultLocations[model];
+    release.lat = next.lat;
+    release.lon = next.lon;
+    automaticLocations.set(release, next);
+}
 
 let releaseColors = new WeakMap<object, string>();
 let nextReleaseColor = 0;

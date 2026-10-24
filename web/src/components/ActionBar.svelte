@@ -1,9 +1,7 @@
 <script lang="ts">
     import resetBtnImg from '$lib/assets/images/ResetBtn.webp';
-    import { awaitLandmaskPreload } from '$lib/map';
     import { startSimulation, stopSimulation, resetSimulation, resumeSimulation } from '$lib/simulation';
-    import { timeline, sidebarState, releaseConfig, simulation } from '$lib/stores/index.svelte';
-    import { showToast } from '$lib/stores/toast.svelte';
+    import { timeline, sidebarState } from '$lib/stores/index.svelte';
 
     let simulationState: "inactive" | "running" | "paused" | "playback" = $state("inactive");
     let { toggleSidebar } = $props();
@@ -14,33 +12,8 @@
         }
     });
 
-    let startInFlight = false;
-
     async function start() {
-        if (startInFlight) {
-            showToast("Please wait... The simulation is loading");
-            return;
-        }
-        startInFlight = true;
-        try {
-            await awaitLandmaskPreload();
-            let errorMessage = "";
-            for (let index = 0; index < releaseConfig.releases.length; index++) {
-                const release = releaseConfig.releases[index];
-                if (simulation.proteus?.is_on_land(release.lon, release.lat)) {
-                    errorMessage += `Release ${index + 1} (${release.lat.toFixed(1)}°N, ${release.lon.toFixed(1)}°E) is on land\n`;
-                }
-            }
-            if (errorMessage.length) {
-                showToast(errorMessage);
-                return;
-            }
-
-            await startSimulation();
-            simulationState = "running";
-        } finally {
-            startInFlight = false;
-        }
+        if (await startSimulation()) simulationState = "running";
     }
 
     function pause() {

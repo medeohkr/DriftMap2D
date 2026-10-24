@@ -1,6 +1,6 @@
 <script lang="ts">
     import "./app.css";
-    import { onMount } from "svelte";
+    import { onMount, untrack } from "svelte";
     import { initialize } from "$lib/initialize";
     import Sidebar from "./components/Sidebar.svelte";
     import MapView from "./components/MapView.svelte";
@@ -11,8 +11,14 @@
     import CurrentDay from "./components/CurrentDay.svelte";
     import CoordinateDisplay from "./components/CoordinateDisplay.svelte";
     import Toast from "./components/Toast.svelte";
-    import { simulation, visualization } from "$lib/stores/index.svelte";
-    import { setMarkerVisible } from "$lib/map";
+    import { simulation, visualization, config } from "$lib/stores/index.svelte";
+    import { setMarkerVisible, updateForcingCoverage } from "$lib/map";
+
+    $effect(() => {
+        config.forcingModel;
+        simulation.simulationActive;
+        untrack(updateForcingCoverage);
+    });
 
     $effect(() => {
         const active = simulation.simulationActive;
