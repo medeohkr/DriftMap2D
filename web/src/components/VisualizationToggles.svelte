@@ -1,12 +1,12 @@
 <script lang="ts">
-    import { visualization } from "$lib/stores/index.svelte";
+    import { visualization, simulation } from "$lib/stores/index.svelte";
     import {
         toggleParticleMode,
         toggleHeatmapMode,
     } from "../lib/visualization";
 </script>
 
-<div class="visualization-toggle-container">
+<div class="visualization-toggle-container" class:simulation-active={simulation.simulationActive}>
     <button
         class="visualization-toggle"
         id="particle-toggle"
@@ -38,6 +38,9 @@
         white-space: nowrap;
     }
     @media (max-width: 768px) {
+        .visualization-toggle-container.simulation-active {
+            display: none;
+        }
         .visualization-toggle-container {
             left: auto;
             right: var(--spacing-sm);
