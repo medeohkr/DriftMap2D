@@ -163,8 +163,6 @@ export async function resetSimulation() {
     history.simulationHistory = [];
     timeline.playbackMode = false;
 
-    map.setPaintProperty("overlay-layer", "raster-opacity", 0.4);
-
     if (map) {
         map.getSource("concentration").setData({
             type: "FeatureCollection",

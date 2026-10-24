@@ -1,19 +1,9 @@
 <script lang="ts">
-    import { map } from "$lib/map";
-    import { simulation, visualization } from "$lib/stores/index.svelte";
+    import { visualization } from "$lib/stores/index.svelte";
     import {
-        updateOverlay,
         toggleParticleMode,
         toggleHeatmapMode,
     } from "../lib/visualization";
-    $effect(() => {
-        if (simulation.simulationActive && map) {
-            map.setPaintProperty("overlay-layer", "raster-opacity", 0.1);
-        } else if (map) {
-            map.setPaintProperty("overlay-layer", "raster-opacity", 0.4);
-        }
-
-    })
 </script>
 
 <div class="visualization-toggle-container">
@@ -29,14 +19,7 @@
         class:active={visualization.visualizationMode === "heatmap"}
         onclick={toggleHeatmapMode}>Heatmap</button
     >
-    <div class="overlay-container">
-        <input
-            type="checkbox"
-            onchange={(e) => updateOverlay(e.currentTarget.checked)}
-            id="overlay-checkbox"
-        />
-        <span>Show Today's Currents</span>
-    </div>
+
 </div>
 
 <style>
