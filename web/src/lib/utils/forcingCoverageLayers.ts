@@ -24,7 +24,7 @@ export async function renderForcingCoverage(target: any, visible: boolean): Prom
         if (!current() || !target.isStyleLoaded()) return;
         const before = target.getStyle().layers.find((layer: { type: string }) => layer.type === "symbol")?.id;
         if (!target.getSource("norkyst-coverage")) {
-            target.addSource("norkyst-coverage", { type: "geojson", data: coverage.feature });
+            target.addSource("norkyst-coverage", { type: "geojson", data: coverage.feature, tolerance: 0 });
             target.addLayer({
                 id: "norkyst-coverage-fill", type: "fill", source: "norkyst-coverage",
                 paint: { "fill-color": "#808080", "fill-opacity": 0.1 },
@@ -47,10 +47,10 @@ export async function renderForcingCoverage(target: any, visible: boolean): Prom
             return;
         }
         if (!target.hasImage("norkyst-hatch")) target.addImage("norkyst-hatch", hatchImage());
-        target.addSource("norkyst-unavailable-water", { type: "geojson", data: support.unavailableWater() });
+        target.addSource("norkyst-unavailable-water", { type: "geojson", data: support.unavailableWater(), tolerance: 0 });
         target.addLayer({
             id: "norkyst-unavailable-water", type: "fill", source: "norkyst-unavailable-water",
-            paint: { "fill-pattern": "norkyst-hatch", "fill-opacity": 0.6, "fill-antialias": false },
+            paint: { "fill-pattern": "norkyst-hatch", "fill-opacity": 0.85, "fill-antialias": false },
         }, "norkyst-coverage-outline");
         drawnMasks.set(target, support.revision);
     } catch (error) {
@@ -59,13 +59,17 @@ export async function renderForcingCoverage(target: any, visible: boolean): Prom
 }
 
 function hatchImage() {
-    const size = 8;
-    const data = new Uint8Array(size * size * 4);
-    for (let y = 0; y < size; y++) {
-        for (let x = 0; x < size; x++) {
-            const offset = (y * size + x) * 4;
-            data.set([150, 150, 150, (x + y) % size < 2 ? 210 : 0], offset);
+    const width = 80;
+    const height = Math.round(width * Math.tan(35 * Math.PI / 180));
+    const repeats = 8;
+    const data = new Uint8Array(width * height * 4);
+    // a rectangular repeat keeps the rotated stripes seamless at tile edges
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const offset = (y * width + x) * 4;
+            const phase = (((x + 0.5) / width + (y + 0.5) / height) * repeats) % 1;
+            data.set([150, 150, 150, phase < 0.25 ? 240 : 0], offset);
         }
     }
-    return { width: size, height: size, data };
+    return { width, height, data };
 }
