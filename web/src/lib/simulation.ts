@@ -62,29 +62,11 @@ export async function simulationStep(version: number) {
 
     try {
         const todayDateInt = simulation.proteus.get_current_date_int();
-        if (config.forcingModel === "global" && simulation.stepCount % Math.floor(1440 / config.timeStepMin) === 0) {
-            const oceanTiles = preloader.getTileIndicesForOcean(
-                simulation.proteus.get_positions(),
-            );
-            preloader.preloadTiles(todayDateInt, oceanTiles);
-            preloader.preloadFutureSteps(
-                todayDateInt,
-                oceanTiles,
-                1,
-            );
-
-            if (window.__tileCache) {
-                for (const url of window.__tileCache?.keys()) {
-                    const match = url.match(/(\d{4})\/(\d{2})\/(\d{2})/);
-                    if (
-                        match &&
-                        parseInt(match[1] + match[2] + match[3]) <
-                            todayDateInt - 1
-                    ) {
-                        window.__tileCache.delete(url);
-                    }
-                }
-            }
+        const model = config.forcingModel;
+        // native tiles span only 96 km so refresh their spatial margin each step
+        if (model === "norkyst" || simulation.stepCount % Math.floor(1440 / config.timeStepMin) === 0) {
+            void preloader.preloadOcean(todayDateInt, simulation.proteus.get_positions(), model, 1);
+            preloader.pruneBefore(preloader.addDays(todayDateInt, -1));
         }
         updateBoundingBox();
 
