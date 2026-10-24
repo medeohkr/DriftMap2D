@@ -1,5 +1,7 @@
 // @ts-expect-error
 import * as maplibregl from 'https://unpkg.com/maplibre-gl@^6.6.0/dist/maplibre-gl.mjs';
+import { GeoGrid } from "geogrid-maplibre-gl";
+import "geogrid-maplibre-gl/dist/geogrid.css";
 import { simulation, config, visualization, releaseConfig } from "./stores/index.svelte";
 import { preloader } from "./preloader";
 import { getReleasePositions, normalizeLongitude, getReleaseBounds, getReleaseColor, loadNorkystCoverage } from "./utils";
@@ -18,6 +20,24 @@ export function initMap() {
             [-Infinity, -75.0],
             [Infinity, 85.0],
         ],
+    });
+
+    map.once("load", () => {
+        const beforeLayerId = map.getStyle().layers.find((layer: { type: string }) => layer.type === "symbol")?.id;
+        const graticule = new GeoGrid({
+            map,
+            beforeLayerId,
+            gridStyle: { color: "rgba(220, 220, 220, 0.1)", width: 1 },
+            labelStyle: {
+                color: "rgb(120, 120, 120)",
+                fontSize: "11px",
+                fontFamily: "Montserrat, sans-serif",
+                textShadow: "0 1px 3px black",
+            },
+        });
+        // the style is already loaded so add the grid without waiting for another load event
+        map.off("load", graticule.add);
+        graticule.add();
     });
 
     map.addControl(

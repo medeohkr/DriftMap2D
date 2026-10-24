@@ -27,7 +27,7 @@
         position: absolute;
         display: flex;
         top: var(--spacing-md);
-        left: 55%;
+        left: 50%;
         transform: translateX(-50%);
         column-gap: var(--spacing-sm);
         font-family: var(--font-family);
