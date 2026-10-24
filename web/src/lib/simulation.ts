@@ -6,7 +6,7 @@ import {
     stats,
     history,
 } from "./stores/index.svelte";
-import { awaitLandmaskPreload, map, zoom } from "./map";
+import { map, zoom } from "./map";
 import { preloader } from "./preloader";
 import {
     updateHeatmapVisualization,
@@ -18,6 +18,7 @@ import {
 import { Proteus } from "../pkg/proteus_wasm";
 import { showToast } from "./stores/toast.svelte";
 import { getTotalDays, startDateTime, releasesToJson, getTracerJson } from "./utils";
+import { validateSimulationStart } from "./validation";
 
 
 
@@ -48,7 +49,7 @@ export async function simulationStep(version: number) {
     try {
         await simulation.proteus?.step(simulation.stepCount);
     } catch (error) {
-        if (simulation.simulationVersion !== version) return;
+        if (!simulation.simulationRunning || simulation.simulationVersion !== version) return;
         stopSimulation();
         simulation.simulationActive = false;
         showToast(String(error), 7000);
@@ -119,29 +120,43 @@ export async function simulationStep(version: number) {
     }
 }
 
-export async function startSimulation() {
-    if (simulation.simulationRunning) return;
+let startInFlight = false;
 
-    simulation.simulationActive = true;
-    simulation.simulationRunning = true;
-    simulation.simulationVersion++;
-    visualization.lastGridUpdate = 0;
-
-    map.setPaintProperty("unstranded-particles-layer", "circle-radius", visualization.particleRadius)
-    map.setPaintProperty("stranded-particles-layer", "circle-radius", visualization.particleRadius)
-
-    try {
-        createProteus();
-    } catch (error) {
-        stopSimulation();
-        simulation.simulationActive = false;
-        showToast(String(error), 7000);
-        return;
+export async function startSimulation(): Promise<boolean> {
+    if (startInFlight) {
+        showToast("Please wait... The simulation is loading");
+        return false;
     }
-    updateConcentrationLayer();
-    zoom();
-    
-    simulationStep(simulation.simulationVersion);
+    if (simulation.simulationRunning) return false;
+
+    startInFlight = true;
+    const version = ++simulation.simulationVersion;
+    let activated = false;
+    let started = false;
+    try {
+        if (!await validateSimulationStart()) return false;
+        createProteus();
+        simulation.simulationActive = true;
+        simulation.simulationRunning = true;
+        activated = true;
+        visualization.lastGridUpdate = 0;
+        map.setPaintProperty("unstranded-particles-layer", "circle-radius", visualization.particleRadius);
+        map.setPaintProperty("stranded-particles-layer", "circle-radius", visualization.particleRadius);
+        updateConcentrationLayer();
+        zoom();
+        started = true;
+        simulationStep(version);
+        return true;
+    } catch (error) {
+        if (simulation.simulationVersion === version) showToast(String(error), 7000);
+        return false;
+    } finally {
+        startInFlight = false;
+        if (activated && !started && simulation.simulationVersion === version) {
+            stopSimulation();
+            simulation.simulationActive = false;
+        }
+    }
 }
 
 export function stopSimulation() {

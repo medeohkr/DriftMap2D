@@ -2,7 +2,7 @@
 import * as maplibregl from 'https://unpkg.com/maplibre-gl@^6.6.0/dist/maplibre-gl.mjs';
 import { simulation, config, visualization, releaseConfig } from "./stores/index.svelte";
 import { preloader } from "./preloader";
-import { getReleasePositions, normalizeLongitude, getReleaseBounds, getReleaseColor } from "./utils";
+import { getReleasePositions, normalizeLongitude, getReleaseBounds, getReleaseColor, loadNorkystCoverage } from "./utils";
 
 
 
@@ -25,6 +25,7 @@ export function initMap() {
         "bottom-right",
     );
     map.getCanvas().style.cursor = simulation.simulationActive ? "" : "crosshair";
+    map.on("load", updateForcingCoverage);
 
     map.on("click", (e: any) => {
         if (e.originalEvent.target.closest?.(".maplibregl-marker")) return;
@@ -38,6 +39,43 @@ export function initMap() {
         visualization.mapLon = normalizeLongitude(e.lngLat.lng).toFixed(2);
         visualization.mapLat = e.lngLat.lat.toFixed(2);
     });
+}
+
+export async function updateForcingCoverage() {
+    const target = map;
+    if (!target) return;
+    const visible = config.forcingModel === "norkyst" && !simulation.simulationActive;
+    for (const id of ["norkyst-coverage-fill", "norkyst-coverage-outline"]) {
+        if (target.getLayer(id)) target.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+    }
+    if (!visible || target.getSource("norkyst-coverage")) return;
+    if (!target.isStyleLoaded()) {
+        target.once("idle", updateForcingCoverage);
+        return;
+    }
+    try {
+        const coverage = await loadNorkystCoverage();
+        if (map !== target || !target.isStyleLoaded() ||
+            config.forcingModel !== "norkyst" || simulation.simulationActive ||
+            target.getSource("norkyst-coverage")) return;
+        target.addSource("norkyst-coverage", { type: "geojson", data: coverage.feature });
+        const before = target.getStyle().layers.find((layer: { type: string }) => layer.type === "symbol")?.id;
+        target.addLayer({
+            id: "norkyst-coverage-fill",
+            type: "fill",
+            source: "norkyst-coverage",
+            paint: { "fill-color": "#808080", "fill-opacity": 0.1 },
+        }, before);
+        target.addLayer({
+            id: "norkyst-coverage-outline",
+            type: "line",
+            source: "norkyst-coverage",
+            layout: { "line-cap": "round", "line-join": "round" },
+            paint: { "line-color": "#707070", "line-width": 2, "line-dasharray": [0.1, 2] },
+        }, before);
+    } catch (error) {
+        console.warn("NorKyst coverage could not be loaded", error);
+    }
 }
 
 let landmaskPreloadInFlight = false;
