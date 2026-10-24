@@ -4,6 +4,7 @@ import argparse
 import json
 import sys
 import time
+from importlib.resources import files
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -78,6 +79,11 @@ def oil_properties(oil):
                  for t, rho in zip(temps, density)]
     sara = np.asarray(gnome["sara_type"])
     fractions = np.asarray(oil.mass_fraction)
+    limits = json.loads(files("opendrift.models.openoil.adios").joinpath(
+        "max_water_fraction.json").read_text(encoding="utf-8")).get(oil.name)
+    water_fraction_table = [] if limits is None else [
+        [float(value), float(temp)] for value, temp in
+        zip(limits["max_water_fraction"], limits["temperatures"])]
     return {
         "wind_factor": WIND_FACTOR, "wind_deflection": WIND_DEFLECTION,
         "product_type": str(oil.oil.metadata.product_type), "api": float(gnome["api"]),
@@ -90,6 +96,7 @@ def oil_properties(oil):
         "component_mass_fractions": fractions.tolist(),
         "bullwinkle_fraction": float(oil.bullwinkle), "bulltime": float(oil.bulltime),
         "emulsion_water_fraction_max": float(oil.emulsion_water_fraction_max),
+        "emulsion_water_fraction_max_by_temperature": water_fraction_table,
     }
 
 

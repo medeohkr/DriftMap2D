@@ -191,6 +191,39 @@ mod tests {
         let expected = 0.9 - 0.0952 * 2.0_f32.ln();
         assert!((cap - expected).abs() < 1e-6);
     }
+
+    #[test]
+    fn norwegian_water_cap_interpolates_and_clamps_at_endpoints() {
+        for (temperature, cap) in [(0.0, 0.46), (10.0, 0.485), (20.0, 0.51)] {
+            let mut oil = oil(0.0, 0.0);
+            oil.properties.emulsion_water_fraction_max_by_temperature = vec![(0.46, 5.0), (0.51, 15.0)];
+            for _ in 0..72 {
+                oil.step(&[0], &[20.0], &[temperature], 3600.0);
+            }
+            assert!((oil.data.y_w[0] - cap).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn norwegian_cap_only_overrides_when_all_samples_are_below_gnome() {
+        let mut oil = oil(0.0, 0.0);
+        oil.push();
+        oil.properties.emulsion_water_fraction_max = 0.5;
+        oil.properties.emulsion_water_fraction_max_by_temperature = vec![(0.4, 5.0), (0.6, 15.0)];
+        for _ in 0..72 {
+            oil.step(&[0, 1], &[20.0, 20.0], &[5.0, 15.0], 3600.0);
+        }
+        assert!((oil.data.y_w[0] - 0.5).abs() < 1e-6);
+        assert!((oil.data.y_w[1] - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn cooling_reduces_an_existing_emulsion_to_the_new_cap() {
+        let mut water = 0.7;
+        let mut area = 6.0 / DROP_MIN;
+        update_emulsification(&mut water, &mut area, 0.46, 3600.0, 10.0, 3600.0);
+        assert_eq!(water, 0.46);
+    }
 }
 
 fn vapor_pressure(boiling_points: &[f32], sst_celsius: f32) -> Vec<f32> {
@@ -315,7 +348,7 @@ pub fn update_emulsification(
     wind_speed: f32,
     dt: f32,
 ) {
-    if y_max <= 0.0 || *y_w >= y_max {
+    if y_max <= 0.0 {
         return;
     }
 
@@ -411,6 +444,12 @@ pub fn step_particle_weathering(
         );
     }
 
+    // OpenOil applies the Norwegian limits only when all emulsifying samples are below GNOME's limit
+    let use_temperature_limits = !oil.emulsion_water_fraction_max_by_temperature.is_empty()
+        && emulsifying.iter().enumerate().filter(|(_, active)| **active).all(|(pos, _)|
+            lerp(&oil.emulsion_water_fraction_max_by_temperature, sst_celsius[pos])
+                < oil.emulsion_water_fraction_max);
+
     for (pos, &idx) in indices.iter().enumerate() {
         if emulsifying[pos] {
             if particles.emulsification_start_age[idx] == -1.0 {
@@ -422,7 +461,11 @@ pub fn step_particle_weathering(
             update_emulsification(
                 &mut particles.y_w[idx],
                 &mut particles.interfacial_area[idx],
-                oil.emulsion_water_fraction_max,
+                if use_temperature_limits {
+                    lerp(&oil.emulsion_water_fraction_max_by_temperature, sst_celsius[pos])
+                } else {
+                    oil.emulsion_water_fraction_max
+                },
                 age_since_start,
                 wind_speeds[pos],
                 dt,

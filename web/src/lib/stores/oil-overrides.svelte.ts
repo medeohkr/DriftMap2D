@@ -4,7 +4,7 @@ export interface OilOverrides {
     windFactor: number;
     deflectionScheme: "samuels" | "constant"
     windDeflection: number | null;
-    emulOnset: "time" | "fraction"
+    emulOnset: "oil" | "time" | "fraction"
     bullwinkleFrac: number;
     bulltime: number;
 }
@@ -15,7 +15,7 @@ export const oilOverrides: OilOverrides = $state({
     windFactor: 3.5,
     windDeflection: 20.0,
     deflectionScheme: "samuels",
-    emulOnset: "time",
+    emulOnset: "oil",
     bullwinkleFrac: 0,
     bulltime: 0
 });

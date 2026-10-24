@@ -45,6 +45,7 @@
             <div class="container-secondary">
                 <span>Emulsification Onset</span>
                 <select bind:value={oilOverrides.emulOnset} class="scheme-selector">
+                    <option value="oil">Oil Default</option>
                     <option value="time">After Time</option>
                     <option value="fraction">At Evap %</option>
                 </select>
@@ -61,7 +62,7 @@
                         use:numberInput={{ min: 0, max: 1e3 }}
                     />
                 </div>
-            {:else}
+            {:else if oilOverrides.emulOnset === "fraction"}
                 <div class="container-secondary">
                     <span>Evaporated (%)</span>
                     <input

@@ -76,6 +76,10 @@ impl OilTracer {
         assert!(emulsion_water_fraction_max.is_finite()
             && (0.0..=0.9).contains(&emulsion_water_fraction_max),
             "emulsion_water_fraction_max must be between 0 and 0.9");
+        assert!(json.emulsion_water_fraction_max_by_temperature.iter().all(|&(fraction, temp)|
+            fraction.is_finite() && (0.0..=0.9).contains(&fraction) && temp.is_finite())
+            && json.emulsion_water_fraction_max_by_temperature.windows(2).all(|p| p[0].1 < p[1].1),
+            "invalid emulsion water fraction temperature limits");
 
         Self {
             properties: OilProperties {
@@ -94,6 +98,7 @@ impl OilTracer {
                 bullwinkle_fraction: json.bullwinkle_fraction,
                 bulltime: json.bulltime,
                 emulsion_water_fraction_max,
+                emulsion_water_fraction_max_by_temperature: json.emulsion_water_fraction_max_by_temperature,
             },
             data: OilData {
                 age: Vec::with_capacity(capacity),
