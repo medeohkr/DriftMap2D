@@ -13,6 +13,7 @@
     "deploy": "npm run build && npx wrangler pages deploy --project-name driftmap dist"
   },
   "dependencies": {
+    "geogrid-maplibre-gl": "^0.2.4",
     "pako": "^3.0.1"
   }
 }
