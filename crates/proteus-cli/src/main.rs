@@ -1,10 +1,11 @@
 mod config;
 mod fetch;
+mod tracer;
 
 use anyhow::{Context, Result};
-use chrono::{Datelike, NaiveDateTime};
+use chrono::{Datelike, NaiveDateTime, Timelike};
 use clap::Parser;
-use config::{Config, ReleasesSpec};
+use config::{Config, ForcingModel, ReleasesSpec};
 use fetch::ReqwestFetcher;
 use proteus_core::basemodel::{LandMaskLoader, Simulation};
 use proteus_core::forcing::DataLoader;
@@ -19,6 +20,10 @@ const MIN_LAT: f32 = -80.0;
 struct Args {
     /// Path to the JSON config file
     config: PathBuf,
+
+    /// override the forcing model selected in the config
+    #[arg(long, value_enum)]
+    forcing_model: Option<ForcingModel>,
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -34,8 +39,11 @@ async fn main() -> Result<()> {
 
     let config_text = std::fs::read_to_string(&config_path)
         .with_context(|| format!("failed to read config: {}", config_path.display()))?;
-    let config: Config = serde_json::from_str(&config_text)
+    let mut config: Config = serde_json::from_str(&config_text)
         .with_context(|| format!("failed to parse config: {}", config_path.display()))?;
+    if let Some(model) = args.forcing_model {
+        config.forcing_model = model;
+    }
     run(config, config_dir).await
 }
 
@@ -43,16 +51,21 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
     let start_date = NaiveDateTime::parse_from_str(&config.start_date, "%Y-%m-%d %H:%M")
         .context("invalid start_date (expected YYYY-MM-DD HH:MM)")?;
 
+    anyhow::ensure!(config.time_step_minutes.is_finite() && config.time_step_minutes > 0.0,
+        "time_step_minutes must be finite and positive");
     let steps_per_day = (1440.0 / config.time_step_minutes) as u32;
     if steps_per_day == 0 {
         anyhow::bail!("time_step_minutes too large (must produce at least 1 step/day)");
     }
 
     let releases_json = resolve_releases(&config.releases, config_dir)?;
+    let tracer_json = tracer::resolve(
+        &config.tracer_type, &config.tracer_json, config_dir, config.catalog_dir.as_deref(),
+    )?;
 
     let mut simulation = Simulation::new(
         &config.tracer_type,
-        &config.tracer_json,
+        &tracer_json,
         &releases_json,
         config.particles,
         steps_per_day,
@@ -61,8 +74,12 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
         config.diffusion_coeffs,
     );
 
-    let base_url = resolve_tile_base_url(&config.tile_url);
-    let mut loader = DataLoader::new(&base_url, MIN_LON, MIN_LAT, ReqwestFetcher::new());
+    let base_url = resolve_tile_base_url(config.tile_url.as_deref(), config.forcing_model);
+    let mut loader = match config.forcing_model {
+        ForcingModel::Global => DataLoader::new(&base_url, MIN_LON, MIN_LAT, ReqwestFetcher::new()),
+        ForcingModel::Norkyst => DataLoader::new_norkyst(&base_url, ReqwestFetcher::new()),
+    };
+    log::info!("forcing model={:?} root={}", config.forcing_model, base_url);
     let mut landmask = LandMaskLoader::new(
         "https://tiles.driftmap2d.com/roaring_landmask",
         MIN_LON,
@@ -93,20 +110,21 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
         }
 
         // Step N: advance from t = (N-1)*dt to t = N*dt.
-        // hour is the forcing time used for the advance, matching the WASM
-        // convention: hour = 24 * step_count / steps_per_day.
-        let day_offset = step_count.saturating_sub(1) / steps_per_day;
-        let date = start_date.date() + chrono::Duration::days(day_offset as i64);
+        let elapsed = simulation_time(start_date, step_count - 1, steps_per_day);
+        let date = elapsed.date();
         let current_date_int =
             date.year() as usize * 10000 + date.month() as usize * 100 + date.day() as usize;
-        let hour = (24.0 * step_count.saturating_sub(1) as f32 / steps_per_day as f32) % 24.0;
+        let hour = elapsed.hour() as f32 + elapsed.minute() as f32 / 60.0
+            + elapsed.second() as f32 / 3600.0;
 
         simulation.release_particles(step_count);
 
         let positions = unstranded_flat(&simulation);
         loader
-            .load_ocean_tiles(positions.clone(), current_date_int)
-            .await;
+            .prepare_forcing(positions.clone(), current_date_int, hour, dt_days * 24.0)
+            .await
+            .with_context(|| format!("failed to prepare forcing for step {step_count}"))?;
+        loader.validate_forcing_interval(current_date_int, hour, dt_days * 24.0)?;
         landmask.load_landmask_tiles(positions).await;
 
         simulation.update_particles_batch(dt_days, &loader, current_date_int, hour, &landmask);
@@ -258,13 +276,100 @@ pub fn mass_weighted_emulsification(simulation: &Simulation) -> f32 {
 ///   use it as-is. This supports local paths and custom servers.
 /// - Otherwise, treat it as a path under the production CDN. So
 ///   `"validation-tiles"` becomes `"https://tiles.driftmap2d.com/validation-tiles"`.
-fn resolve_tile_base_url(tile_url: &str) -> String {
+fn resolve_tile_base_url(tile_url: Option<&str>, model: ForcingModel) -> String {
+    let tile_url = tile_url.unwrap_or(match model {
+        ForcingModel::Global => "tiles",
+        ForcingModel::Norkyst => "norkyst",
+    }).trim().trim_end_matches('/');
     if tile_url.starts_with("file://")
         || tile_url.starts_with("http://")
         || tile_url.starts_with("https://")
     {
         tile_url.to_string()
     } else {
-        format!("https://tiles.driftmap2d.com/{}", tile_url)
+        format!("https://tiles.driftmap2d.com/{}", tile_url.trim_start_matches('/'))
+    }
+}
+
+fn simulation_time(start: NaiveDateTime, step: u32, steps_per_day: u32) -> NaiveDateTime {
+    let seconds = (step as f64 * 86400.0 / steps_per_day as f64).round() as i64;
+    start + chrono::Duration::seconds(seconds)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn config_value() -> serde_json::Value {
+        serde_json::json!({
+            "start_date": "2026-10-23 00:30", "tracer_type": "generic",
+            "releases": [{"lon": 4.62534, "lat": 60.16331, "radius": 0.0,
+                "schedule": [{"amount": 1, "duration": 0}]}],
+            "particles": 1, "time_step_minutes": 15, "steps": 1
+        })
+    }
+
+    #[test]
+    fn model_defaults_and_legacy_tile_prefixes_are_preserved() {
+        let mut value = config_value();
+        let config: Config = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(config.forcing_model, ForcingModel::Global);
+        assert_eq!(resolve_tile_base_url(config.tile_url.as_deref(), config.forcing_model),
+            "https://tiles.driftmap2d.com/tiles");
+        value["forcing_model"] = serde_json::json!("norkyst");
+        let config: Config = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(resolve_tile_base_url(config.tile_url.as_deref(), config.forcing_model),
+            "https://tiles.driftmap2d.com/norkyst");
+        value["forcing_model"] = serde_json::json!("unknown");
+        assert!(serde_json::from_value::<Config>(value).is_err());
+        assert_eq!(resolve_tile_base_url(Some("validation-tiles"), ForcingModel::Global),
+            "https://tiles.driftmap2d.com/validation-tiles");
+    }
+
+    #[test]
+    fn explicit_roots_are_not_given_an_extra_model_prefix() {
+        for (input, expected) in [
+            ("norkyst/", "https://tiles.driftmap2d.com/norkyst"),
+            ("https://example.com/custom/native/", "https://example.com/custom/native"),
+            ("file:///D:/forcing/norkyst/", "file:///D:/forcing/norkyst"),
+        ] {
+            assert_eq!(resolve_tile_base_url(Some(input), ForcingModel::Norkyst), expected);
+        }
+        let args = Args::try_parse_from(["proteus", "config.json", "--forcing-model", "norkyst"]).unwrap();
+        assert_eq!(args.forcing_model, Some(ForcingModel::Norkyst));
+    }
+
+    #[test]
+    fn forcing_clock_keeps_start_time_and_crosses_midnight() {
+        let start = NaiveDateTime::parse_from_str("2026-10-23 23:45", "%Y-%m-%d %H:%M").unwrap();
+        assert_eq!(simulation_time(start, 0, 96), start);
+        assert_eq!(simulation_time(start, 1, 96).to_string(), "2026-10-24 00:00:00");
+        assert_eq!(simulation_time(start, 2, 96).to_string(), "2026-10-24 00:15:00");
+    }
+
+    #[tokio::test]
+    async fn native_loader_reads_file_manifest_and_projected_daily_tiles() {
+        let target = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/cli-norkyst-tests");
+        std::fs::create_dir_all(&target).unwrap();
+        let target = target.canonicalize().unwrap();
+        let root = target.join(format!("{}", std::process::id()));
+        let day = root.join("2026/10/23");
+        std::fs::create_dir_all(&day).unwrap();
+        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../proteus-core/src/forcing/norkyst/fixtures");
+        for name in ["004_005.bin", "005_005.bin"] {
+            std::fs::copy(fixture.join(name), day.join(name)).unwrap();
+        }
+        std::fs::copy(fixture.join("manifest.json"), root.join("manifest.json")).unwrap();
+        let root_url = url::Url::from_directory_path(&root).unwrap();
+        let base = resolve_tile_base_url(Some(root_url.as_str()), ForcingModel::Norkyst);
+        let mut loader = DataLoader::new_norkyst(&base, ReqwestFetcher::new());
+        let position = (4.62534, 60.16331, 0.0);
+        loader.prepare_forcing(vec![position.0, position.1], 20261023, 0.5, 0.25).await.unwrap();
+        let values = loader.get_wind_sst([position].into_iter(), 20261023, 0.5);
+        assert_eq!(values[0], (0.0, 4.0, 280.5));
+        assert!(loader.validate_forcing_interval(20261023, 1.5, 1.0).is_err());
+        assert!(root.starts_with(target));
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

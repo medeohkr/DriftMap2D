@@ -1,6 +1,14 @@
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 
+#[derive(Debug, Clone, Copy, Default, Deserialize, clap::ValueEnum, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ForcingModel {
+    #[default]
+    Global,
+    Norkyst,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Config {
     /// Simulation start date, "YYYY-MM-DD HH:MM"
@@ -12,6 +20,10 @@ pub struct Config {
     /// Tracer-specific config (passed through as JSON to the tracer constructor)
     #[serde(default = "default_json_object", deserialize_with = "de_string_or_object")]
     pub tracer_json: String,
+
+    /// optional catalog directory relative to the config file
+    #[serde(default)]
+    pub catalog_dir: Option<std::path::PathBuf>,
 
     /// Releases spec (see below)
     pub releases: ReleasesSpec,
@@ -30,8 +42,12 @@ pub struct Config {
 
     pub steps: u32,
 
-    #[serde(default = "default_base_url")]
-    pub tile_url: String,
+    #[serde(default)]
+    pub forcing_model: ForcingModel,
+
+    /// complete forcing root or CDN prefix, defaulting to the selected model
+    #[serde(default)]
+    pub tile_url: Option<String>,
 
     #[serde(default = "default_output")]
     pub output: String,
@@ -62,5 +78,4 @@ where
 fn default_advection() -> String { "rk4".into() }
 fn default_diffusion() -> String { "constant".into() }
 fn default_diffusion_coeffs() -> Vec<f32> { vec![50.0, 0.1] }
-fn default_base_url() -> String { "tiles".into() }
 fn default_output() -> String { "centroids.json".into() }

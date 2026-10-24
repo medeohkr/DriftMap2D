@@ -28,3 +28,5 @@ validation/synthetic/time_varying/
 validation/synthetic/shear/
 !validation/*/config.json
 __pycache__/
+catalogs/*.json
+catalogs/*.json.gz
