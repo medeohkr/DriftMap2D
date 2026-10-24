@@ -67,8 +67,8 @@
     }
 </script>
 
-{#if timeline.playbackMode}
-    <div id="timeline-container" class="timeline-container">
+    <div id="timeline-container" class="timeline-container" class:inactive={!timeline.playbackMode}
+        inert={!timeline.playbackMode} aria-hidden={!timeline.playbackMode}>
         <div class="timeline-controls">
             <button
                 onclick={goToStart}
@@ -111,16 +111,19 @@
             id="timeline-slider"
             class="timeline-slider"
             min="0"
-            max={history.simulationHistory.length - 1}
+            max={Math.max(0, history.simulationHistory.length - 1)}
             value={timeline.timelineDay}
         />
         <div class="timeline-labels">
-            <span>{timeline.timelineDate}</span>
+            <span>{timeline.timelineDate || '\u00a0'}</span>
         </div>
     </div>
-{/if}
 
 <style>
+    .timeline-container.inactive {
+        visibility: hidden;
+        pointer-events: none;
+    }
     .timeline-container {
         position: absolute;
         display: flex;
