@@ -131,7 +131,7 @@
         row-gap: var(--spacing-sm);
         padding: var(--spacing-md) var(--spacing-lg);
         transform: translateX(-45%);
-        background: var(--bg-timeline);
+        background: var(--bg-primary);
         border: none;
         border-radius: var(--border-lg);
         box-shadow: var(--shadow-size-secondary) var(--shadow-secondary);

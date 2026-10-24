@@ -7,4 +7,5 @@ export * from "./inputs";
 export * from "./releaseBounds";
 export * from "./forcing";
 export * from "./forcingCoverage";
+export * from "./forcingCoverageLayers";
 export * from "./stereographic";

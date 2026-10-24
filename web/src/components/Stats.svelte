@@ -49,7 +49,7 @@
         top: var(--spacing-md);
         padding: var(--spacing-xs) 0px var(--spacing-xs) var(--spacing-xs);
         row-gap: var(--spacing-xxs);
-        background-color: var(--bg-timeline);
+        background-color: var(--bg-primary);
         box-shadow: var(--shadow-size-secondary) var(--shadow-secondary);
         border-radius: var(--border-md);
     }
