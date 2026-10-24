@@ -24,7 +24,7 @@ class CatalogTests(unittest.TestCase):
         with lzma.open(resource, "rt", encoding="utf-8") as stream:
             cls.records = json.load(stream)
         cls.limits = load_water_fraction_limits()
-        path = Path(__file__).resolve().parents[2] / "validation/oil/run.py"
+        path = Path(__file__).resolve().parents[2] / "validation/oil/reference.py"
         spec = importlib.util.spec_from_file_location("oil_validation", path)
         cls.validation = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.validation)

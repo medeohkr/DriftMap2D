@@ -4,7 +4,6 @@ import argparse
 import json
 import sys
 import time
-from importlib.resources import files
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -42,7 +41,7 @@ def prepare_wind():
     return path
 
 
-def make_model(oil_name):
+def make_model(oil_name, oil_source=None):
     from opendrift.models.openoil import OpenOil
 
     model = OpenOil(loglevel=30, weathering_model="noaa")
@@ -66,44 +65,49 @@ def make_model(oil_name):
         model.set_config(key, value)
     # Oil wind drift has no rotation in OpenOil; zero factor also makes its
     # direction immaterial. Keep the explicit Proteus rotation at zero below.
-    model.set_oiltype(oil_name)
+    if oil_source is None:
+        model.set_oiltype(oil_name)
+    else:
+        model.set_oiltype_from_file(str(oil_source))
     return model, settings
 
 
-def oil_properties(oil):
-    """Use OpenOil's actual pseudo-components, rather than a separate catalog."""
-    gnome = oil.gnome_oil
-    temps = np.arange(-5.0, 40.5, 0.5)
-    density = [float(oil.density_at_temp(t + 273.15)) for t in temps]
-    viscosity = [float(oil.kvis_at_temp(t + 273.15)) * rho * 1000
-                 for t, rho in zip(temps, density)]
-    sara = np.asarray(gnome["sara_type"])
-    fractions = np.asarray(oil.mass_fraction)
-    limits = json.loads(files("opendrift.models.openoil.adios").joinpath(
-        "max_water_fraction.json").read_text(encoding="utf-8")).get(oil.name)
-    water_fraction_table = [] if limits is None else [
-        [float(value), float(temp)] for value, temp in
-        zip(limits["max_water_fraction"], limits["temperatures"])]
-    return {
-        "wind_factor": WIND_FACTOR, "wind_deflection": WIND_DEFLECTION,
-        "product_type": str(oil.oil.metadata.product_type), "api": float(gnome["api"]),
-        "density_kgm3": list(map(list, zip(density, temps.tolist()))),
-        "dynamic_viscosity_cp": list(map(list, zip(viscosity, temps.tolist()))),
-        "interfacial_tension_n_m": [[float(oil.oil_water_surface_tension()), 15.0]],
-        "sara_mass_fractions": {"asphaltenes": float(fractions[sara == "Asphaltenes"].sum())},
-        "boiling_points_c": (np.asarray(gnome["boiling_point"]) - 273.15).tolist(),
-        "molecular_weights_kg_mol": (np.asarray(oil.molecular_weight) / 1000).tolist(),
-        "component_mass_fractions": fractions.tolist(),
-        "bullwinkle_fraction": float(oil.bullwinkle), "bulltime": float(oil.bulltime),
-        "emulsion_water_fraction_max": float(oil.emulsion_water_fraction_max),
-        "emulsion_water_fraction_max_by_temperature": water_fraction_table,
-    }
+def catalog_oil(oil, catalog_dir):
+    """require the same oil ID in OpenDrift and the local production catalog."""
+    path = catalog_dir / "oil_catalog.json"
+    if not path.is_file():
+        raise ValueError(f"Missing {path}. Run python scripts/build_catalogs.py first")
+    catalog = json.loads(path.read_text(encoding="utf-8"))
+    matches = [record for record in catalog["oils"] if record["oil_id"] == oil.id]
+    if len(matches) != 1:
+        raise ValueError(f"OpenDrift oil {oil.id} must match exactly one catalog entry")
+    return matches[0]
 
 
-def make_cli_config(lon, lat, properties, tile_url):
+def reference_oil_source(record, explicit=None):
+    """use the raw source record so catalog and OpenDrift oil editions match."""
+    if explicit is not None:
+        source = explicit.resolve()
+    else:
+        name = record["source_file"]
+        if name.startswith("opendrift:"):
+            return None
+        source = Path(name)
+        if not source.is_absolute():
+            source = HERE.parents[1] / source
+    if not source.is_file():
+        raise ValueError(f"Oil source record not found at {source}. Set --reference-oil-file")
+    return source
+
+
+def make_cli_config(lon, lat, oil_id, tile_url, catalog_dir):
     return {
         "start_date": START_TIME.strftime("%Y-%m-%d %H:%M"),
-        "tracer_type": "oil", "tracer_json": properties,
+        "tracer_type": "oil", "forcing_model": "global",
+        "catalog_dir": str(catalog_dir),
+        "tracer_json": {"oil_id": oil_id,
+                        "overrides": {"wind_factor": WIND_FACTOR,
+                                      "wind_deflection": WIND_DEFLECTION}},
         "releases": [{"lon": lon, "lat": lat, "radius": 0.0,
                       "schedule": [{"amount": TOTAL_MASS_KG, "duration": 0}]}],
         "particles": N_PARTICLES, "time_step_minutes": TIME_STEP_SECONDS / 60,
@@ -155,21 +159,32 @@ def validate_cli_output(run_dir, config):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--oil-type", default="GENERIC MEDIUM CRUDE")
+    parser.add_argument("--oil-type", default="Generic Medium Crude")
     parser.add_argument("--grid-n", type=int, default=8)
     parser.add_argument("--tile-url", default="validation-tiles")
+    parser.add_argument("--catalog-dir", type=Path, default=HERE.parents[1] / "catalogs")
+    parser.add_argument("--runs-dir", type=Path, default=HERE / "runs")
+    parser.add_argument("--reference-oil-file", type=Path,
+                        help="raw NOAA JSON for OpenDrift, defaults to catalog source_file")
     parser.add_argument("--check-config", action="store_true",
-                        help="validate OpenOil settings and oil properties without running simulations")
+                        help="validate OpenOil settings and local catalog selection without running simulations")
     args = parser.parse_args()
     if args.grid_n < 1:
         parser.error("--grid-n must be positive")
     # Validate shared setup before loading forcing or entering the grid loop.
     # Invalid settings should fail once, rather than repeat for every case.
+    catalog_dir = args.catalog_dir.resolve()
     first_model, settings = make_model(args.oil_type)
-    properties = oil_properties(first_model.oiltype)
+    record = catalog_oil(first_model.oiltype, catalog_dir)
+    oil_id = record["oil_id"]
+    oil_source = reference_oil_source(record, args.reference_oil_file)
+    if oil_source is not None:
+        first_model, settings = make_model(args.oil_type, oil_source)
+        if first_model.oiltype.id != oil_id:
+            raise ValueError(f"Reference source oil ID must be {oil_id}")
     if args.check_config:
-        print(json.dumps({"opendrift_config": settings,
-                          "proteus_oil_properties": properties}, indent=2))
+        print(json.dumps({"opendrift_config": settings, "reference_oil_file": str(oil_source) if oil_source else None,
+                          "proteus_config": make_cli_config(0, 0, oil_id, args.tile_url, catalog_dir)}, indent=2))
         return
     from opendrift.readers import reader_netCDF_CF_generic
 
@@ -181,18 +196,20 @@ def main():
     for index, (lat, lon) in enumerate((lat, lon)
             for lat in np.linspace(-7.5, 7.5, args.grid_n)
             for lon in np.linspace(-177.5, -147.5, args.grid_n)):
-        run_dir = HERE / "runs" / f"run_{index:03d}"
+        run_dir = args.runs_dir.resolve() / f"run_{index:03d}"
         run_dir.mkdir(parents=True, exist_ok=True)
         meta = {"run_index": index, "release_lon": lon, "release_lat": lat,
                 "start_time": START_TIME.isoformat(), "duration_hours": DURATION_HOURS,
                 "time_step_seconds": TIME_STEP_SECONDS, "n_particles": N_PARTICLES,
                 "total_mass_kg": TOTAL_MASS_KG, "oil_type": args.oil_type,
+                "oil_id": oil_id, "catalog_dir": str(catalog_dir),
+                "reference_oil_file": str(oil_source) if oil_source else None,
                 "wind_factor": WIND_FACTOR, "wind_deflection": WIND_DEFLECTION}
         print(f"[{index + 1}/{args.grid_n**2}] ({lon:.2f}, {lat:.2f})", flush=True)
         try:
-            model = first_model if index == 0 else make_model(args.oil_type)[0]
+            model = first_model if index == 0 else make_model(args.oil_type, oil_source)[0]
             meta["opendrift_config"] = settings
-            config = make_cli_config(lon, lat, properties, args.tile_url)
+            config = make_cli_config(lon, lat, oil_id, args.tile_url, catalog_dir)
             model.add_reader([currents, wind])
             model.seed_elements(lon=lon, lat=lat, radius=0, number=N_PARTICLES,
                                 time=START_TIME, z=0, wind_drift_factor=WIND_FACTOR,
