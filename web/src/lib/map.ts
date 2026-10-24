@@ -135,8 +135,7 @@ export async function updateMarker() {
 
     const positions = new Float32Array(getReleasePositions());
     const currentDate = parseInt(config.startDate.replace(/-/g, ""));
-    const oceanTiles = preloader.getTileIndicesForOcean(positions);
-    preloader.preloadTiles(currentDate, oceanTiles);
+    void preloader.preloadOcean(currentDate, positions, config.forcingModel);
 
     pendingLandmaskPreload = positions;
     if (!landmaskPreloadInFlight) {
