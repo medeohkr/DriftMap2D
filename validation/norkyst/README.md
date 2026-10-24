@@ -13,6 +13,12 @@ reordered days use explicit indices for every forcing field and coverage mask.
 duplicates and backward transitions are logged, and genuine hourly gaps in the
 selected window still fail the run.
 
+remote array reads are divided into contiguous requests of at most 2.5 million
+decoded values, about 10 MB as float32. failed requests are retried with backoff,
+then split into smaller requests up to four times. errors report the field and
+source indices. data that cannot be fetched still fails the job rather than
+being replaced with missing or zero values.
+
 The full grid currently has 2747 columns and 1148 rows, giving 23 by 10 tiles.
 Each tile has a 120 by 120 core and one halo cell on each side. Tiles remain
 122 by 122 at domain edges, with unavailable cells padded with NaN. Partial

@@ -23,6 +23,8 @@ ROOT = Path(__file__).resolve().parent
 CORE = 120
 HALO = 1
 WIDTH = CORE + HALO * 2
+MAX_READ_VALUES = 2_500_000
+MAX_READ_SPLITS = 4
 FIELDS = {
     'u': 'u_eastward',
     'v': 'v_northward',
@@ -42,13 +44,58 @@ def plain(value):
 
 
 def read(variable, index):
-    """decode packing and masks while retrying transient remote failures."""
+    """read bounded contiguous requests and preserve reordered time selections."""
+    index = index if isinstance(index, tuple) else (index,)
+    index += (slice(None),) * (variable.ndim - len(index))
+    for axis, selection in enumerate(index):
+        if isinstance(selection, (list, np.ndarray)):
+            values = np.asarray(selection)
+            if values.ndim != 1 or not len(values) or not np.issubdtype(values.dtype, np.integer):
+                raise ValueError('expected nonempty integer source indices')
+            # OPeNDAP receives slices rather than a disjoint or reversed index vector
+            boundaries = np.r_[0, np.flatnonzero(np.diff(values) != 1) + 1, len(values)]
+            parts = []
+            for first, last in zip(boundaries[:-1], boundaries[1:]):
+                subset = list(index)
+                subset[axis] = slice(int(values[first]), int(values[last - 1]) + 1)
+                parts.append(read(variable, tuple(subset)))
+            output_axis = sum(not isinstance(s, (int, np.integer)) for s in index[:axis])
+            return np.concatenate(parts, axis=output_axis)
+    return read_block(variable, index)
+
+
+def read_block(variable, index, splits=0):
+    """retry a bounded request and bisect persistent failures without filling data."""
+    lengths = [(axis, len(range(*selection.indices(variable.shape[axis]))))
+               for axis, selection in enumerate(index) if isinstance(selection, slice)]
+    candidates = [(axis, count) for axis, count in lengths if count > 1]
+
+    def smaller_requests(next_splits):
+        # prefer splitting time so each request touches fewer forecast records
+        axis, count = next((pair for pair in candidates if pair[0] == 0), max(candidates, key=lambda p: p[1]))
+        selection = index[axis]
+        middle = range(*selection.indices(variable.shape[axis]))[count // 2]
+        left, right = list(index), list(index)
+        left[axis] = slice(selection.start, middle, selection.step)
+        right[axis] = slice(middle, selection.stop, selection.step)
+        output_axis = sum(isinstance(s, slice) for s in index[:axis])
+        return np.concatenate([read_block(variable, tuple(left), next_splits),
+                               read_block(variable, tuple(right), next_splits)], axis=output_axis)
+
+    if math.prod(count for _, count in lengths) > MAX_READ_VALUES and candidates:
+        return smaller_requests(splits)
     for attempt in range(4):
         try:
             return np.ma.asarray(variable[index], dtype=np.float32).filled(np.nan)
-        except (OSError, RuntimeError):
+        except (OSError, RuntimeError) as error:
+            name = getattr(variable, 'name', 'array')
+            logging.warning('NetCDF read failed field=%s index=%s attempt=%s error=%s',
+                            name, index, attempt + 1, error)
             if attempt == 3:
-                raise
+                if candidates and splits < MAX_READ_SPLITS:
+                    logging.warning('retrying smaller NetCDF requests field=%s split=%s', name, splits + 1)
+                    return smaller_requests(splits + 1)
+                raise RuntimeError(f'NetCDF read failed for {name} at {index} after retries and smaller requests') from error
             time.sleep(2 ** attempt)
 
 
@@ -354,6 +401,7 @@ def main():
                     write_json(manifest, details)
                     publish(manifest, 'application/json')
             else:
+                logging.info('generating forcing day %s samples=%s', day, len(times))
                 details = generate_day(dataset, metadata, surface, window, times, directory, publish)
                 manifest = directory / 'manifest.json'
                 write_json(manifest, dict(grid=metadata, **details))

@@ -6,6 +6,7 @@ import struct
 import tempfile
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -199,6 +200,58 @@ class NativeCoverage(unittest.TestCase):
         self.assertFalse(cron.coverage_mask(land['unavailable_water_rows'], (8, 8)).any())
         with self.assertRaises(ValueError):
             cron.make_coverage(self.metadata(), np.zeros_like(observed), Landmask(False))
+
+
+class RemoteReads(unittest.TestCase):
+    class Variable:
+        def __init__(self, limit, unavailable=False):
+            data = np.arange(8 * 2 * 4, dtype=np.float32).reshape(8, 2, 4)
+            self.data = np.ma.array(data, mask=np.zeros_like(data, dtype=bool))
+            self.data.mask[3, 1, 2] = True
+            self.shape, self.ndim = data.shape, data.ndim
+            self.name = 'u_eastward'
+            self.limit, self.unavailable = limit, unavailable
+            self.requests = []
+
+        def __getitem__(self, index):
+            if any(isinstance(s, (list, np.ndarray)) for s in index):
+                raise AssertionError('remote requests must use contiguous slices')
+            result = self.data[index]
+            self.requests.append(result.size)
+            if self.unavailable or result.size > self.limit:
+                raise RuntimeError('NetCDF: Access failure')
+            return result
+
+    def test_large_reads_are_split_before_contacting_server(self):
+        variable = self.Variable(8)
+        with patch.object(cron, 'MAX_READ_VALUES', 8), patch.object(cron.time, 'sleep') as sleep:
+            result = cron.read(variable, (slice(None), 1, slice(None)))
+        np.testing.assert_array_equal(result, variable.data[:, 1, :].filled(np.nan))
+        self.assertTrue(all(size <= 8 for size in variable.requests))
+        sleep.assert_not_called()
+
+    def test_persistent_large_failures_retry_smaller_requests(self):
+        variable = self.Variable(8)
+        with patch.object(cron.time, 'sleep'), self.assertLogs(level='WARNING'):
+            result = cron.read(variable, (slice(None), 1, slice(None)))
+        np.testing.assert_array_equal(result, variable.data[:, 1, :].filled(np.nan))
+        self.assertTrue(np.isnan(result[3, 2]))
+        self.assertIn(32, variable.requests)
+        self.assertIn(8, variable.requests)
+
+    def test_reordered_times_are_read_as_runs_and_keep_output_order(self):
+        variable = self.Variable(100)
+        indices = np.array([4, 5, 1, 2, 0])
+        result = cron.read(variable, (indices, 1, slice(None)))
+        np.testing.assert_array_equal(result, variable.data[indices, 1, :].filled(np.nan))
+        self.assertEqual(variable.requests, [8, 8, 4])
+
+    def test_unavailable_source_fails_with_field_context(self):
+        variable = self.Variable(100, unavailable=True)
+        with patch.object(cron.time, 'sleep'), patch.object(cron, 'MAX_READ_SPLITS', 1), self.assertLogs(level='WARNING'):
+            with self.assertRaisesRegex(RuntimeError, 'u_eastward.*after retries and smaller requests'):
+                cron.read(variable, (slice(None), 1, slice(None)))
+        self.assertLessEqual(len(variable.requests), 8)
 
 
 if __name__ == '__main__':
