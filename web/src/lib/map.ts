@@ -46,6 +46,12 @@ export function initMap() {
     );
     map.getCanvas().style.cursor = simulation.simulationActive ? "" : "crosshair";
     map.on("load", updateForcingCoverage);
+    map.on("dragstart", () => {
+        map.getCanvas().style.cursor = "move";
+    });
+    map.on("dragend", () => {
+        map.getCanvas().style.cursor = simulation.simulationActive ? "" : "crosshair";
+    });
 
     map.on("click", (e: any) => {
         if (e.originalEvent.target.closest?.(".maplibregl-marker")) return;
