@@ -78,34 +78,8 @@ export function initGridLayer() {
             },
         });
 
-        map.addSource("overlay-png", {
-            type: "image",
-            url: "https://tiles.driftmap2d.com/currents.png",
-            coordinates: [
-                [-199.71, 85.05],
-                [199.71, 85.05],
-                [199.71, -80.0],
-                [-199.71, -80.0],
-            ],
-        });
-        map.addLayer({
-            id: "overlay-layer",
-            type: "raster",
-            source: "overlay-png",
-            paint: { "raster-opacity": 0.4 },
-        });
-
         toggleVisualizationMode();
-        updateOverlay(false);
     });
-}
-
-export function updateOverlay(checked: boolean) {
-    map.setLayoutProperty(
-        "overlay-layer",
-        "visibility",
-        checked ? "visible" : "none",
-    );
 }
 
 export function getScaledConcentrations() {

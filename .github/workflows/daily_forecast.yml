@@ -20,7 +20,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgdal-dev
-          pip install numpy xarray boto3 scipy matplotlib cartopy cfgrib netCDF4 copernicusmarine ecmwf-opendata zstandard
+          pip install numpy xarray boto3 scipy cfgrib netCDF4 copernicusmarine ecmwf-opendata zstandard
       
       - name: Run tile generation
         env:
