@@ -1,6 +1,7 @@
 <script lang="ts">
     import { config, simulation } from "$lib/stores/index.svelte";
     import { loadForcingWindow, utcInputTimestamp, type ForcingWindow } from "$lib/utils";
+    import { showToast } from "$lib/stores/toast.svelte";
 
     let bounds = $state<ForcingWindow | null>(null);
     let availabilityError = $state("");
@@ -32,14 +33,18 @@
             const clampedStart = Math.min(Math.max(requestedStart, window.start), window.end - 60000);
             const clampedEnd = Math.min(Math.max(requestedEnd, clampedStart + 60000), window.end);
             defaultInterval = usingDefault ? { start: clampedStart, end: clampedEnd } : null;
+            let adjusted = false;
             if (Number.isFinite(clampedStart) && clampedStart !== start) {
                 config.startDate = datePart(clampedStart);
                 config.startTime = timePart(clampedStart);
+                adjusted = true;
             }
             if (Number.isFinite(clampedEnd) && clampedEnd !== end) {
                 config.endDate = datePart(clampedEnd);
                 config.endTime = timePart(clampedEnd);
+                adjusted = true;
             }
+            if (adjusted) showToast("Simulation time interval adjusted");
         }).catch(error => {
             if (!cancelled) availabilityError = String(error);
         });

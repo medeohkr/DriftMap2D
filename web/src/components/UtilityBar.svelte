@@ -3,9 +3,14 @@
 import { importScenario } from "$lib/io/importScenario";
     import { config, releaseConfig, visualization, genericOverrides, objectOverrides, oilOverrides, simulation } from "$lib/stores/index.svelte";
     import { dateOffset, resetReleaseColors } from "$lib/utils";
+    import { showToast } from "$lib/stores/toast.svelte";
     let fileInput = $state<HTMLInputElement | undefined>(undefined);
 
     function openFilePicker() {
+        if (simulation.simulationActive) {
+            showToast("Cannot import config/scenario when simulation active");
+            return;
+        }
         fileInput?.click();
     }
     
@@ -19,6 +24,7 @@ import { importScenario } from "$lib/io/importScenario";
     }
     function resetConfig() {
         if (simulation.simulationActive) {
+            showToast("Cannot clear settings when simulation active");
             return;
         }
         config.particleCount = 10000;
@@ -64,7 +70,7 @@ import { importScenario } from "$lib/io/importScenario";
         oilOverrides.windFactor = 3.5;
         oilOverrides.windDeflection = 20.0;
         oilOverrides.deflectionScheme = "samuels";
-        oilOverrides.emulOnset = "time";
+        oilOverrides.emulOnset = "oil";
         oilOverrides.bullwinkleFrac = 0;
         oilOverrides.bulltime = 0;
         

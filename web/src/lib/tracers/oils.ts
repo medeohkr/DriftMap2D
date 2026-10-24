@@ -14,28 +14,13 @@ export interface OilRecord {
         resins: number;
         asphaltenes: number;
     };
-    distillation_cuts: {
-        cumulative_fraction: number;
-        vapor_temperature_c: number;
-    }[];
     boiling_points_c: number[];
     molecular_weights_kg_mol: number[];
     component_mass_fractions: number[];
     bullwinkle_fraction: number;
+    bulltime: number;
+    emulsion_water_fraction_max_by_temperature?: [number, number][];
     emulsion_water_fraction_max?: number;
-    estimated: {
-        density: boolean;
-        dynamic_viscosity: boolean;
-        interfacial_tension: boolean;
-        sara: {
-            saturates: boolean;
-            aromatics: boolean;
-            resins: boolean;
-            asphaltenes: boolean;
-        };
-        distillation: boolean;
-        bullwinkle_fraction: boolean;
-    };
     source_file: string;
 }
 
@@ -66,7 +51,7 @@ export async function loadOilCatalog(): Promise<OilCatalog> {
 
     catalogPromise = (async (): Promise<OilCatalog> => {
         try {
-            const url = "https://tiles.driftmap2d.com/oil_catalog.json.gz";
+            const url = "https://tiles.driftmap2d.com/oil_catalog.json.gz?v=2";
             const response = await fetch(url);
 
             if (!response.ok) {
@@ -154,18 +139,20 @@ export function getOilJson() {
             oilOverrides.deflectionScheme === "constant"
                 ? oilOverrides.windDeflection
                 : null,
-        product_type: oil.name,
+        product_type: oil.product_type,
         api: oil.api_gravity,
         density_kgm3: oil.density_kgm3,
         dynamic_viscosity_cp: oil.dynamic_viscosity_cp,
         interfacial_tension_n_m: oil.interfacial_tension_n_m,
         sara_mass_fractions: oil.sara_mass_fractions,
-        distillation_cuts: oil.distillation_cuts,
         boiling_points_c: oil.boiling_points_c,
         molecular_weights_kg_mol: oil.molecular_weights_kg_mol,
         component_mass_fractions: oil.component_mass_fractions,
         emulsion_water_fraction_max: oil.emulsion_water_fraction_max,
-        bullwinkle_fraction: oilOverrides.emulOnset === "fraction" ? oilOverrides.bullwinkleFrac / 100 : 1,
-        bulltime: oilOverrides.emulOnset === "time" ? oilOverrides.bulltime * 3600 : -1,
+        emulsion_water_fraction_max_by_temperature: oil.emulsion_water_fraction_max_by_temperature,
+        bullwinkle_fraction: oilOverrides.emulOnset === "oil" ? oil.bullwinkle_fraction
+            : oilOverrides.emulOnset === "fraction" ? oilOverrides.bullwinkleFrac / 100 : 1,
+        bulltime: oilOverrides.emulOnset === "oil" ? (oil.bulltime ?? -999)
+            : oilOverrides.emulOnset === "time" ? oilOverrides.bulltime * 3600 : -1,
     });
 }

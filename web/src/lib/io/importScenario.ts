@@ -53,7 +53,7 @@ export function applyConfig(cfg: DriftMap2DConfig): void {
     oilOverrides.windFactor = cfg.oil.windFactor;
     oilOverrides.deflectionScheme = cfg.oil.deflectionScheme as "samuels" | "constant";
     oilOverrides.windDeflection = cfg.oil.windDeflection;
-    oilOverrides.emulOnset = cfg.oil.emulOnset as "time" | "fraction";
+    oilOverrides.emulOnset = cfg.oil.emulOnset === "time" || cfg.oil.emulOnset === "fraction" ? cfg.oil.emulOnset : "oil";
     oilOverrides.bullwinkleFrac = cfg.oil.bullwinkleFrac;
     oilOverrides.bulltime = cfg.oil.bulltime;
     
@@ -111,6 +111,10 @@ export function loadSnapshots(geojson: DriftMap2DGeoJson): void {
 export async function importScenario(file: File): Promise<void> {
     try {
         const text = await file.text();
+        if (simulation.simulationActive) {
+            showToast("Cannot import config/scenario when simulation active");
+            return;
+        }
         const data: DriftMap2DGeoJson = JSON.parse(text);
         
         if (data.properties?.model !== "DriftMap2D") {
