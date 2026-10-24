@@ -10,31 +10,30 @@
     import Timeline from "./components/Timeline.svelte";
     import CurrentDay from "./components/CurrentDay.svelte";
     import Toast from "./components/Toast.svelte";
-    import { simulation, visualization, config, timeline } from "$lib/stores/index.svelte";
+    import { simulation, visualization, config } from "$lib/stores/index.svelte";
     import { setMarkerVisible, updateForcingCoverage } from "$lib/map";
     let sidebarHeight = $state<number | null>(null);
+    let sidebarBottom = $state<number | null>(null);
 
     $effect(() => {
-        timeline.playbackMode;
-        simulation.simulationActive;
-        config.tracerType;
         const observer = new ResizeObserver(measureSidebar);
         let cancelled = false;
         function measureSidebar() {
             const sidebar = document.querySelector('.sidebar');
-            const stats = document.getElementById('stats-container');
             const playback = document.getElementById('timeline-container');
-            if (window.innerWidth > 768 || !sidebar || !stats || !playback) {
+            if (window.innerWidth > 768 || !sidebar || !playback) {
                 sidebarHeight = null;
+                sidebarBottom = null;
                 return;
             }
             const top = sidebar.getBoundingClientRect().top;
-            const gap = Math.max(0, top - stats.getBoundingClientRect().bottom);
-            sidebarHeight = Math.max(0, playback.getBoundingClientRect().top - top - gap);
+            const bottom = playback.getBoundingClientRect().top - 24;
+            sidebarHeight = Math.max(0, bottom - top);
+            sidebarBottom = Math.max(0, window.innerHeight - bottom);
         }
         tick().then(() => {
             if (cancelled) return;
-            for (const selector of ['.app', '#stats-container', '#timeline-container']) {
+            for (const selector of ['.app', '#timeline-container']) {
                 const element = document.querySelector(selector);
                 if (element) observer.observe(element);
             }
@@ -66,7 +65,10 @@
     });
 </script>
 
-<div class="app" style:--mobile-sidebar-height={sidebarHeight === null ? undefined : `${sidebarHeight}px`}>
+<div class="app"
+    style:--mobile-sidebar-height={sidebarHeight === null ? undefined : `${sidebarHeight}px`}
+    style:--mobile-sidebar-bottom={sidebarBottom === null ? undefined : `${sidebarBottom}px`}
+>
     <MapView />
     <Sidebar />
     <VisualizationToggles />

@@ -48,6 +48,7 @@
     @media (max-width: 768px) {
         #concentration-legend {
             position: fixed;
+            bottom: var(--mobile-sidebar-bottom, calc(var(--legend-offset) + 24px));
         }
     }
     .legend-bars {
