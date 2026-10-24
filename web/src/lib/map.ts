@@ -217,7 +217,7 @@ export function zoom() {
     const padding = Math.min(80, width * 0.15, height * 0.15);
     map.fitBounds(bounds, {
         padding: {
-            top: padding,
+            top: height * 0.1 + padding,
             bottom: padding,
             left: width * 0.15 + padding,
             right: padding,

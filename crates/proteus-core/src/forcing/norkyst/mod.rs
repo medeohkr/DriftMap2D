@@ -75,10 +75,7 @@ impl Norkyst {
         }
         for position in positions.chunks_exact(2) {
             let (x, y) = grid.position(position[0], position[1]).ok_or_else(|| {
-                LoaderError::NotFound(format!(
-                    "position outside NorKyst domain {}, {}",
-                    position[0], position[1]
-                ))
+                LoaderError::NotFound(format!("position outside NorKyst domain"))
             })?;
             // preload a 12 km margin for intermediate integration and diffusion probes
             let left = ((x - 15.0).max(0.0) as usize) / 120;

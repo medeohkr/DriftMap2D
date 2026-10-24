@@ -1,35 +1,19 @@
 <script lang="ts">
     import resetBtnImg from '$lib/assets/images/ResetBtn.webp';
     import { startSimulation, stopSimulation, resetSimulation, resumeSimulation } from '$lib/simulation';
-    import { timeline, sidebarState } from '$lib/stores/index.svelte';
+    import { simulation, timeline, sidebarState } from '$lib/stores/index.svelte';
 
-    let simulationState: "inactive" | "running" | "paused" | "playback" = $state("inactive");
+    let simulationState = $derived(
+        timeline.playbackMode
+            ? "playback"
+            : simulation.simulationRunning
+              ? "running"
+              : simulation.simulationActive
+                ? "paused"
+                : "inactive"
+    );
     let { toggleSidebar } = $props();
 
-    $effect(() => {
-        if (timeline.playbackMode) {
-            simulationState = "playback";
-        }
-    });
-
-    async function start() {
-        if (await startSimulation()) simulationState = "running";
-    }
-
-    function pause() {
-        stopSimulation();
-        simulationState = "paused";
-    }
-
-    function resume() {
-        resumeSimulation();
-        simulationState = "running";
-    }
-
-    function reset() {
-        resetSimulation();
-        simulationState = "inactive";
-    }
 </script>
 
 <button
@@ -41,35 +25,35 @@
 <button
     class:active={simulationState === "inactive"}
     class="btn-primary"
-    onclick={start}
+    onclick={() => startSimulation()}
 >
     Render Simulation
 </button>
 <button
     class:active={simulationState === "running"}
     class="btn-primary"
-    onclick={pause}
+    onclick={() => stopSimulation()}
 >
     Pause Simulation
 </button>
 <button
     class:active={simulationState === "paused"}
     class="btn-primary"
-    onclick={resume}
+    onclick={() => resumeSimulation()}
 >
     Resume Simulation
 </button>
 <button
     class:active={timeline.playbackMode}
     class="btn-primary"
-    onclick={reset}
+    onclick={() => resetSimulation()}
 >
     New Simulation
 </button>
 <button
     class="btn-secondary"
     type="button"
-    onclick={reset}
+    onclick={() => resetSimulation()}
 >
     <img class="reset-btn-img" src={resetBtnImg} alt="Reset Button" />
 </button>

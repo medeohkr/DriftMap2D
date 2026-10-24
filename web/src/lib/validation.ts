@@ -26,7 +26,7 @@ export async function validateSimulationStart(): Promise<boolean> {
         return false;
     }
     if (outside.length) {
-        showToast(releaseMessage(outside, "outside grid domain"));
+        showToast(releaseMessage(outside, "outside forcing domain"));
         return false;
     }
     if (!simulation.proteus) {
