@@ -2,6 +2,7 @@
 """norkyst_cron.py publishes surface forcing on the native projected grid."""
 
 import argparse
+import hashlib
 import io
 import json
 import logging
@@ -62,11 +63,14 @@ def describe(dataset):
         raise ValueError('expected finite nonnegative depths')
     surface = int(np.argmin(depth))
     clock = dataset.variables['time']
-    dates = netCDF4.num2date(clock[:], clock.units, calendar=getattr(clock, 'calendar', 'standard'),
+    clock_values = np.ma.asarray(clock[:])
+    if clock_values.ndim != 1 or np.ma.getmaskarray(clock_values).any() or not np.isfinite(clock_values).all():
+        raise ValueError('expected a finite unmasked source timeline')
+    dates = netCDF4.num2date(clock_values, clock.units, calendar=getattr(clock, 'calendar', 'standard'),
                             only_use_cftime_datetimes=False, only_use_python_datetimes=True)
     seconds = np.array([int(d.replace(tzinfo=timezone.utc).timestamp()) for d in dates], dtype=np.int64)
-    if len(seconds) < 2 or np.any(np.diff(seconds) <= 0):
-        raise ValueError('expected a strictly increasing source timeline')
+    if len(seconds) < 2:
+        raise ValueError('expected at least two source timestamps')
     xdim, ydim = dataset.variables['X'].dimensions[0], dataset.variables['Y'].dimensions[0]
     tdim, zdim = clock.dimensions[0], dataset.variables['depth'].dimensions[0]
     for field, name in FIELDS.items():
@@ -84,15 +88,32 @@ def describe(dataset):
         'surface_depth_m': float(depth[surface]), 'vector_basis': 'east_north',
         'fields': list(FIELDS), 'field_units': ['m/s', 'm/s', 'm/s', 'm/s', 'K'],
         'dtype': '<f2', 'array_order': 'field,time,y,x', 'compression': 'zstd', 'compression_level': 3,
-        'source_first_time': int(seconds[0]), 'source_last_time': int(seconds[-1]),
+        'source_first_time': int(seconds.min()), 'source_last_time': int(seconds.max()),
         'attribution': 'Norwegian Meteorological Institute (MET Norway)',
         'license': 'https://spdx.org/licenses/CC-BY-4.0.html',
     }
     return metadata, seconds, surface
 
 
+def ordered_timeline(seconds):
+    """sort timestamps and retain the last source record for duplicate times."""
+    seconds = np.asarray(seconds)
+    if seconds.ndim != 1 or len(seconds) < 2 or not np.isfinite(seconds).all():
+        raise ValueError('expected at least two finite source timestamps')
+    ordered, reversed_indices = np.unique(seconds[::-1], return_index=True)
+    source_indices = len(seconds) - 1 - reversed_indices
+    if len(ordered) < 2:
+        raise ValueError('expected at least two distinct source timestamps')
+    backwards = int(np.sum(np.diff(seconds) < 0))
+    duplicates = len(seconds) - len(ordered)
+    if backwards or duplicates:
+        logging.warning('ordering source timeline backwards=%s duplicates=%s', backwards, duplicates)
+    return ordered, source_indices
+
+
 def day_windows(seconds, today):
     """include seven prior UTC dates and every available forecast interval."""
+    seconds, source_indices = ordered_timeline(seconds)
     first = datetime.combine(today - timedelta(days=7), datetime.min.time(), timezone.utc)
     if seconds[0] > int(first.timestamp()):
         raise ValueError('source does not cover the requested seven-day hindcast')
@@ -108,7 +129,10 @@ def day_windows(seconds, today):
                 raise ValueError(f'missing hourly samples on {day}')
             if day < last and seconds[indices[-1]] != start + 86400:
                 raise ValueError(f'missing end of day {day}')
-            yield day, slice(int(indices[0]), int(indices[-1]) + 1), seconds[indices].tolist()
+            source = source_indices[indices]
+            # contiguous days keep efficient slices, reordered records use explicit indices
+            window = slice(int(source[0]), int(source[-1]) + 1) if np.all(np.diff(source) == 1) else source
+            yield day, window, seconds[indices].tolist()
         elif day < last:
             raise ValueError(f'missing forcing day {day}')
         day += timedelta(days=1)
@@ -154,9 +178,76 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2, allow_nan=False), encoding='utf-8')
 
 
+def coverage_rows(mask):
+    """encode true cells as sorted half-open column intervals for each row."""
+    rows = []
+    for row in mask:
+        edges = np.flatnonzero(np.diff(np.r_[False, row, False].astype(np.int8)))
+        rows.append(edges.reshape(-1, 2).tolist())
+    return rows
+
+
+def coverage_mask(rows, shape):
+    """restore a saved mask without accepting malformed intervals."""
+    if len(rows) != shape[0]:
+        raise ValueError('invalid coverage row count')
+    mask = np.zeros(shape, dtype=bool)
+    for y, intervals in enumerate(rows):
+        previous = 0
+        for left, right in intervals:
+            if not all(type(v) is int for v in (left, right)) or not previous <= left < right <= shape[1]:
+                raise ValueError('invalid coverage interval')
+            mask[y, left:right] = True
+            previous = right
+    return mask
+
+
+def read_current_coverage(dataset, metadata, surface, window):
+    """collect observed currents across all hours of a retained hindcast day."""
+    height, width = metadata['grid_shape']
+    mask = np.zeros((height, width), dtype=bool)
+    for row in range(0, height, CORE):
+        index = (window, surface, slice(row, min(height, row + CORE)), slice(None))
+        u = read(dataset.variables[FIELDS['u']], index)
+        v = read(dataset.variables[FIELDS['v']], index)
+        mask[row:row + CORE] = np.any(np.isfinite(u) & np.isfinite(v), axis=0)
+    return mask
+
+
+def make_coverage(metadata, observed, landmask=None):
+    """precompute interpolation coverage and unsupported ocean cells on the native grid."""
+    from pyproj import CRS, Transformer
+    if not observed.any():
+        raise ValueError('no finite currents available to establish NorKyst coverage')
+    # allow one coastal expansion without treating deeper missing regions as coverage
+    padded = np.pad(observed, 1)
+    expanded = np.zeros_like(observed)
+    height, width = observed.shape
+    for dy in range(3):
+        for dx in range(3):
+            expanded |= padded[dy:dy + height, dx:dx + width]
+    valid = expanded[:-1, :-1] & expanded[1:, :-1] & expanded[:-1, 1:] & expanded[1:, 1:]
+    if landmask is None:
+        from roaring_landmask import RoaringLandmask
+        landmask = RoaringLandmask.new()
+    transform = Transformer.from_crs(CRS.from_cf(metadata['projection']), 'EPSG:4326', always_xy=True)
+    water = np.zeros_like(valid)
+    for row in range(0, height - 1, CORE):
+        yy, xx = np.nonzero(~valid[row:row + CORE])
+        x = metadata['grid_origin_m'][0] + (xx + 0.5) * metadata['grid_spacing_m'][0]
+        y = metadata['grid_origin_m'][1] + (yy + row + 0.5) * metadata['grid_spacing_m'][1]
+        lon, lat = transform.transform(x, y)
+        if len(xx):
+            water[yy + row, xx] = ~np.asarray(landmask.contains_many(lon, lat), dtype=bool)
+    return dict(schema_version=1, grid={key: metadata[key] for key in
+        ('grid_shape', 'grid_origin_m', 'grid_spacing_m', 'projection')}, buffer_cells=1,
+        valid_rows=coverage_rows(valid), unavailable_water_rows=coverage_rows(water))
+
+
 def generate_day(dataset, metadata, surface, window, timestamps, directory, publish):
     """fetch one row of tiles at a time to bound memory and remote requests."""
     height, width = metadata['grid_shape']
+    observed = np.zeros((height, width), dtype=bool)
     tiles = []
     for row in range(0, height, CORE):
         strips = []
@@ -168,6 +259,7 @@ def generate_day(dataset, metadata, surface, window, timestamps, directory, publ
             if field == 'temperature_k':
                 strip += 273.15
             strips.append(strip)
+        observed[y] |= np.any(np.isfinite(strips[0]) & np.isfinite(strips[1]), axis=0)
         for col in range(0, width, CORE):
             name = f'{col // CORE:03}_{row // CORE:03}.bin'
             header = {
@@ -187,7 +279,7 @@ def generate_day(dataset, metadata, surface, window, timestamps, directory, publ
             if publish.remote:
                 path.unlink()
         logging.info('completed tile row %s of %s', row // CORE + 1, math.ceil(height / CORE))
-    return dict(timestamps=timestamps, tiles=tiles)
+    return dict(timestamps=timestamps, tiles=tiles, coverage_rows=coverage_rows(observed))
 
 
 def cleanup(client, bucket, prefix, cutoff):
@@ -239,6 +331,7 @@ def main():
 
         publish.remote = client is not None
         days = []
+        observed = np.zeros(metadata['grid_shape'], dtype=bool)
         for day, window, times in windows:
             directory = args.output / day.strftime('%Y/%m/%d')
             key = f'{prefix}/{day:%Y/%m/%d}/manifest.json'
@@ -254,14 +347,28 @@ def main():
                                         if k not in ('source_first_time', 'source_last_time')}
             if previous and stable_grid(previous.get('grid', {})) == stable_grid(metadata) and previous.get('timestamps') == times:
                 logging.info('retaining complete hindcast day %s', day)
+                details = previous
+                if 'coverage_rows' not in details:
+                    details['coverage_rows'] = coverage_rows(read_current_coverage(dataset, metadata, surface, window))
+                    manifest = directory / 'manifest.json'
+                    write_json(manifest, details)
+                    publish(manifest, 'application/json')
             else:
                 details = generate_day(dataset, metadata, surface, window, times, directory, publish)
                 manifest = directory / 'manifest.json'
                 write_json(manifest, dict(grid=metadata, **details))
                 publish(manifest, 'application/json')
+            observed |= coverage_mask(details['coverage_rows'], tuple(metadata['grid_shape']))
             days.append(dict(date=str(day), manifest=f'{day:%Y/%m/%d}/manifest.json', timestamps=times))
+        coverage = make_coverage(metadata, observed)
+        payload = json.dumps(coverage, separators=(',', ':'), allow_nan=False).encode()
+        digest = hashlib.sha256(payload).hexdigest()
+        coverage_path = args.output / f'coverage-{digest[:16]}.json'
+        coverage_path.write_bytes(payload)
+        publish(coverage_path, 'application/json')
         manifest = args.output / 'manifest.json'
-        write_json(manifest, dict(grid=metadata, generated_at=datetime.now(timezone.utc).isoformat(), days=days))
+        write_json(manifest, dict(grid=metadata, generated_at=datetime.now(timezone.utc).isoformat(), days=days,
+                                 coverage=dict(path=coverage_path.name, sha256=digest)))
         publish(manifest, 'application/json')
         if client:
             cleanup(client, bucket, prefix, today - timedelta(days=7))

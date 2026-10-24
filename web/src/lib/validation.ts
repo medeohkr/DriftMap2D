@@ -25,10 +25,6 @@ export async function validateSimulationStart(): Promise<boolean> {
         showToast("forcing selection changed, please start again");
         return false;
     }
-    if (outside.length) {
-        showToast(releaseMessage(outside, "outside forcing domain"));
-        return false;
-    }
     if (!simulation.proteus) {
         showToast("Please wait... The simulation is loading");
         return false;
@@ -37,6 +33,10 @@ export async function validateSimulationStart(): Promise<boolean> {
         simulation.proteus!.is_on_land(release.lon, release.lat));
     if (onLand.length) {
         showToast(releaseMessage(onLand, "on land"));
+        return false;
+    }
+    if (outside.length) {
+        showToast(releaseMessage(outside, "outside forcing coverage"));
         return false;
     }
     validateForcingWindow(

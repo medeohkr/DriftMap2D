@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install dependencies
-        run: pip install numpy netCDF4 boto3 zstandard
+        run: pip install numpy netCDF4 boto3 zstandard pyproj roaring-landmask
       - name: Generate and publish native grid tiles
         env:
           ACCOUNT_ID: ${{ secrets.ACCOUNT_ID }}

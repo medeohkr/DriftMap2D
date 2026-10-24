@@ -33,7 +33,7 @@
 
 
 <div class="floating-container" id="model-selector-container-basic">
-    <div class="container-secondary">
+    <div class="container-secondary" style="height: 13.5px;">
         <span>Forcing Model</span>
         {#if config.forcingModel == "norkyst"}
             <button class="zoom-btn" onclick={flyToNorKystCoverage}>
