@@ -6,7 +6,7 @@
     } from "../lib/visualization";
 </script>
 
-<div class="visualization-toggle-container" class:simulation-active={simulation.simulationActive}>
+<div class="visualization-toggle-container" class:simulation-active={!simulation.simulationActive}>
     <button
         class="visualization-toggle"
         id="particle-toggle"
