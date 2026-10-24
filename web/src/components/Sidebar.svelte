@@ -134,8 +134,10 @@
 
 @media (max-width: 768px) {
     .sidebar {
-        height: calc(700px);
-        top: 80px;
+        top: var(--mobile-sidebar-top, 80px);
+        bottom: auto;
+        height: var(--mobile-sidebar-height, min(700px, calc(100dvh - var(--mobile-sidebar-top, 80px) - 140px)));
+        max-height: var(--mobile-sidebar-height, calc(100dvh - var(--mobile-sidebar-top, 80px) - 140px));
     }
 }
 .sidebar.stage-1 {

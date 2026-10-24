@@ -39,7 +39,9 @@
     }
     @media (max-width: 768px) {
         .visualization-toggle-container {
-            left: 35%;
+            left: auto;
+            right: var(--spacing-sm);
+            transform: none;
         }
     }
     .visualization-toggle {

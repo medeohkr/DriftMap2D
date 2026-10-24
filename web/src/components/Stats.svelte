@@ -60,4 +60,30 @@
         color: var(--text-secondary);
         margin-right: 50px;
     }
+
+    @media (max-width: 768px) {
+        .stats-container {
+            top: var(--spacing-md);
+            left: var(--spacing-sm);
+            right: auto;
+            width: var(--width-sidebar);
+            max-width: calc(100vw - 2 * var(--spacing-sm));
+            grid-template-rows: repeat(3, 14px);
+            grid-auto-flow: column;
+            grid-auto-columns: minmax(0, 1fr);
+            gap: var(--spacing-xxs) var(--spacing-xs);
+            padding: 6px var(--spacing-xs);
+        }
+        .stats-primary-text {
+            margin-right: var(--spacing-xxs);
+            font-size: var(--font-size-xxs);
+            white-space: nowrap;
+        }
+        .stats-container :global(.unit-text) {
+            width: auto;
+            flex-shrink: 0;
+            font-size: var(--font-size-xxs);
+            text-align: right;
+        }
+    }
 </style>

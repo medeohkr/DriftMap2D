@@ -35,7 +35,7 @@
     #concentration-legend {
         position: absolute;
         display: flex;
-        bottom: var(--legend-offset);
+        bottom: calc(var(--legend-offset) + 24px);
         right: var(--spacing-md);
         padding: var(--spacing-sm);
         column-gap: var(--spacing-sm);

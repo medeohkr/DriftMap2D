@@ -1,6 +1,6 @@
 <script lang="ts">
     import "./app.css";
-    import { onMount, untrack } from "svelte";
+    import { onMount, untrack, tick } from "svelte";
     import { initialize } from "$lib/initialize";
     import Sidebar from "./components/Sidebar.svelte";
     import MapView from "./components/MapView.svelte";
@@ -9,10 +9,44 @@
     import Legend from "./components/Legend.svelte";
     import Timeline from "./components/Timeline.svelte";
     import CurrentDay from "./components/CurrentDay.svelte";
-    import CoordinateDisplay from "./components/CoordinateDisplay.svelte";
     import Toast from "./components/Toast.svelte";
-    import { simulation, visualization, config } from "$lib/stores/index.svelte";
+    import { simulation, visualization, config, timeline } from "$lib/stores/index.svelte";
     import { setMarkerVisible, updateForcingCoverage } from "$lib/map";
+    let sidebarHeight = $state<number | null>(null);
+
+    $effect(() => {
+        timeline.playbackMode;
+        simulation.simulationActive;
+        config.tracerType;
+        const observer = new ResizeObserver(measureSidebar);
+        let cancelled = false;
+        function measureSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const stats = document.getElementById('stats-container');
+            const playback = document.getElementById('timeline-container');
+            if (window.innerWidth > 768 || !sidebar || !stats || !playback) {
+                sidebarHeight = null;
+                return;
+            }
+            const top = sidebar.getBoundingClientRect().top;
+            const gap = Math.max(0, top - stats.getBoundingClientRect().bottom);
+            sidebarHeight = Math.max(0, playback.getBoundingClientRect().top - top - gap);
+        }
+        tick().then(() => {
+            if (cancelled) return;
+            for (const selector of ['.app', '#stats-container', '#timeline-container']) {
+                const element = document.querySelector(selector);
+                if (element) observer.observe(element);
+            }
+            measureSidebar();
+        });
+        window.addEventListener('resize', measureSidebar);
+        return () => {
+            cancelled = true;
+            observer.disconnect();
+            window.removeEventListener('resize', measureSidebar);
+        };
+    });
 
     $effect(() => {
         config.forcingModel;
@@ -32,7 +66,7 @@
     });
 </script>
 
-<div class="app">
+<div class="app" style:--mobile-sidebar-height={sidebarHeight === null ? undefined : `${sidebarHeight}px`}>
     <MapView />
     <Sidebar />
     <VisualizationToggles />
@@ -40,7 +74,6 @@
     <Legend />
     <Timeline />
     <CurrentDay />
-    <CoordinateDisplay />
     <Toast />
 </div>
 
@@ -52,5 +85,9 @@
         overflow: hidden;
         position: relative;
         background: var(--bg-primary);
+    }
+
+    @media (max-width: 768px) {
+        .app { --mobile-sidebar-top: 102px; }
     }
 </style>

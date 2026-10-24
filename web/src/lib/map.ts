@@ -2,6 +2,8 @@
 import * as maplibregl from 'https://unpkg.com/maplibre-gl@^6.6.0/dist/maplibre-gl.mjs';
 import { GeoGrid } from "geogrid-maplibre-gl";
 import "geogrid-maplibre-gl/dist/geogrid.css";
+import { mount, unmount } from "svelte";
+import MapDisplay from "../components/MapDisplay.svelte";
 import { simulation, config, visualization, releaseConfig } from "./stores/index.svelte";
 import { preloader } from "./preloader";
 import { getReleasePositions, normalizeLongitude, getReleaseBounds, getReleaseColor, renderForcingCoverage } from "./utils";
@@ -16,15 +18,28 @@ export function initMap() {
         style: "https://api.maptiler.com/maps/019da3a2-47a0-7f1b-b591-38d451a7c7c5/style.json?key=gkGR2Cprig9FAk9AfV3C",
         center: [-85, 40],
         zoom: 1,
+        attributionControl: false,
         maxBounds: [
             [-Infinity, -75.0],
             [Infinity, 85.0],
         ],
     });
 
+    const attribution = new maplibregl.AttributionControl();
+
+    let graticule: GeoGrid | undefined;
+    let showGraticule = false;
+    const toggleGraticule = (visible: boolean) => {
+        if (visible === showGraticule) return;
+        showGraticule = visible;
+        if (graticule) {
+            if (visible) graticule.add();
+            else graticule.remove();
+        }
+    };
     map.once("load", () => {
         const beforeLayerId = map.getStyle().layers.find((layer: { type: string }) => layer.type === "symbol")?.id;
-        const graticule = new GeoGrid({
+        graticule = new GeoGrid({
             map,
             beforeLayerId,
             gridStyle: { color: "rgba(220, 220, 220, 0.1)", width: 1 },
@@ -37,13 +52,33 @@ export function initMap() {
         });
         // the style is already loaded so add the grid without waiting for another load event
         map.off("load", graticule.add);
-        graticule.add();
+        if (showGraticule) graticule.add();
     });
 
-    map.addControl(
-        new maplibregl.ScaleControl({ maxWidth: 100, unit: "metric" }),
-        "bottom-right",
-    );
+    const scale = new maplibregl.ScaleControl({ maxWidth: 100, unit: "metric" });
+    let display: ReturnType<typeof mount>;
+    let displayContainer: HTMLDivElement;
+    map.addControl({
+        onAdd(controlMap: any) {
+            displayContainer = document.createElement("div");
+            displayContainer.className = "maplibregl-ctrl";
+            display = mount(MapDisplay, {
+                target: displayContainer,
+                props: {
+                    scaleElement: scale.onAdd(controlMap),
+                    attributionElement: attribution.onAdd(controlMap),
+                    toggleGraticule,
+                },
+            });
+            return displayContainer;
+        },
+        onRemove() {
+            scale.onRemove();
+            attribution.onRemove();
+            void unmount(display);
+            displayContainer.remove();
+        },
+    }, "bottom-right");
     map.getCanvas().style.cursor = simulation.simulationActive ? "" : "crosshair";
     map.on("load", updateForcingCoverage);
     map.on("dragstart", () => {
@@ -61,10 +96,6 @@ export function initMap() {
         }
     });
 
-    map.on("mousemove", (e: any) => {
-        visualization.mapLon = normalizeLongitude(e.lngLat.lng).toFixed(2);
-        visualization.mapLat = e.lngLat.lat.toFixed(2);
-    });
 }
 
 export function updateForcingCoverage() {

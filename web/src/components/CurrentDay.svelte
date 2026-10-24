@@ -17,4 +17,16 @@
         left: 50%;
         transform: translateX(-50%);
     }
+    @media (max-width: 768px) {
+        #current-day {
+            top: 52px;
+            bottom: auto;
+            left: auto;
+            right: var(--spacing-sm);
+            text-align: right;
+            transform: none;
+            font-size: var(--font-size-sm);
+            white-space: nowrap;
+        }
+    }
 </style>
