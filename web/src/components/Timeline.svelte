@@ -6,8 +6,16 @@
     import { map } from "$lib/map";
 
     const lastStep = $derived(timeline.playbackMode ? Math.max(0, history.simulationHistory.length - 1) : 0);
+    let slider = $state<HTMLInputElement>();
     let previousTime = 0;
     let progress = 0;
+
+    $effect(() => {
+        if (!slider) return;
+        // changing max can clamp the thumb even when the snapshot index stays unchanged
+        slider.max = String(lastStep);
+        slider.value = String(timeline.timelineDay);
+    });
 
     $effect(() => {
         if (timeline.playbackMode) {
@@ -151,13 +159,13 @@
             >
         </div>
         <input
+            bind:this={slider}
             oninput={onSliderInput}
             type="range"
             id="timeline-slider"
             class="timeline-slider"
             min="0"
-            max={lastStep}
-            value={timeline.timelineDay}
+            step="1"
         />
         <div class="timeline-labels">
             <span>{timeline.timelineDate || '\u00a0'}</span>
