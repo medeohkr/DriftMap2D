@@ -33,8 +33,8 @@ export function getReleaseColor(release: object) {
     let color = releaseColors.get(release);
     if (!color) {
         const index = nextReleaseColor++;
-        const hue = (220 + index * 30) % 360;
-        color = `hsl(${hue} 50% 40%)`;
+        const hue = (220 + index * 50) % 360;
+        color = `hsl(${hue} 40% 35%)`;
         releaseColors.set(release, color);
     }
     return color;
