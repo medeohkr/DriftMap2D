@@ -83,7 +83,7 @@ export function initGridLayer() {
 }
 
 export function getScaledConcentrations() {
-    const scale = getTotalReleaseMass() * 0.0025;
+    const scale = getTotalReleaseMass() * 0.005;
     return CONCENTRATIONS.map((c) => c * scale);
 }
 
