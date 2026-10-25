@@ -4,13 +4,15 @@ Daily forecast update: download ECMWF once, then SMOC day by day,
 tile immediately, upload to R2.
 
 Temporal interpolation support:
-  - Each day tile contains 25 SMOC hours (hour N*24 .. N*24+24),
-    overlapping the next day by 1 hour.
+  - Full day tiles contain 25 SMOC samples with a midnight overlap.
+    The final forecast tile may contain fewer hourly samples.
   - Each day tile contains 5 wind steps (step N*4 .. N*4+4),
     overlapping the next day by 1 step.
 """
 import os
 import io
+import json
+import math
 import sys
 import struct
 import shutil
@@ -30,8 +32,9 @@ else:
     BASE_DIR = Path("D:/projects/driftmap2d/data")
 
 BUCKET = "driftmap-tiles"
-FORECAST_DAYS = 10  # Yesterday + 10 forecast days
 HINDCAST_DAYS = 7
+SMOC_DATASET = "cmems_mod_glo_phy_anfc_merged-uv_PT1H-i"
+ECMWF_FORECAST_HOURS = 360
 
 TILE_SIZE = 10.0
 N_LON_TILES = 36
@@ -100,17 +103,48 @@ def delete_oldest_day():
             print(f"  Deleted expired day {oldest}: {deleted} tiles")
 
 
-def download_ecmwf():
-    """Download ECMWF wind + SST once (contains all forecast steps).
+def smoc_timeline():
+    """read source timestamps without downloading the global current fields."""
+    import copernicusmarine
+    with copernicusmarine.open_dataset(dataset_id=SMOC_DATASET, variables=["utotal", "vtotal"],
+                                      username=CMEMS_USER or ".", password=CMEMS_PASS or ".") as dataset:
+        return dataset['time'].values.astype('datetime64[s]')
 
-    We download steps 0..264 inclusive (45 steps) so that the last
-    forecast day still gets a full 5-step window for interpolation.
-    """
+
+def ecmwf_steps(reference, last_current):
+    """include the wind sample bracketing the current endpoint, up to the product horizon."""
+    hours = (last_current - reference).total_seconds() / 3600
+    last = min(ECMWF_FORECAST_HOURS, math.ceil(hours / WIND_STEP_HOURS) * WIND_STEP_HOURS)
+    if last < WIND_STEP_HOURS:
+        raise ValueError('insufficient common current and wind forecast coverage')
+    return list(range(0, last + 1, WIND_STEP_HOURS))
+
+
+def forecast_windows(times, reference, wind_end):
+    """select every complete or partial day jointly covered by currents and wind."""
+    times = np.asarray(times).astype('datetime64[s]')
+    if times.ndim != 1 or len(times) < 2 or np.isnat(times).any():
+        raise ValueError('invalid SMOC source timeline')
+    selected = times[(times >= np.datetime64(reference, 's')) & (times <= np.datetime64(wind_end, 's'))]
+    if len(selected) < 2 or selected[0] != np.datetime64(reference, 's'):
+        raise ValueError('source does not cover the requested start day')
+    if np.any(np.diff(selected) != np.timedelta64(1, 'h')):
+        raise ValueError('missing or unordered hourly current samples')
+    day = reference
+    last = selected[-1]
+    while np.datetime64(day, 's') < last:
+        midnight = np.datetime64(day, 's')
+        samples = selected[(selected >= midnight) & (selected <= midnight + np.timedelta64(1, 'D'))]
+        current_sample_count(samples, day)
+        yield day, samples
+        day += timedelta(days=1)
+
+
+def download_ecmwf(reference, last_current):
+    """download six-hourly wind and temperature through the required forecast horizon."""
     from ecmwf.opendata import Client
 
-    today = datetime.utcnow()
-    yesterday = today - timedelta(days=1)
-    date_str = yesterday.strftime("%Y-%m-%d")
+    date_str = reference.strftime("%Y-%m-%d")
 
     WIND_DIR.mkdir(parents=True, exist_ok=True)
     out_file = str(WIND_DIR / f"ecmwf_{date_str.replace('-', '')}_00z.grib2")
@@ -123,7 +157,7 @@ def download_ecmwf():
             client.retrieve(
                 date=date_str,
                 time="00",
-                step=list(range(0, 264, 6)),
+                step=ecmwf_steps(reference, last_current),
                 param=["10u", "10v", "skt"],
                 target=out_file,
                 type="fc",
@@ -139,12 +173,8 @@ def download_ecmwf():
     return None
 
 
-def download_smoc_day(date):
-    """Download SMOC data for one day + 1 extra hour (for overlap).
-
-    We request 25 hours: 00:00 .. 00:00 next day (inclusive), so the
-    last hour of day N equals the first hour of day N+1.
-    """
+def download_smoc_day(date, end_dt):
+    """download hourly currents through the selected full or partial day endpoint."""
     import copernicusmarine
 
     if CMEMS_USER and CMEMS_PASS:
@@ -155,14 +185,13 @@ def download_smoc_day(date):
     NC_DIR.mkdir(parents=True, exist_ok=True)
     out_file = str(NC_DIR / f"smoc_{date.strftime('%Y%m%d')}.nc")
 
-    # End datetime = start + 24h (so we get hours 0..24 inclusive = 25 hours)
     start_dt = date.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_dt = start_dt + timedelta(hours=24)
 
-    print(f"    Downloading SMOC {date.date()} ({SMOC_HOURS_PER_DAY}h)...")
+    sample_count = int((end_dt - start_dt).total_seconds() / 3600) + 1
+    print(f"    Downloading SMOC {date.date()} ({sample_count} samples)...")
 
     copernicusmarine.subset(
-        dataset_id="cmems_mod_glo_phy_anfc_merged-uv_PT1H-i",
+        dataset_id=SMOC_DATASET,
         variables=["utotal", "vtotal"],
         minimum_longitude=-180,
         maximum_longitude=179.9166717529297,
@@ -202,19 +231,38 @@ def halo_indices(coords, lower, upper, periodic=False):
     return indices, origin
 
 
-def tile_and_upload_day(date, wind_file, wind_data_cache):
+def current_sample_count(times, date):
+    """validate hourly current samples starting at the tile's midnight."""
+    times = np.asarray(times).astype('datetime64[s]')
+    if times.ndim != 1 or not 2 <= len(times) <= SMOC_HOURS_PER_DAY:
+        raise ValueError('expected 2 to 25 hourly current samples')
+    midnight = np.datetime64(date.strftime('%Y-%m-%d'), 's')
+    expected = midnight + np.arange(len(times)) * np.timedelta64(1, 'h')
+    if not np.array_equal(times, expected):
+        raise ValueError('current samples must be hourly and start at midnight')
+    return len(times)
+
+
+def encode_tile_header(current_origin, wind_origin, n_lon, n_lat, n_hours):
+    """encode padded origins and the actual hourly sample count."""
+    if n_lon < 2 or n_lat < 2 or not 2 <= n_hours <= SMOC_HOURS_PER_DAY:
+        raise ValueError('invalid global tile dimensions or sample count')
+    return b'PRT3' + struct.pack('<ffffIIIIf', *current_origin, *wind_origin,
+                                n_hours, n_lon, n_lat, 1, 0.0)
+
+
+def tile_and_upload_day(date, wind_file, wind_data_cache, expected_times=None):
     """Tile a single day and upload immediately, then delete.
 
     Day tile contents:
-      - SMOC: 25 hourly steps (hardcoded reader-side), starting at
-        day_offset*24 within the global SMOC timeline.
+      - SMOC: up to 25 hourly samples, beginning at midnight.
       - Wind: 5 6-hourly steps, starting at day_offset*4 within the
         global ECMWF timeline.
 
     Zstandard level 3 wraps the complete tile without changing its .bin URL.
-    Decompressed tile binary layout version 2:
-      [PRT2][float32 current_lon_origin][float32 current_lat_origin]
-        [float32 wind_lon_origin][float32 wind_lat_origin]
+    Decompressed tile binary layout version 3:
+      [PRT3][float32 current_lon_origin][float32 current_lat_origin]
+        [float32 wind_lon_origin][float32 wind_lat_origin][uint32 n_hours]
       Each grid includes a one-cell halo where source data is available.
       [uint32 n_lon][uint32 n_lat][uint32 n_levels][float32 level]
         n_hours * (n_lat*n_lon float16 u, n_lat*n_lon float16 v)
@@ -224,21 +272,22 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
 
     nc_file = NC_DIR / f"smoc_{date.strftime('%Y%m%d')}.nc"
     if not nc_file.exists():
-        print(f"    ❌ SMOC file not found: {nc_file}")
-        return 0
+        raise FileNotFoundError(f'SMOC file not found: {nc_file}')
 
-    # Load SMOC data (already covers 25 hours for this day)
+    # the final source day may end before the next midnight
     ds = xr.open_dataset(str(nc_file))
     lons = ds['longitude'].values
     lats = ds['latitude'].values
 
-    # Current data: 25 hours (hourly) for this day tile
-    u_day = ds['utotal'].isel(depth=0).values
-    v_day = ds['vtotal'].isel(depth=0).values
-    n_hours = u_day.shape[0]
+    u_day = ds['utotal'].isel(depth=0).values[:SMOC_HOURS_PER_DAY]
+    v_day = ds['vtotal'].isel(depth=0).values[:SMOC_HOURS_PER_DAY]
+    n_hours = current_sample_count(ds['time'].values[:SMOC_HOURS_PER_DAY], date)
+    if expected_times is not None and not np.array_equal(ds['time'].values.astype('datetime64[s]'), expected_times):
+        raise ValueError('downloaded currents do not match the planned forecast window')
+    if u_day.shape != v_day.shape or u_day.shape[0] != n_hours:
+        raise ValueError('current fields do not match the source timeline')
     if n_hours < SMOC_HOURS_PER_DAY:
-        print(f"    ⚠️ Expected {SMOC_HOURS_PER_DAY} SMOC hours, got {n_hours}")
-    n_hours = min(n_hours, SMOC_HOURS_PER_DAY)
+        print(f"    Partial forecast day: {n_hours} samples, ending at hour {n_hours - 1}")
 
     # Wind step range for this day: start at day_offset*4, take 5 steps
     day_offset = (date - wind_data_cache['reference_date']).days
@@ -253,6 +302,8 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
     wind_lons = wind_data_cache['lons']
     wind_lats = wind_data_cache['lats']
     n_wind_steps = u_wind_global.shape[0]
+    if n_wind_steps < 2:
+        raise ValueError('at least two six-hourly wind samples are required')
 
     if n_wind_steps < WIND_STEPS_PER_DAY:
         print(f"    ⚠️ Expected {WIND_STEPS_PER_DAY} wind steps, got {n_wind_steps}")
@@ -270,6 +321,7 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
     day_dir = TILES_DIR / date.strftime("%Y/%m/%d")
     day_dir.mkdir(parents=True, exist_ok=True)
     tiles = 0
+    failed = 0
 
     for tilex in range(N_LON_TILES):
         lon_min = -180 + TILE_SIZE * tilex
@@ -301,17 +353,11 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
 
             try:
                 with io.BytesIO() as f:
-                    # version 2 stores padded grid origins before the original payload
-                    f.write(b'PRT2')
-                    f.write(struct.pack('<ffff', current_lon_origin, current_lat_origin,
-                                        wind_lon_origin, wind_lat_origin))
-                    # dimensions include the halo cells
-                    f.write(struct.pack('<I', len(lon_idx)))   # n_lon
-                    f.write(struct.pack('<I', len(lat_idx)))   # n_lat
-                    f.write(struct.pack('<I', 1))              # n_levels
-                    f.write(struct.pack('<f', 0.0))            # level
+                    f.write(encode_tile_header(
+                        (current_lon_origin, current_lat_origin),
+                        (wind_lon_origin, wind_lat_origin), len(lon_idx), len(lat_idx), n_hours))
 
-                    # Current data (25 hours, client hardcodes this)
+                    # current slices follow the sample count in the header
                     for h in range(n_hours):
                         u_tile = u_day[h, :, :][np.ix_(lat_idx, lon_idx)]
                         v_tile = v_day[h, :, :][np.ix_(lat_idx, lon_idx)]
@@ -338,6 +384,7 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
 
                 tiles += 1
             except Exception as e:
+                failed += 1
                 print(f"      ⚠️ Tile ({tilex},{tiley}) failed: {e}")
                 import traceback
                 traceback.print_exc()
@@ -345,6 +392,8 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
                     tile_path.unlink()
 
     ds.close()
+    if failed:
+        raise RuntimeError(f'{failed} tiles failed to generate for {date.date()}')
 
     # Upload tiles for this day to R2
     print(f"    📤 Uploading {tiles} tiles to R2...")
@@ -358,6 +407,8 @@ def tile_and_upload_day(date, wind_file, wind_data_cache):
             print(f"      ❌ Upload failed: {bin_file.name} - {e}")
 
     print(f"    ✅ Tiled and uploaded: {uploaded}/{tiles} tiles")
+    if tiles == 0 or uploaded != tiles:
+        raise RuntimeError(f'incomplete upload for {date.date()}: {uploaded}/{tiles} tiles')
 
     # Clean up local files
     shutil.rmtree(day_dir)
@@ -381,9 +432,16 @@ def main():
     NC_DIR.mkdir(parents=True, exist_ok=True)
     WIND_DIR.mkdir(parents=True, exist_ok=True)
 
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    reference = today - timedelta(days=1)
+    times = smoc_timeline()
+    if len(times) < 2 or np.isnat(times).any():
+        raise ValueError('invalid SMOC source timeline')
+    last_current = datetime.utcfromtimestamp(int(times.max().astype('int64')))
+
     # Step 2: Download ECMWF once
     print("\n📡 Step 2: Downloading ECMWF forecast...")
-    wind_file = download_ecmwf()
+    wind_file = download_ecmwf(reference, last_current)
     if not wind_file:
         print("  ❌ Failed to get ECMWF data. Exiting.")
         sys.exit(1)
@@ -393,9 +451,15 @@ def main():
     ds_wind = xr.open_dataset(wind_file, engine="cfgrib")
     u_wind_global = ds_wind['u10'].values
     v_wind_global = ds_wind['v10'].values
-    sst_global = ds_wind['skt'].values if 'skt' in ds_wind else np.zeros_like(u_wind_global)
+    sst_global = ds_wind['skt'].values
     wind_lons = ds_wind['longitude'].values
     wind_lats = ds_wind['latitude'].values
+    wind_times = ds_wind['valid_time'].values.astype('datetime64[s]')
+    expected_wind_times = np.datetime64(reference, 's') + np.arange(len(wind_times)) * np.timedelta64(WIND_STEP_HOURS, 'h')
+    if len(wind_times) < 2 or not np.array_equal(wind_times, expected_wind_times):
+        raise ValueError('wind samples must be six-hourly and start at the selected initialization')
+    if u_wind_global.shape != v_wind_global.shape or u_wind_global.shape != sst_global.shape or u_wind_global.shape[0] != len(wind_times):
+        raise ValueError('wind fields do not match the forecast timeline')
 
     wind_data_cache = {
         'u_wind': u_wind_global,
@@ -403,29 +467,39 @@ def main():
         'sst': sst_global,
         'lons': wind_lons,
         'lats': wind_lats,
-        'reference_date': datetime.utcnow() - timedelta(days=1),
+        'reference_date': reference,
     }
     ds_wind.close()
     print(f"  ✅ Wind data loaded: {u_wind_global.shape[0]} steps, {len(wind_lats)} lat, {len(wind_lons)} lon")
 
     # Step 4: Process each day
-    today = datetime.utcnow()
-    yesterday = today - timedelta(days=1)
+    wind_end = datetime.utcfromtimestamp(int(wind_times[-1].astype('int64')))
+    windows = list(forecast_windows(times, reference, wind_end))
 
     total_tiles = 0
-    print(f"\n📡 Step 4: Processing {FORECAST_DAYS} days...")
+    print(f"\n📡 Step 4: Processing {len(windows)} days through {windows[-1][1][-1]} UTC...")
 
-    for day_offset in range(FORECAST_DAYS):
-        day_date = yesterday + timedelta(days=day_offset)
-        print(f"\n  Day {day_offset+1}/{FORECAST_DAYS}: {day_date.date()}")
+    for day_offset, (day_date, samples) in enumerate(windows):
+        print(f"\n  Day {day_offset+1}/{len(windows)}: {day_date.date()}")
 
-        nc_file = download_smoc_day(day_date)
+        nc_file = download_smoc_day(day_date, datetime.utcfromtimestamp(int(samples[-1].astype('int64'))))
         if not nc_file:
-            print(f"    ⚠️ Skipping day {day_date.date()} - SMOC download failed")
-            continue
-        tiles = tile_and_upload_day(day_date, wind_file, wind_data_cache)
+            raise RuntimeError(f'SMOC download failed for {day_date.date()}')
+        tiles = tile_and_upload_day(day_date, wind_file, wind_data_cache, samples)
         total_tiles += tiles
         print(f"    Cumulative tiles: {total_tiles}")
+
+    manifest = {
+        'schema_version': 1,
+        'generated_at': datetime.utcnow().isoformat(timespec='seconds') + 'Z',
+        'hindcast_days': HINDCAST_DAYS,
+        'days': [{'date': date.strftime('%Y-%m-%d'), 'timestamps': samples.astype('int64').tolist()}
+                 for date, samples in windows],
+    }
+    manifest_path = TILES_DIR / 'manifest.json'
+    manifest_path.write_text(json.dumps(manifest), encoding='utf-8')
+    s3.upload_file(str(manifest_path), BUCKET, 'tiles/manifest.json',
+                   ExtraArgs={'ContentType': 'application/json', 'CacheControl': 'no-cache'})
 
     # Clean up
     if wind_file and Path(wind_file).exists():

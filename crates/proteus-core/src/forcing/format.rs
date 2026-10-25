@@ -18,23 +18,34 @@ pub fn parse_tile_data(bytes: &[u8]) -> Result<TileData, String> {
     } else {
         bytes
     };
-    let (bytes, current_origin, wind_origin) = if bytes.starts_with(b"PRT2") {
-        if bytes.len() < 20 {
-            return Err("File too short for padded tile header".to_string());
-        }
-        let value = |offset| f32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap());
-        let current = (value(4), value(8));
-        let wind = (value(12), value(16));
-        if ![current.0, current.1, wind.0, wind.1]
-            .iter()
-            .all(|v| v.is_finite())
-        {
-            return Err("Invalid padded grid origin".to_string());
-        }
-        (&bytes[20..], Some(current), Some(wind))
-    } else {
-        (bytes, None, None)
-    };
+    let (bytes, current_origin, wind_origin, n_hours) =
+        if bytes.starts_with(b"PRT2") || bytes.starts_with(b"PRT3") {
+            let counted = bytes.starts_with(b"PRT3");
+            let header_size = if counted { 24 } else { 20 };
+            if bytes.len() < header_size {
+                return Err("File too short for padded tile header".to_string());
+            }
+            let value = |offset| f32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap());
+            let current = (value(4), value(8));
+            let wind = (value(12), value(16));
+            if ![current.0, current.1, wind.0, wind.1]
+                .iter()
+                .all(|v| v.is_finite())
+            {
+                return Err("Invalid padded grid origin".to_string());
+            }
+            let hours = if counted {
+                u32::from_le_bytes(bytes[20..24].try_into().unwrap()) as usize
+            } else {
+                25
+            };
+            if !(2..=25).contains(&hours) {
+                return Err(format!("Invalid current sample count: {hours}"));
+            }
+            (&bytes[header_size..], Some(current), Some(wind), hours)
+        } else {
+            (bytes, None, None, 25)
+        };
     if bytes.len() < 12 {
         return Err("File too short for header".to_string());
     }
@@ -51,7 +62,6 @@ pub fn parse_tile_data(bytes: &[u8]) -> Result<TileData, String> {
     if n_depths > (bytes.len() - 12) / 4 {
         return Err("Truncated depth header or incompatible tile format".to_string());
     }
-    let n_hours = 25usize;
     let n_cells = n_lon
         .checked_mul(n_lat)
         .ok_or("Current grid dimensions overflow")?;
@@ -65,7 +75,7 @@ pub fn parse_tile_data(bytes: &[u8]) -> Result<TileData, String> {
         .ok_or("Current payload size overflow")?;
     if current_bytes > bytes.len() - depth_end {
         return Err(format!(
-            "Truncated current payload: expected {current_bytes} bytes for 25 hours, found {}",
+            "Truncated current payload: expected {current_bytes} bytes for {n_hours} samples, found {}",
             bytes.len() - depth_end
         ));
     }

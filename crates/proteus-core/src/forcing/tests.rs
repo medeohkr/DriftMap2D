@@ -336,6 +336,177 @@ impl TileFetcher for UnusedFetcher {
     }
 }
 
+fn counted_global_tile(hours: u32, wind_steps: u32) -> Vec<u8> {
+    let mut bytes = b"PRT3".to_vec();
+    for _ in 0..4 {
+        bytes.extend(0.0f32.to_le_bytes());
+    }
+    for value in [hours, 2, 2, 1] {
+        bytes.extend(value.to_le_bytes());
+    }
+    bytes.extend(0.0f32.to_le_bytes());
+    for hour in 0..hours {
+        for value in [hour as f32, hour as f32 + 1.0] {
+            for _ in 0..4 {
+                bytes.extend(f16::from_f32(value).to_bits().to_le_bytes());
+            }
+        }
+    }
+    for value in [2u32, 2, wind_steps] {
+        bytes.extend(value.to_le_bytes());
+    }
+    for step in 0..wind_steps {
+        for value in [
+            100.0 + step as f32,
+            200.0 + step as f32,
+            280.0 + step as f32,
+        ] {
+            for _ in 0..4 {
+                bytes.extend(f16::from_f32(value).to_bits().to_le_bytes());
+            }
+        }
+    }
+    bytes
+}
+
+#[test]
+fn counted_global_tiles_keep_current_and_wind_payloads_aligned() {
+    for hours in [2, 24, 25] {
+        let tile = parse_tile_data(&counted_global_tile(hours, 5)).unwrap();
+        assert_eq!(tile.n_hours, hours as usize);
+        assert_eq!(tile.u.len(), hours as usize * 4);
+        assert_eq!(tile.u[0], 0.0);
+        assert_eq!(*tile.u.last().unwrap(), (hours - 1) as f32);
+        assert_eq!(*tile.v.last().unwrap(), hours as f32);
+        assert_eq!(tile.wind_u[0], 100.0);
+        assert_eq!(*tile.wind_v.last().unwrap(), 204.0);
+        assert_eq!(*tile.sst_k.last().unwrap(), 284.0);
+    }
+}
+
+#[test]
+fn counted_global_tiles_reject_invalid_counts_and_truncation() {
+    let bytes = counted_global_tile(24, 5);
+    let currents_end = 40 + 24 * 4 * 4;
+    for length in 0..bytes.len() {
+        if length != currents_end {
+            assert!(
+                parse_tile_data(&bytes[..length]).is_err(),
+                "accepted truncated length {length}"
+            );
+        }
+    }
+    for hours in [0u32, 1, 26, u32::MAX] {
+        let mut invalid = bytes.clone();
+        invalid[20..24].copy_from_slice(&hours.to_le_bytes());
+        assert!(parse_tile_data(&invalid).is_err());
+    }
+}
+
+#[test]
+fn partial_global_tiles_stop_at_the_last_current_or_wind_sample() {
+    let mut loader = DataLoader::new("", 0.0, 0.0, UnusedFetcher);
+    let key = TileKey {
+        lon_idx: 0,
+        lat_idx: 0,
+        day: 20261023,
+    };
+    loader.cache.insert(
+        key.clone(),
+        RefCell::new(parse_tile_data(&counted_global_tile(24, 5)).unwrap()),
+    );
+    assert!(loader.validate_forcing_interval(key.day, 22.5, 0.5).is_ok());
+    assert!(loader.validate_forcing_interval(key.day, 23.0, 0.0).is_ok());
+    assert!(loader.get_velocities_wind_slice(
+        &[(1.0 / 24.0, 1.0 / 24.0, 0.0)],
+        key.day,
+        23.000_002
+    )[0]
+    .0
+    .is_finite());
+    assert!(loader
+        .validate_forcing_interval(key.day, 22.5, 0.6)
+        .is_err());
+    assert!(loader
+        .validate_forcing_interval(key.day, 23.0, 1.0)
+        .is_err());
+    let positions = [(1.0 / 24.0, 1.0 / 24.0, 0.0)];
+    assert!(
+        loader.get_velocities_wind_slice(&positions, key.day, f32::NAN)[0]
+            .0
+            .is_nan()
+    );
+    let value = loader.get_velocities_wind_slice(&positions, key.day, 22.5)[0];
+    assert!((value.0 / meters_per_degree_lon(1.0, positions[0].1) - 22.5).abs() < 1e-5);
+    assert!(
+        loader.get_velocities_wind_slice(&positions, key.day, 23.1)[0]
+            .0
+            .is_nan()
+    );
+    loader.cache.insert(
+        key.clone(),
+        RefCell::new(parse_tile_data(&counted_global_tile(24, 4)).unwrap()),
+    );
+    assert!(loader.validate_forcing_interval(key.day, 17.5, 0.5).is_ok());
+    assert!(loader
+        .validate_forcing_interval(key.day, 18.0, 0.1)
+        .is_err());
+    let value = loader.get_velocities_wind_slice(&positions, key.day, 18.1)[0];
+    assert!(value.0.is_finite());
+    assert!(value.2.is_nan());
+}
+
+struct PartialForecastFetcher;
+impl TileFetcher for PartialForecastFetcher {
+    fn fetch_bytes<'a>(&'a self, url: &'a str) -> BoxFuture<'a, Result<Vec<u8>, FetchError>> {
+        Box::pin(async move {
+            if url.contains("/2026/10/23/") {
+                Ok(counted_global_tile(25, 5))
+            } else if url.contains("/2026/10/24/") {
+                Ok(counted_global_tile(24, 5))
+            } else {
+                Err(FetchError::Http(404))
+            }
+        })
+    }
+}
+
+#[tokio::test]
+async fn global_midnight_advances_load_both_dates_and_sample_the_next_tile() {
+    let mut loader = DataLoader::new(
+        "https://example.test/tiles",
+        0.0,
+        0.0,
+        PartialForecastFetcher,
+    );
+    let positions = vec![1.0 / 24.0, 1.0 / 24.0];
+    loader
+        .prepare_forcing(positions.clone(), 20261023, 23.75, 0.250_002)
+        .await
+        .unwrap();
+    assert_eq!(loader.cache.len(), 1);
+    loader
+        .prepare_forcing(positions.clone(), 20261023, 23.75, 0.5)
+        .await
+        .unwrap();
+    assert_eq!(loader.cache.len(), 2);
+    let point = [(positions[0], positions[1], 0.0)];
+    let value = loader.get_velocities_wind_slice(&point, 20261023, 24.25)[0];
+    assert!((value.0 / meters_per_degree_lon(1.0, positions[1]) - 0.25).abs() < 1e-5);
+    assert!(loader
+        .validate_forcing_interval(20261023, 23.75, 0.5)
+        .is_ok());
+    loader
+        .prepare_forcing(positions, 20261024, 22.5, 0.5)
+        .await
+        .unwrap();
+    assert_eq!(loader.cache.len(), 1);
+    assert!(loader
+        .validate_forcing_interval(20261024, 23.0, 0.1)
+        .is_err());
+    assert_eq!(next_date(20261231).unwrap(), 20270101);
+}
+
 #[test]
 fn loader_batches_currents_wind_and_sst_into_output_order() {
     let mut loader = DataLoader::new("", 0.0, 0.0, UnusedFetcher);

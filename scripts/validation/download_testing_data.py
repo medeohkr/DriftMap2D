@@ -193,6 +193,8 @@ def tile_day(date: datetime, forcing: dict, day_offset: int) -> int:
     h_end = h_start + SMOC_HOURS_PER_DAY          # +25, inclusive of boundary
     h_end = min(h_end, u_day.shape[0])
     n_hours = h_end - h_start
+    if n_hours < 2:
+        raise ValueError('at least two hourly current samples are required for a day tile')
 
     if n_hours < SMOC_HOURS_PER_DAY:
         print(f"    ⚠️ Day {day_offset}: only {n_hours} current hours "
@@ -248,6 +250,10 @@ def tile_day(date: datetime, forcing: dict, day_offset: int) -> int:
 
             try:
                 with open(tile_path, "wb") as f:
+                    f.write(b"PRT3")
+                    f.write(struct.pack("<ffffI", float(cur_lons[lon_idx[0]]), float(cur_lats[lat_idx[0]]),
+                                        float(wind_lons[wind_lon_idx[0]]) if wind_nlon else lon_min,
+                                        float(wind_lats[wind_lat_idx[0]]) if wind_nlat else lat_min, n_hours))
                     # ----- Currents header -----
                     f.write(struct.pack("<I", len(lon_idx)))
                     f.write(struct.pack("<I", len(lat_idx)))

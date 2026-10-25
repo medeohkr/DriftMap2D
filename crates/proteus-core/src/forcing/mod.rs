@@ -20,6 +20,8 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
+const TIME_EPSILON: f32 = 0.000_01;
+
 /// generic F allows the same loader to work in WASM
 /// (GlooFetcher) and in the CLI (ReqwestFetcher)
 pub struct DataLoader<F: TileFetcher> {
@@ -127,13 +129,28 @@ impl<F: TileFetcher> DataLoader<F> {
         if let Some(native) = &self.norkyst {
             return native.sample(groups, count, hour, want_current, want_wind, want_sst);
         }
-        let mut results = vec![[0.0; 5]; count];
+        let mut results = vec![[f32::NAN; 5]; count];
         let mut scratch = Vec::new();
-        for (key, group) in groups {
+        for (mut key, group) in groups {
+            let sample_hour = if hour > 24.0 + TIME_EPSILON {
+                let Ok(next) = next_date(key.day) else {
+                    continue;
+                };
+                key.day = next;
+                hour - 24.0
+            } else {
+                hour
+            };
             let Some(cached) = self.cache.get(&key) else {
                 continue;
             };
             let mut tile = cached.borrow_mut();
+            if !sample_hour.is_finite() || sample_hour < 0.0 || sample_hour > 24.0 + TIME_EPSILON {
+                for &(index, _, _, _) in &group {
+                    results[index].fill(f32::NAN);
+                }
+                continue;
+            }
             let (min_lon, min_lat) = self.tile_origin(&key);
             let samples = |step: f32, origin: Option<(f32, f32)>| -> Vec<GridSample> {
                 let (min_lon, min_lat) = origin.unwrap_or((min_lon, min_lat));
@@ -159,7 +176,11 @@ impl<F: TileFetcher> DataLoader<F> {
                         height,
                         times,
                         depths,
-                        hour,
+                        if sample_hour <= (times - 1) as f32 + TIME_EPSILON {
+                            sample_hour.min((times - 1) as f32)
+                        } else {
+                            f32::NAN
+                        },
                         &samples,
                         &mut scratch,
                     );
@@ -193,7 +214,12 @@ impl<F: TileFetcher> DataLoader<F> {
                         *n_lat_wind,
                         *n_steps,
                         1,
-                        hour / 6.0,
+                        if *n_steps > 0 && sample_hour <= (*n_steps - 1) as f32 * 6.0 + TIME_EPSILON
+                        {
+                            (sample_hour / 6.0).min((*n_steps - 1) as f32)
+                        } else {
+                            f32::NAN
+                        },
                         &samples,
                         &mut scratch,
                     );
@@ -325,6 +351,12 @@ impl<F: TileFetcher> DataLoader<F> {
     }
 
     pub fn update_tiles(&mut self, positions: Vec<f32>, current_day: usize) -> HashSet<TileKey> {
+        let needed = self.tiles_for_positions(&positions, current_day);
+        self.cache.retain(|key, _| needed.contains(key));
+        needed
+    }
+
+    fn tiles_for_positions(&self, positions: &[f32], current_day: usize) -> HashSet<TileKey> {
         if let Some(native) = &self.norkyst {
             return positions
                 .chunks_exact(2)
@@ -376,7 +408,6 @@ impl<F: TileFetcher> DataLoader<F> {
                 add_tile(lon_idx + lon_dir, lat_idx + lat_dir);
             }
         }
-        self.cache.retain(|k, _| needed.contains(k));
         needed
     }
 
@@ -442,7 +473,7 @@ impl<F: TileFetcher> DataLoader<F> {
         }
     }
 
-    /// preload every native date needed by intermediate integration stages
+    /// preload every date needed by intermediate integration stages
     pub async fn prepare_forcing(
         &mut self,
         positions: Vec<f32>,
@@ -462,10 +493,25 @@ impl<F: TileFetcher> DataLoader<F> {
                 )
                 .await;
         }
-        self.try_load_ocean_tiles(positions, date).await
+        validate_hours(hour, duration_hours)?;
+        let current = self.tiles_for_positions(&positions, date);
+        let next = if hour + duration_hours > 24.0 + TIME_EPSILON {
+            let date = next_date(date)?;
+            Some((date, self.tiles_for_positions(&positions, date)))
+        } else {
+            None
+        };
+        self.cache.retain(|key, _| {
+            current.contains(key) || next.as_ref().is_some_and(|(_, keys)| keys.contains(key))
+        });
+        self.load_by_date(date, &current).await?;
+        if let Some((date, keys)) = next {
+            self.load_by_date(date, &keys).await?;
+        }
+        self.validate_forcing_interval(date, hour, duration_hours)
     }
 
-    /// reject advances beyond the final available native forecast sample
+    /// reject advances beyond the final available forecast sample
     pub fn validate_forcing_interval(
         &self,
         date: usize,
@@ -475,9 +521,60 @@ impl<F: TileFetcher> DataLoader<F> {
         if let Some(native) = &self.norkyst {
             native.validate_interval(date, hour, duration_hours)
         } else {
+            validate_hours(hour, duration_hours)?;
+            let end = hour + duration_hours;
+            self.validate_global_day(date, end.min(24.0))?;
+            if end > 24.0 + TIME_EPSILON {
+                self.validate_global_day(next_date(date)?, end - 24.0)?;
+            }
             Ok(())
         }
     }
+
+    fn validate_global_day(&self, date: usize, end: f32) -> Result<(), LoaderError> {
+        let mut found = false;
+        for (key, cached) in self.cache.iter().filter(|(key, _)| key.day == date) {
+            found = true;
+            let tile = cached.borrow();
+            let mut last = tile.n_hours.saturating_sub(1) as f32;
+            if tile.n_steps > 0 {
+                last = last.min((tile.n_steps - 1) as f32 * 6.0);
+            }
+            if end > last + TIME_EPSILON {
+                return Err(LoaderError::NotFound(format!(
+                    "advance exceeds global time coverage for {date} tile={}_{}: last sample at hour {last}", key.lon_idx, key.lat_idx
+                )));
+            }
+        }
+        if !found && !self.cache.is_empty() {
+            return Err(LoaderError::NotFound(format!(
+                "global forcing is not loaded for {date}"
+            )));
+        }
+        Ok(())
+    }
+}
+
+fn validate_hours(hour: f32, duration: f32) -> Result<(), LoaderError> {
+    if !hour.is_finite()
+        || !duration.is_finite()
+        || !(0.0..24.0).contains(&hour)
+        || !(0.0..=24.0).contains(&duration)
+    {
+        return Err(LoaderError::NotFound("invalid forcing interval".into()));
+    }
+    Ok(())
+}
+
+fn next_date(date: usize) -> Result<usize, LoaderError> {
+    chrono::NaiveDate::from_ymd_opt(
+        (date / 10000) as i32,
+        (date / 100 % 100) as u32,
+        (date % 100) as u32,
+    )
+    .and_then(|date| date.succ_opt())
+    .map(|date| date.format("%Y%m%d").to_string().parse().unwrap())
+    .ok_or_else(|| LoaderError::NotFound("invalid forcing date".into()))
 }
 
 #[cfg(test)]
