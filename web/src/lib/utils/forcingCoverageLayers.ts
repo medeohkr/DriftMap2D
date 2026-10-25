@@ -62,13 +62,19 @@ function hatchImage() {
     const width = 80;
     const height = Math.round(width * Math.tan(35 * Math.PI / 180));
     const repeats = 8;
+    const stripeWidth = 0.25;
+    const edgeWidth = repeats * Math.hypot(1 / width, 1 / height);
     const data = new Uint8Array(width * height * 4);
     // a rectangular repeat keeps the rotated stripes seamless at tile edges
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
             const offset = (y * width + x) * 4;
             const phase = (((x + 0.5) / width + (y + 0.5) / height) * repeats) % 1;
-            data.set([150, 150, 150, phase < 0.25 ? 240 : 0], offset);
+            const centerDistance = Math.abs(phase - stripeWidth / 2);
+            const distance = Math.min(centerDistance, 1 - centerDistance);
+            // blend over one pixel across each edge, including the repeat boundary
+            const coverage = Math.max(0, Math.min(1, 0.5 + (stripeWidth / 2 - distance) / edgeWidth));
+            data.set([150, 150, 150, Math.round(240 * coverage)], offset);
         }
     }
     return { width, height, data };
