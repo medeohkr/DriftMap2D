@@ -1,21 +1,31 @@
 <script lang="ts">
+    import { onDestroy, untrack } from "svelte";
     import rewindBtn from "$lib/assets/images/RewindBtn.webp";
     import pauseBtn from "$lib/assets/images/PauseBtn.webp";
-    import { stats, timeline, history} from "$lib/stores/index.svelte";
+    import { config, stats, timeline, history, visualization} from "$lib/stores/index.svelte";
     import { map } from "$lib/map";
+
+    const lastStep = $derived(timeline.playbackMode ? Math.max(0, history.simulationHistory.length - 1) : 0);
+    let previousTime = 0;
+    let progress = 0;
 
     $effect(() => {
         if (timeline.playbackMode) {
-            timeline.timelineDay = history.simulationHistory.length - 1
-            timeline.timelineDate = history.simulationHistory[history.simulationHistory.length - 1].dateStr;
             updateDisplay(history.simulationHistory.length - 1);
         }
     });
 
+    $effect(() => {
+        if (!timeline.playbackMode) untrack(() => {
+            stopPlayback();
+            progress = 0;
+        });
+    });
+    onDestroy(stopPlayback);
+
     function updateDisplay(index: number) {
         const s = history.simulationHistory[index];
         if (!s) return;
-
         timeline.timelineDay = index;
         timeline.timelineDate = s.dateStr;
 
@@ -30,39 +40,74 @@
         map.getSource("concentration").setData(s.heatmapGeojson);
     }
 
-    function timelinePlayback() {
-        if (!timeline.timelinePlaying) return;
-        if (timeline.timelineDay < history.simulationHistory.length - 1) {
-            timeline.timelineDay++;
-            updateDisplay(timeline.timelineDay);
-            timeline.timelineAnimationId = setTimeout(
-                () => requestAnimationFrame(timelinePlayback),
-                timeline.playbackSpeed,
-            );
-        } else {
-            timeline.timelinePlaying = false;
+    function advancePlayback(now: number) {
+        if (!timeline.timelinePlaying || !timeline.playbackMode) return;
+        const snapshotMinutes = config.timeStepMin * visualization.snapshotInterval;
+        const interval = timeline.playbackSpeed * (snapshotMinutes / 30);
+        progress += Math.max(0, now - previousTime) / interval;
+        previousTime = now;
+        const steps = Math.floor(progress);
+        if (steps > 0) {
+            progress -= steps;
+            // render only the latest due snapshot when several fit within one display frame
+            updateDisplay(Math.min(timeline.timelineDay + steps, history.simulationHistory.length - 1));
+        }
+        if (timeline.timelineDay >= history.simulationHistory.length - 1) {
+            stopPlayback();
+            progress = 0;
         }
     }
 
+    function timelinePlayback(now: number) {
+        timeline.timelineAnimationId = null;
+        advancePlayback(now);
+        if (timeline.timelinePlaying && timeline.playbackMode) {
+            timeline.timelineAnimationId = requestAnimationFrame(timelinePlayback);
+        }
+    }
+
+    function startPlayback() {
+        if (timeline.timelinePlaying || !timeline.playbackMode || timeline.timelineDay >= lastStep) return;
+        previousTime = performance.now();
+        timeline.timelinePlaying = true;
+        timeline.timelineAnimationId = requestAnimationFrame(timelinePlayback);
+    }
+
+    function stopPlayback() {
+        if (timeline.timelineAnimationId !== null) cancelAnimationFrame(timeline.timelineAnimationId);
+        timeline.timelineAnimationId = null;
+        timeline.timelinePlaying = false;
+    }
+
+    function pausePlayback() {
+        advancePlayback(performance.now());
+        stopPlayback();
+    }
+
     function updatePlaybackSpeed() {
-        if (timeline.playbackSpeed === 60) {
-            timeline.playbackSpeed = 30;
-        } else if (timeline.playbackSpeed === 30) {
-            timeline.playbackSpeed = 15;
+        advancePlayback(performance.now());
+        if (timeline.playbackSpeed === 40) {
+            timeline.playbackSpeed = 20;
+        } else if (timeline.playbackSpeed === 20) {
+            timeline.playbackSpeed = 10;
+        } else if (timeline.playbackSpeed === 10) {
+            timeline.playbackSpeed = 80;
         } else {
-            timeline.playbackSpeed = 60;
+            timeline.playbackSpeed = 40;
         }
     }
 
     function goToStart() {
-        timeline.timelinePlaying = false;
+        stopPlayback();
+        progress = 0;
         updateDisplay(0);
     }
 
     function onSliderInput(e: Event) {
         const target = e.target as HTMLInputElement;
         const index = parseInt(target.value, 10);
-        timeline.timelineDay = index;
+        progress = 0;
+        previousTime = performance.now();
         updateDisplay(index);
     }
 </script>
@@ -82,13 +127,13 @@
                 />
             </button>
             <button
-                onclick={() => {timeline.timelinePlaying = true; timelinePlayback()}}
+                onclick={startPlayback}
                 class:active={!timeline.timelinePlaying}
                 id="timeline-play"
                 class="timeline-btn">▶</button
             >
             <button
-                onclick={() => timeline.timelinePlaying = false}
+                onclick={pausePlayback}
                 class:active={timeline.timelinePlaying}
                 id="timeline-pause"
                 class="timeline-btn"
@@ -102,7 +147,7 @@
             <button
                 onclick={updatePlaybackSpeed}
                 id="timeline-speed"
-                class="timeline-btn">{60 / timeline.playbackSpeed}x</button
+                class="timeline-btn">{40 / timeline.playbackSpeed}x</button
             >
         </div>
         <input
@@ -111,7 +156,7 @@
             id="timeline-slider"
             class="timeline-slider"
             min="0"
-            max={Math.max(0, history.simulationHistory.length - 1)}
+            max={lastStep}
             value={timeline.timelineDay}
         />
         <div class="timeline-labels">
@@ -162,7 +207,7 @@
         height: var(--height-timeline-btn);
         background-color: var(--bg-tertiary);
         color: var(--text-primary);
-        padding: var(--spacing-xxs) var(--spacing-md);
+        padding: var(--spacing-xxs) 0;
         border: none;
         border-radius: var(--border-md);
         font-family: var(--font-family);

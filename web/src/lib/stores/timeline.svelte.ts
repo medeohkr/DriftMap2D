@@ -2,7 +2,7 @@ export interface Timeline {
     timelineDay: number;
     timelineDate: string;
     timelinePlaying: boolean;
-    timelineAnimationId: ReturnType<typeof setTimeout> | null;
+    timelineAnimationId: number | null;
     playbackSpeed: number;
     playbackMode: boolean;
 }
@@ -12,6 +12,6 @@ export const timeline: Timeline = $state({
     timelineDate: "",
     timelinePlaying: false,
     timelineAnimationId: null,
-    playbackSpeed: 60,
+    playbackSpeed: 40,
     playbackMode: false,
 });
