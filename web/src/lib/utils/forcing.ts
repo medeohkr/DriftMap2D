@@ -1,4 +1,5 @@
 export type ForcingModel = "global" | "norkyst";
+export const DEFAULT_SIMULATION_DAYS = 2;
 export interface ForcingWindow {
     start: number;
     end: number;
@@ -41,6 +42,15 @@ export function norkystForcingWindow(manifest: unknown): ForcingWindow {
 export async function loadForcingWindow(model: ForcingModel): Promise<ForcingWindow> {
     if (model === "global") return globalForcingWindow();
     return norkystForcingWindow(await loadNorkystManifest());
+}
+
+export function defaultSimulationWindow(window: ForcingWindow, now = new Date()): ForcingWindow {
+    const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const first = window.start;
+    const last = window.end;
+    if (last - first < 60000) throw new Error("forcing has no available simulation interval");
+    const start = Math.min(Math.max(today, first), last - 60000);
+    return { start, end: Math.min(start + DEFAULT_SIMULATION_DAYS * 86400000, last) };
 }
 
 let manifestRequest: Promise<unknown> | null = null;

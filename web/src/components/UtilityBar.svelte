@@ -1,8 +1,8 @@
 <script lang="ts">
     import { exportScenario } from "$lib/io/exportScenario";
 import { importScenario } from "$lib/io/importScenario";
-    import { config, releaseConfig, visualization, genericOverrides, objectOverrides, oilOverrides, simulation } from "$lib/stores/index.svelte";
-    import { dateOffset, resetReleaseColors } from "$lib/utils";
+    import { config, simulationTimeState, releaseConfig, visualization, genericOverrides, objectOverrides, oilOverrides, simulation } from "$lib/stores/index.svelte";
+    import { dateOffset, resetReleaseColors, DEFAULT_SIMULATION_DAYS } from "$lib/utils";
     import { showToast } from "$lib/stores/toast.svelte";
     let fileInput = $state<HTMLInputElement | undefined>(undefined);
 
@@ -34,9 +34,11 @@ import { importScenario } from "$lib/io/importScenario";
         config.diffusionCoeffs = [10, 0.1];
         config.startDate = dateOffset(0);
         config.startTime = "00:00";
-        config.endDate = dateOffset(7);
+        config.endDate = dateOffset(DEFAULT_SIMULATION_DAYS);
         config.endTime = "00:00";
-        config.totalDays = 7;
+        config.totalDays = DEFAULT_SIMULATION_DAYS;
+        simulationTimeState.usingDefault = true;
+        simulationTimeState.defaultVersion++;
         config.tracerType = "generic";
         config.forcingModel = "global";
 

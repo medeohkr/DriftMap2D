@@ -1,4 +1,4 @@
-import { dateOffset } from "../utils";
+import { dateOffset, DEFAULT_SIMULATION_DAYS } from "../utils";
 
 export interface Config {
     particleCount: number;
@@ -15,6 +15,8 @@ export interface Config {
     forcingModel: "global" | "norkyst"
 }
 
+export const simulationTimeState = $state({ usingDefault: true, defaultVersion: 0, importVersion: 0 });
+
 export const config: Config = $state({
     particleCount: 10000,
     timeStepMin: 15,
@@ -24,9 +26,9 @@ export const config: Config = $state({
 
     startDate: dateOffset(0),
     startTime: "00:00",
-    endDate: dateOffset(7),
+    endDate: dateOffset(DEFAULT_SIMULATION_DAYS),
     endTime: "00:00",
-    totalDays: 7,
+    totalDays: DEFAULT_SIMULATION_DAYS,
 
     tracerType: "generic",
     forcingModel: "global"

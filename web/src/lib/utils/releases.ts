@@ -8,14 +8,16 @@ const defaultLocations = {
 const automaticLocations = new WeakMap<object, { lat: number; lon: number }>();
 
 export function updateDefaultReleaseLocation(model: ForcingModel) {
-    if (releaseConfig.releases.length !== 1) return;
+    if (releaseConfig.releases.length !== 1) return false;
     const release = releaseConfig.releases[0];
     const previous = automaticLocations.get(release) ?? defaultLocations.global;
-    if (release.lat !== previous.lat || release.lon !== previous.lon) return;
+    if (release.lat !== previous.lat || release.lon !== previous.lon) return false;
     const next = defaultLocations[model];
+    const moved = release.lat !== next.lat || release.lon !== next.lon;
     release.lat = next.lat;
     release.lon = next.lon;
     automaticLocations.set(release, next);
+    return moved;
 }
 
 let releaseColors = new WeakMap<object, string>();

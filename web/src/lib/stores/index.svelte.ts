@@ -1,5 +1,5 @@
 export { simulation, type Simulation } from "./simulation.svelte";
-export { config, type Config } from "./config.svelte";
+export { config, simulationTimeState, type Config } from "./config.svelte";
 export { visualization, type Visualization } from "./visualization.svelte";
 export { timeline, type Timeline } from "./timeline.svelte";
 export { stats, type Stats } from "./stats.svelte";

@@ -1,4 +1,4 @@
-import { config } from '$lib/stores/config.svelte';
+import { config, simulationTimeState } from '$lib/stores/config.svelte';
 import { releaseConfig } from '$lib/stores/releases.svelte';
 import { visualization } from '$lib/stores/visualization.svelte';
 import { oilOverrides } from '$lib/stores/oil-overrides.svelte';
@@ -15,6 +15,8 @@ import { resetReleaseColors } from '$lib/utils';
 import { getScaledConcentrations, updateConcentrationLayer } from '$lib/visualization';
 
 export function applyConfig(cfg: DriftMap2DConfig): void {
+    simulationTimeState.usingDefault = false;
+    simulationTimeState.importVersion++;
     // Tracer
     config.tracerType = cfg.tracerType;
     config.forcingModel = cfg.forcingModel === "norkyst" ? "norkyst" : "global";

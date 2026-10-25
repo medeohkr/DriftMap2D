@@ -8,7 +8,11 @@
     $effect(() => {
         const model = config.forcingModel;
         untrack(() => {
-            if (!simulation.simulationActive) updateDefaultReleaseLocation(model);
+            if (!simulation.simulationActive && updateDefaultReleaseLocation(model)) {
+                showToast(model === "norkyst"
+                    ? "Default release moved to Norway"
+                    : "Default release moved back to Vancouver");
+            }
         });
     });
 
