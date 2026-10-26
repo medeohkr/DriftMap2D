@@ -20,7 +20,7 @@ export function initMap() {
         zoom: 1,
         attributionControl: false,
         maxBounds: [
-            [-Infinity, -75.0],
+            [-Infinity, -85.0],
             [Infinity, 85.0],
         ],
     });
@@ -220,6 +220,7 @@ export function zoom() {
     if (width <= 0 || height <= 0) return;
     const padding = Math.min(80, width * 0.15, height * 0.15);
     map.fitBounds(bounds, {
+        bearing: map.getBearing(),
         padding: {
             top: height * 0.1 + padding,
             bottom: padding,
