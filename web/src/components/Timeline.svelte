@@ -186,7 +186,7 @@
         width: 50%;
         row-gap: var(--spacing-sm);
         padding: var(--spacing-md) var(--spacing-lg);
-        transform: translateX(-45%);
+        transform: translateX(-50%);
         background: var(--bg-primary);
         border: none;
         border-radius: var(--border-lg);
