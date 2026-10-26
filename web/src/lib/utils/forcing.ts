@@ -90,7 +90,7 @@ export function loadNorkystManifest(): Promise<unknown> {
 }
 
 export function utcInputTimestamp(date: string, time: string): number {
-    return new Date(`${date}T${time}:00Z`).getTime();
+    return new Date(`${date}T${time}Z`).getTime();
 }
 
 export function validateForcingWindow(start: number, end: number, window: ForcingWindow): void {

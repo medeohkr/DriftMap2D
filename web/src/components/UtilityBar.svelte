@@ -37,8 +37,7 @@ import { importScenario } from "$lib/io/importScenario";
         config.endDate = dateOffset(DEFAULT_SIMULATION_DAYS);
         config.endTime = "00:00";
         config.totalDays = DEFAULT_SIMULATION_DAYS;
-        simulationTimeState.usingDefault = true;
-        simulationTimeState.defaultVersion++;
+        simulationTimeState.version++;
         config.tracerType = "generic";
         config.forcingModel = "global";
 

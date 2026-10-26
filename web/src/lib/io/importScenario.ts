@@ -15,8 +15,7 @@ import { resetReleaseColors } from '$lib/utils';
 import { getScaledConcentrations, updateConcentrationLayer } from '$lib/visualization';
 
 export function applyConfig(cfg: DriftMap2DConfig): void {
-    simulationTimeState.usingDefault = false;
-    simulationTimeState.importVersion++;
+    simulationTimeState.version++;
     // Tracer
     config.tracerType = cfg.tracerType;
     config.forcingModel = cfg.forcingModel === "norkyst" ? "norkyst" : "global";

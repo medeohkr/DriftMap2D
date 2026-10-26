@@ -15,7 +15,7 @@ export interface Config {
     forcingModel: "global" | "norkyst"
 }
 
-export const simulationTimeState = $state({ usingDefault: true, defaultVersion: 0, importVersion: 0 });
+export const simulationTimeState = $state({ version: 0 });
 
 export const config: Config = $state({
     particleCount: 10000,

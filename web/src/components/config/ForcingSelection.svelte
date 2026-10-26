@@ -9,9 +9,7 @@
         const model = config.forcingModel;
         untrack(() => {
             if (!simulation.simulationActive && updateDefaultReleaseLocation(model)) {
-                showToast(model === "norkyst"
-                    ? "Default release moved to Norway"
-                    : "Default release moved back to Vancouver");
+                showToast("Default release moved to Norway");
             }
         });
     });

@@ -29,3 +29,7 @@ fixed forecast range.
 
 run `node --test validation/global_forcing/forcing.test.mjs` to check published
 availability, partial final days, and compatibility with older deployments.
+
+run `node --test validation/global_forcing/simulationTime.test.mjs` to check
+shared interval clipping, imports and resets, stale availability responses,
+and preservation of the Norway release location when returning to global.
