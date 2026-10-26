@@ -39,7 +39,7 @@
         right: var(--spacing-md);
         padding: var(--spacing-sm);
         column-gap: var(--spacing-sm);
-        font-family: monospace;
+        font-family: var(--font-family);
         background-color: var(--bg-primary);
         border-radius: var(--border-lg);
         box-shadow: var(--shadow-size-secondary) var(--shadow-secondary);
