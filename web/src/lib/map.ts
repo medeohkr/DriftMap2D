@@ -16,13 +16,13 @@ export function initMap() {
     map = new maplibregl.Map({
         container: "map",
         style: "https://api.maptiler.com/maps/019da3a2-47a0-7f1b-b591-38d451a7c7c5/style.json?key=gkGR2Cprig9FAk9AfV3C",
-        center: [-85, 40],
+        center: [-140, 20],
         zoom: 1,
         attributionControl: false,
-        maxBounds: [
-            [-Infinity, -85.0],
-            [Infinity, 85.0],
-        ],
+        // maxBounds: [
+        //     [-Infinity, -85.0],
+        //     [Infinity, 80.0],
+        // ],
     });
 
     const attribution = new maplibregl.AttributionControl();
