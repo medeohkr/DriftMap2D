@@ -12,9 +12,9 @@ export interface OilOverrides {
 export const oilOverrides: OilOverrides = $state({
     query: "Generic Light Crude",
     id: "GN00006",
-    windFactor: 3.5,
-    windDeflection: 20.0,
-    deflectionScheme: "samuels",
+    windFactor: 3,
+    windDeflection: 0.0,
+    deflectionScheme: "constant",
     emulOnset: "oil",
     bullwinkleFrac: 0,
     bulltime: 0
