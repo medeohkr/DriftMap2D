@@ -81,7 +81,7 @@ coverage validation.
 ## binary format
 
 This is a new format, deliberately separate from the global longitude/latitude
-tiles. Proteus reads it through `DataLoader::new_norkyst`. The wasm constructor
+tiles. Proteus reads it through `ForcingKind::norkyst`. The wasm constructor
 accepts a final `forcing_model` argument of `global` or `norkyst`, supplied by
 the web forcing selector.
 

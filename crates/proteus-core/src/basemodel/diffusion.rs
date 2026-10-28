@@ -1,6 +1,5 @@
-use crate::TileFetcher;
 use super::{normalize_lon, ParticleView};
-use crate::forcing::DataLoader;
+use crate::forcing::Forcing;
 use rand::prelude::*;
 use rand_distr::{Distribution, Normal};
 
@@ -32,23 +31,23 @@ impl Diffusion {
         }
     }
 
-    pub fn diffusion_step<F: TileFetcher>(
+    pub fn diffusion_step(
         &mut self,
-        loader: &DataLoader<F>,
+        forcing: &impl Forcing,
         old_view: &ParticleView,
-        positions: &[(f32, f32, f32)],
+        positions: &[(f32, f32)],
         day: usize,
         dt_days: f32,
         hour: f32,
     ) -> Vec<(f32, f32)> {
         match self.diffusion_scheme {
             DiffusionScheme::Constant(k) => self.constant_diffusion_step(positions, dt_days, k),
-            DiffusionScheme::Smagorinsky(cs) => self.smagorinsky_step(loader, old_view, positions, day, dt_days, hour, cs)
+            DiffusionScheme::Smagorinsky(cs) => self.smagorinsky_step(forcing, old_view, positions, day, dt_days, hour, cs)
         }
     }
     pub fn constant_diffusion_step(
         &mut self,
-        positions: &[(f32, f32, f32)],
+        positions: &[(f32, f32)],
         dt_days: f32,
         k: f32
     ) -> Vec<(f32, f32)> {
@@ -56,7 +55,7 @@ impl Diffusion {
         let sigma = (2.0 * k * dt_seconds).sqrt();
         let mut final_positions = Vec::with_capacity(positions.len());
             
-        for (_, &(lon, lat, _)) in positions.iter().enumerate() {
+        for (_, &(lon, lat)) in positions.iter().enumerate() {
             let dx_meters = self.normal.sample(&mut self.rng) * sigma;
             let dy_meters = self.normal.sample(&mut self.rng) * sigma;
 
@@ -70,11 +69,11 @@ impl Diffusion {
         final_positions
     }
 
-    pub fn smagorinsky_step<F: TileFetcher>(
+    pub fn smagorinsky_step(
         &mut self,
-        loader: &DataLoader<F>,
+        forcing: &impl Forcing,
         old_view: &ParticleView,
-        positions: &[(f32, f32, f32)],
+        positions: &[(f32, f32)],
         day: usize,
         dt_days: f32,
         hour: f32,
@@ -87,19 +86,19 @@ impl Diffusion {
         let mut probes = Vec::with_capacity(n);
         let mut final_positions = Vec::with_capacity(n);
 
-        for (i, &(lon, lat, depth)) in positions.iter().enumerate() {
+        for (i, &(lon, lat)) in positions.iter().enumerate() {
             let mid_lon = (old_view.lon(i) + lon) / 2.0;
             let mid_lat = (old_view.lat(i) + lat) / 2.0;
 
-            probes.push((normalize_lon(mid_lon - dx), mid_lat, depth));
-            probes.push((normalize_lon(mid_lon + dx), mid_lat, depth));
-            probes.push((mid_lon, (mid_lat - dy).clamp(-80.0, 90.0), depth));
-            probes.push((mid_lon, (mid_lat + dy).clamp(-80.0, 90.0), depth));
+            probes.push((normalize_lon(mid_lon - dx), mid_lat));
+            probes.push((normalize_lon(mid_lon + dx), mid_lat));
+            probes.push((mid_lon, (mid_lat - dy).clamp(-80.0, 90.0)));
+            probes.push((mid_lon, (mid_lat + dy).clamp(-80.0, 90.0)));
         }
 
-        let velocities = loader.get_velocities(&probes, day, hour);
+        let velocities = forcing.get_velocities(&probes, day, hour);
 
-        for (i, &(lon, lat, _)) in positions.iter().enumerate() {
+        for (i, &(lon, lat)) in positions.iter().enumerate() {
             let base = i * 4;
 
             let vel_lon_minus = velocities[base];
@@ -114,7 +113,7 @@ impl Diffusion {
 
             let strain = (dudx.powi(2) + 0.5 * (dudy + dvdx).powi(2) + dvdy.powi(2)).sqrt();
 
-            let cell_area_m2 = loader.cell_area_m2(lat);
+            let cell_area_m2 = forcing.cell_area_m2(lat);
             let k = cs * cell_area_m2 * strain;
             let dt_seconds = dt_days * 86400.0;
             let sigma = (2.0 * k * dt_seconds).sqrt();

@@ -1,8 +1,14 @@
 // interpolation.rs samples fields and expands missing grid values
 
-use super::grid::GridSample;
 use crate::utils::{bilerp, lerp};
 
+/// fractional coordinates reused by fields on the same grid
+#[derive(Clone, Copy)]
+pub(super) struct GridSample {
+    pub(super) output_index: usize,
+    pub(super) x: f32,
+    pub(super) y: f32,
+}
 fn sample_spatial(
     grid: &[f32],
     width: usize,
@@ -125,24 +131,18 @@ pub(super) fn interpolate_time_batch(
     width: usize,
     height: usize,
     times: usize,
-    depths: usize,
     time: f32,
     samples: &[GridSample],
     scratch: &mut Vec<f32>,
 ) -> Vec<f32> {
     let cells = width * height;
-    if times == 0
-        || depths == 0
-        || cells == 0
-        || !time.is_finite()
-        || data.len() < times * depths * cells
-    {
+    if times == 0 || cells == 0 || !time.is_finite() || data.len() != times * cells {
         return vec![f32::NAN; samples.len()];
     }
     let time = time.clamp(0.0, (times - 1) as f32);
     let before = time.floor() as usize;
     let fraction = time - before as f32;
-    let offset = before * depths * cells;
+    let offset = before * cells;
     let mut values = interpolate_batch(
         &mut data[offset..offset + cells],
         width,
@@ -154,7 +154,7 @@ pub(super) fn interpolate_time_batch(
     if fraction == 0.0 {
         return values;
     }
-    let offset = (before + 1) * depths * cells;
+    let offset = (before + 1) * cells;
     let after = interpolate_batch(
         &mut data[offset..offset + cells],
         width,

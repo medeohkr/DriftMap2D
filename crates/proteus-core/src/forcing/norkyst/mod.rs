@@ -1,22 +1,24 @@
 // mod.rs loads native projected forcing and reuses the shared interpolator
 
+mod cache;
 mod format;
 mod metadata;
 
-use super::{grid::GridSample, interpolation::interpolate_time_batch, LoaderError, TileKey};
+use super::{interpolation::GridSample, Forcing, ForcingFields, LoaderError, TileKey};
 use crate::{
     fetch::{FetchError, TileFetcher},
-    utils::{meters_per_degree_lat, meters_per_degree_lon},
+    utils::{meters_per_degree_lat, meters_per_degree_lon, normalize_lon},
 };
-use format::Tile;
+use cache::Tile;
 use metadata::Manifest;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
 };
 
-#[derive(Default)]
-pub(super) struct Norkyst {
+pub struct NorkystForcing<F: TileFetcher> {
+    fetcher: F,
+    base_url: String,
     manifest: Option<Manifest>,
     tiles: HashMap<TileKey, RefCell<Tile>>,
 }
@@ -31,16 +33,17 @@ async fn fetch<F: TileFetcher>(fetcher: &F, url: &str) -> Result<Vec<u8>, Loader
     })
 }
 
-impl Norkyst {
-    pub(super) fn cell_area_m2(&self, lat: f32) -> f32 {
-        let Some(manifest) = &self.manifest else {
-            return f32::NAN;
-        };
-        let scale = manifest.grid.projection.scale(lat as f64);
-        (800.0 * 800.0 / scale.powi(2)) as f32
+impl<F: TileFetcher> NorkystForcing<F> {
+    pub fn new(base_url: &str, fetcher: F) -> Self {
+        Self {
+            fetcher,
+            base_url: base_url.trim_end_matches('/').to_owned(),
+            manifest: None,
+            tiles: HashMap::new(),
+        }
     }
 
-    pub(super) fn key(&self, lon: f32, lat: f32, day: usize) -> Option<TileKey> {
+    fn key(&self, lon: f32, lat: f32, day: usize) -> Option<TileKey> {
         let grid = &self.manifest.as_ref()?.grid;
         let (x, y) = grid.position(lon, lat)?;
         Some(TileKey {
@@ -48,81 +51,6 @@ impl Norkyst {
             lat_idx: y as usize / 120,
             day,
         })
-    }
-
-    pub(super) async fn load<F: TileFetcher>(
-        &mut self,
-        fetcher: &F,
-        base: &str,
-        positions: &[f32],
-        date: usize,
-        hour: f32,
-        duration_hours: f32,
-    ) -> Result<(), LoaderError> {
-        if self.manifest.is_none() {
-            let url = format!("{base}/manifest.json");
-            self.manifest = Some(
-                Manifest::parse(&fetch(fetcher, &url).await?)
-                    .map_err(|e| LoaderError::Parse(format!("{url}: {e}")))?,
-            );
-        }
-        let dates = self.interval_dates(date, hour, duration_hours)?;
-        let manifest = self.manifest.as_ref().unwrap();
-        let grid = &manifest.grid;
-        let mut needed = HashSet::new();
-        if positions.len() % 2 != 0 {
-            return Err(LoaderError::Parse("incomplete position pair".into()));
-        }
-        for position in positions.chunks_exact(2) {
-            let (x, y) = grid.position(position[0], position[1]).ok_or_else(|| {
-                LoaderError::NotFound(format!("position outside NorKyst domain"))
-            })?;
-            // preload a 12 km margin for intermediate integration and diffusion probes
-            let left = ((x - 15.0).max(0.0) as usize) / 120;
-            let right = ((x + 15.0).min((grid.grid_shape[1] - 1) as f64) as usize) / 120;
-            let top = ((y - 15.0).max(0.0) as usize) / 120;
-            let bottom = ((y + 15.0).min((grid.grid_shape[0] - 1) as f64) as usize) / 120;
-            for lon_idx in left..=right {
-                for lat_idx in top..=bottom {
-                    for &day in &dates {
-                        needed.insert(TileKey {
-                            lon_idx,
-                            lat_idx,
-                            day,
-                        });
-                    }
-                }
-            }
-        }
-        self.tiles.retain(|k, _| needed.contains(k));
-        for key in needed {
-            if self.tiles.contains_key(&key) {
-                continue;
-            }
-            let url = format!(
-                "{base}/{:04}/{:02}/{:02}/{:03}_{:03}.bin",
-                key.day / 10000,
-                key.day / 100 % 100,
-                key.day % 100,
-                key.lon_idx,
-                key.lat_idx
-            );
-            let bytes = fetch(fetcher, &url).await?;
-            let day = manifest.day(key.day).unwrap();
-            let tile = Tile::parse(&bytes, grid, [key.lon_idx, key.lat_idx], &day.timestamps)
-                .map_err(|e| LoaderError::Parse(format!("{url}: {e}")))?;
-            self.tiles.insert(key, RefCell::new(tile));
-        }
-        Ok(())
-    }
-
-    pub(super) fn validate_interval(
-        &self,
-        date: usize,
-        hour: f32,
-        duration_hours: f32,
-    ) -> Result<(), LoaderError> {
-        self.interval_dates(date, hour, duration_hours).map(|_| ())
     }
 
     fn interval_dates(
@@ -170,9 +98,9 @@ impl Norkyst {
         Ok(dates)
     }
 
-    pub(super) fn sample(
+    fn sample(
         &self,
-        groups: HashMap<TileKey, Vec<(usize, f32, f32, f32)>>,
+        groups: HashMap<TileKey, Vec<(usize, f32, f32)>>,
         count: usize,
         hour: f32,
         current: bool,
@@ -227,7 +155,7 @@ impl Norkyst {
             };
             let samples: Vec<_> = group
                 .iter()
-                .filter_map(|&(output_index, lon, lat, _)| {
+                .filter_map(|&(output_index, lon, lat)| {
                     let (x, y) = manifest.grid.position(lon, lat)?;
                     Some(GridSample {
                         output_index,
@@ -236,7 +164,6 @@ impl Norkyst {
                     })
                 })
                 .collect();
-            let times = tile.timestamps.len();
             for field in 0..5 {
                 if !match field {
                     0 | 1 => current,
@@ -245,12 +172,8 @@ impl Norkyst {
                 } {
                     continue;
                 }
-                let values = interpolate_time_batch(
-                    &mut tile.fields[field],
-                    122,
-                    122,
-                    times,
-                    1,
+                let values = tile.grid.sample_field(
+                    field,
                     before as f32 + fraction as f32,
                     &samples,
                     &mut scratch,
@@ -260,13 +183,123 @@ impl Norkyst {
                 }
             }
             if current {
-                for &(i, _, lat, _) in &group {
+                for &(i, _, lat) in &group {
                     results[i][0] = meters_per_degree_lon(results[i][0], lat);
                     results[i][1] = meters_per_degree_lat(results[i][1], lat);
                 }
             }
         }
         results
+    }
+}
+
+impl<F: TileFetcher> Forcing for NorkystForcing<F> {
+    async fn prepare_forcing(
+        &mut self,
+        positions: Vec<f32>,
+        date: usize,
+        hour: f32,
+        duration_hours: f32,
+    ) -> Result<(), LoaderError> {
+        let fetcher = &self.fetcher;
+        let base = &self.base_url;
+        if self.manifest.is_none() {
+            let url = format!("{base}/manifest.json");
+            self.manifest = Some(
+                Manifest::parse(&fetch(fetcher, &url).await?)
+                    .map_err(|e| LoaderError::Parse(format!("{url}: {e}")))?,
+            );
+        }
+        let dates = self.interval_dates(date, hour, duration_hours)?;
+        let manifest = self.manifest.as_ref().unwrap();
+        let grid = &manifest.grid;
+        let mut needed = HashSet::new();
+        if positions.len() % 2 != 0 {
+            return Err(LoaderError::Parse("incomplete position pair".into()));
+        }
+        for position in positions.chunks_exact(2) {
+            let (x, y) = grid
+                .position(position[0], position[1])
+                .ok_or_else(|| LoaderError::NotFound(format!("position outside NorKyst domain")))?;
+            // preload a 12 km margin for intermediate integration and diffusion probes
+            let left = ((x - 15.0).max(0.0) as usize) / 120;
+            let right = ((x + 15.0).min((grid.grid_shape[1] - 1) as f64) as usize) / 120;
+            let top = ((y - 15.0).max(0.0) as usize) / 120;
+            let bottom = ((y + 15.0).min((grid.grid_shape[0] - 1) as f64) as usize) / 120;
+            for lon_idx in left..=right {
+                for lat_idx in top..=bottom {
+                    for &day in &dates {
+                        needed.insert(TileKey {
+                            lon_idx,
+                            lat_idx,
+                            day,
+                        });
+                    }
+                }
+            }
+        }
+        self.tiles.retain(|k, _| needed.contains(k));
+        for key in needed {
+            if self.tiles.contains_key(&key) {
+                continue;
+            }
+            let url = format!(
+                "{base}/{:04}/{:02}/{:02}/{:03}_{:03}.bin",
+                key.day / 10000,
+                key.day / 100 % 100,
+                key.day % 100,
+                key.lon_idx,
+                key.lat_idx
+            );
+            let bytes = fetch(fetcher, &url).await?;
+            let day = manifest.day(key.day).unwrap();
+            let tile = Tile::parse(&bytes, grid, [key.lon_idx, key.lat_idx], &day.timestamps)
+                .map_err(|e| LoaderError::Parse(format!("{url}: {e}")))?;
+            self.tiles.insert(key, RefCell::new(tile));
+        }
+        Ok(())
+    }
+
+    fn validate_forcing_interval(
+        &self,
+        date: usize,
+        hour: f32,
+        duration_hours: f32,
+    ) -> Result<(), LoaderError> {
+        self.interval_dates(date, hour, duration_hours).map(|_| ())
+    }
+
+    fn cell_area_m2(&self, lat: f32) -> f32 {
+        let Some(manifest) = &self.manifest else {
+            return f32::NAN;
+        };
+        let scale = manifest.grid.projection.scale(lat as f64);
+        (800.0 * 800.0 / scale.powi(2)) as f32
+    }
+
+    fn sample_fields(
+        &self,
+        positions: impl ExactSizeIterator<Item = (f32, f32)>,
+        day: usize,
+        hour: f32,
+        fields: ForcingFields,
+    ) -> Vec<[f32; 5]> {
+        let count = positions.len();
+        let mut groups: HashMap<TileKey, Vec<(usize, f32, f32)>> = HashMap::new();
+        for (i, (lon, lat)) in positions.enumerate() {
+            let lon = normalize_lon(lon);
+            if let Some(key) = self.key(lon, lat, day) {
+                groups.entry(key).or_default().push((i, lon, lat));
+            }
+        }
+        self.sample(
+            groups,
+            count,
+            hour,
+            fields.current(),
+            fields.wind(),
+            fields.sst(),
+        )
     }
 }
 

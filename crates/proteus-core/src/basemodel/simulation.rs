@@ -3,7 +3,7 @@ use super::{
     meters_per_degree_lat, meters_per_degree_lon, normalize_lon, Diffusion, Integrator,
     LandMaskLoader, ParticleView, Particles, ReleaseManager,
 };
-use crate::forcing::DataLoader;
+use crate::forcing::Forcing;
 use crate::tracers::{GenericTracer, LeewayTracer, OilTracer, Tracer, TracerKind};
 use crate::TileFetcher;
 
@@ -51,7 +51,7 @@ impl Simulation {
             "euler" => Integrator::Euler,
             "rk2" => Integrator::Midpoint,
             "rk4" => Integrator::RK4,
-            _ => Integrator::RK4,
+            _ => Integrator::Euler,
         };
         let diffusion = Diffusion::new(diffusion_scheme, diffusion_coeffs);
 
@@ -67,7 +67,7 @@ impl Simulation {
     pub fn release_particles(&mut self, step_count: u32) {
         let seeds = self.release_manager.update(step_count);
         for seed in seeds {
-            self.particles.add_particle(seed.lon, seed.lat, seed.depth);
+            self.particles.add_particle(seed.lon, seed.lat);
         }
     }
 
@@ -91,7 +91,7 @@ impl Simulation {
     pub fn update_particles_batch<F: TileFetcher>(
         &mut self,
         dt_days: f32,
-        loader: &DataLoader<F>,
+        forcing: &impl Forcing,
         current_day: usize,
         hour: f32,
         landmask: &LandMaskLoader<F>,
@@ -100,10 +100,10 @@ impl Simulation {
 
         let (indices, (wind_speeds, sst_celsius)): (Vec<usize>, (Vec<f32>, Vec<f32>)) = {
             let temp_view = self.particles.view();
-            let wind_sst = loader.get_wind_sst(
+            let wind_sst = forcing.get_wind_sst(
                 temp_view
                     .iter()
-                    .map(|(_, lon, lat, depth)| (lon, lat, depth)),
+                    .map(|(_, lon, lat)| (lon, lat)),
                 current_day,
                 hour,
             );
@@ -129,8 +129,8 @@ impl Simulation {
         let unstranded_view = self.particles.view();
 
         let get_velocities_view = |view: &ParticleView| -> Vec<(f32, f32)> {
-            let env = loader.get_velocities_wind(
-                view.iter().map(|(_, lon, lat, depth)| (lon, lat, depth)),
+            let env = forcing.get_velocities_wind(
+                view.iter().map(|(_, lon, lat)| (lon, lat)),
                 current_day,
                 hour,
             );
@@ -151,8 +151,8 @@ impl Simulation {
                 .collect()
         };
 
-        let get_velocities_slice = |slice: &[(f32, f32, f32)], dt: f32| -> Vec<(f32, f32)> {
-            let env = loader.get_velocities_wind_slice(slice, current_day, hour + dt / 3600.0);
+        let get_velocities_slice = |slice: &[(f32, f32)], dt: f32| -> Vec<(f32, f32)> {
+            let env = forcing.get_velocities_wind_slice(slice, current_day, hour + dt / 3600.0);
 
             env.iter()
                 .copied()
@@ -176,7 +176,7 @@ impl Simulation {
             &get_velocities_slice,
         );
         let final_positions = self.diffusion.diffusion_step(
-            loader,
+            forcing,
             &unstranded_view,
             &advected_positions,
             current_day,

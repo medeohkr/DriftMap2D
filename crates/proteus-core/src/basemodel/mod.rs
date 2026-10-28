@@ -13,5 +13,5 @@ pub use particles::{ParticleView, Particles};
 pub use release_manager::ReleaseManager;
 pub use simulation::Simulation;
 pub use utils::{
-    bilerp, find_depth_indices, lerp, meters_per_degree_lat, meters_per_degree_lon, normalize_lon,
+    bilerp, lerp, meters_per_degree_lat, meters_per_degree_lon, normalize_lon,
 };

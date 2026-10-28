@@ -28,7 +28,6 @@ pub struct ReleaseManager {
 pub struct ParticleSeed {
     pub lon: f32,
     pub lat: f32,
-    pub depth: f32,
     pub mass: f32,
 }
 
@@ -193,7 +192,6 @@ fn seed(
             ParticleSeed {
                 lon,
                 lat,
-                depth: 0.0,
                 mass: mass_per_particle,
             }
         })

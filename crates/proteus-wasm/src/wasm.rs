@@ -3,14 +3,14 @@ use chrono::Duration;
 use chrono::Timelike;
 use chrono::{Datelike, NaiveDateTime};
 use proteus_core::basemodel::{LandMaskLoader, Simulation};
-use proteus_core::forcing::DataLoader;
+use proteus_core::forcing::{Forcing, ForcingKind};
 use proteus_core::tracers::TracerKind;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 pub struct Proteus {
     simulation: Simulation,
-    loader: DataLoader<GlooFetcher>,
+    forcing: ForcingKind<GlooFetcher>,
     landmask: LandMaskLoader<GlooFetcher>,
     start_date: NaiveDateTime,
     steps_per_day: u32,
@@ -61,15 +61,15 @@ impl Proteus {
             diffusion_coeffs,
         );
 
-        let loader = match forcing_model {
-            "global" => DataLoader::new(
+        let forcing = match forcing_model {
+            "global" => ForcingKind::global(
                 "https://tiles.driftmap2d.com/tiles",
                 -180.0,
                 -80.0,
                 GlooFetcher,
             ),
             "norkyst" => {
-                DataLoader::new_norkyst("https://tiles.driftmap2d.com/norkyst", GlooFetcher)
+                ForcingKind::norkyst("https://tiles.driftmap2d.com/norkyst", GlooFetcher)
             }
             _ => return Err(JsValue::from_str("forcing model must be global or norkyst")),
         };
@@ -83,7 +83,7 @@ impl Proteus {
 
         Ok(Self {
             simulation,
-            loader,
+            forcing,
             landmask,
             start_date,
             steps_per_day,
@@ -117,7 +117,7 @@ impl Proteus {
             + forcing_date.month() as usize * 100
             + forcing_date.day() as usize;
 
-        self.loader
+        self.forcing
             .prepare_forcing(
                 self.get_unstranded_positions(),
                 current_date_int,
@@ -126,7 +126,7 @@ impl Proteus {
             )
             .await
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        self.loader
+        self.forcing
             .validate_forcing_interval(current_date_int, hour, dt_days * 24.0)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         self.landmask
@@ -135,7 +135,7 @@ impl Proteus {
 
         self.simulation.update_particles_batch(
             dt_days,
-            &self.loader,
+            &self.forcing,
             current_date_int,
             hour,
             &self.landmask,

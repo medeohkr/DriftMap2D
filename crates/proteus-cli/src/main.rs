@@ -8,7 +8,7 @@ use clap::Parser;
 use config::{Config, ForcingModel, ReleasesSpec};
 use fetch::ReqwestFetcher;
 use proteus_core::basemodel::{LandMaskLoader, Simulation};
-use proteus_core::forcing::DataLoader;
+use proteus_core::forcing::{Forcing, ForcingKind};
 use proteus_core::tracers::TracerKind;
 use std::path::PathBuf;
 
@@ -75,9 +75,9 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
     );
 
     let base_url = resolve_tile_base_url(config.tile_url.as_deref(), config.forcing_model);
-    let mut loader = match config.forcing_model {
-        ForcingModel::Global => DataLoader::new(&base_url, MIN_LON, MIN_LAT, ReqwestFetcher::new()),
-        ForcingModel::Norkyst => DataLoader::new_norkyst(&base_url, ReqwestFetcher::new()),
+    let mut forcing = match config.forcing_model {
+        ForcingModel::Global => ForcingKind::global(&base_url, MIN_LON, MIN_LAT, ReqwestFetcher::new()),
+        ForcingModel::Norkyst => ForcingKind::norkyst(&base_url, ReqwestFetcher::new()),
     };
     log::info!("forcing model={:?} root={}", config.forcing_model, base_url);
     let mut landmask = LandMaskLoader::new(
@@ -120,14 +120,14 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
         simulation.release_particles(step_count);
 
         let positions = unstranded_flat(&simulation);
-        loader
+        forcing
             .prepare_forcing(positions.clone(), current_date_int, hour, dt_days * 24.0)
             .await
             .with_context(|| format!("failed to prepare forcing for step {step_count}"))?;
-        loader.validate_forcing_interval(current_date_int, hour, dt_days * 24.0)?;
+        forcing.validate_forcing_interval(current_date_int, hour, dt_days * 24.0)?;
         landmask.load_landmask_tiles(positions).await;
 
-        simulation.update_particles_batch(dt_days, &loader, current_date_int, hour, &landmask);
+        simulation.update_particles_batch(dt_days, &forcing, current_date_int, hour, &landmask);
 
         let (lon, lat) = centroid(&simulation);
         results.push((
@@ -363,12 +363,12 @@ mod tests {
         std::fs::copy(fixture.join("manifest.json"), root.join("manifest.json")).unwrap();
         let root_url = url::Url::from_directory_path(&root).unwrap();
         let base = resolve_tile_base_url(Some(root_url.as_str()), ForcingModel::Norkyst);
-        let mut loader = DataLoader::new_norkyst(&base, ReqwestFetcher::new());
-        let position = (4.62534, 60.16331, 0.0);
-        loader.prepare_forcing(vec![position.0, position.1], 20261023, 0.5, 0.25).await.unwrap();
-        let values = loader.get_wind_sst([position].into_iter(), 20261023, 0.5);
+        let mut forcing = ForcingKind::norkyst(&base, ReqwestFetcher::new());
+        let position = (4.62534, 60.16331);
+        forcing.prepare_forcing(vec![position.0, position.1], 20261023, 0.5, 0.25).await.unwrap();
+        let values = forcing.get_wind_sst([position].into_iter(), 20261023, 0.5);
         assert_eq!(values[0], (0.0, 4.0, 280.5));
-        assert!(loader.validate_forcing_interval(20261023, 1.5, 1.0).is_err());
+        assert!(forcing.validate_forcing_interval(20261023, 1.5, 1.0).is_err());
         assert!(root.starts_with(target));
         std::fs::remove_dir_all(root).unwrap();
     }

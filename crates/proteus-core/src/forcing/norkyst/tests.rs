@@ -1,7 +1,7 @@
 // tests.rs checks projected coordinates and native forcing samples
 
 use super::*;
-use crate::{fetch::BoxFuture, forcing::DataLoader};
+use crate::fetch::BoxFuture;
 
 const MANIFEST: &[u8] = include_bytes!("fixtures/manifest.json");
 const LEFT: &[u8] = include_bytes!("fixtures/004_005.bin");
@@ -32,11 +32,10 @@ fn reference() -> Vec<serde_json::Value> {
     serde_json::from_str(include_str!("fixtures/reference.json")).unwrap()
 }
 
-fn point(reference: &serde_json::Value) -> (f32, f32, f32) {
+fn point(reference: &serde_json::Value) -> (f32, f32) {
     (
         reference["lon"].as_f64().unwrap() as f32,
         reference["lat"].as_f64().unwrap() as f32,
-        0.0,
     )
 }
 
@@ -91,7 +90,7 @@ async fn integration_stages_cross_midnight_using_the_next_day_tile() {
             Box::pin(async { panic!("fixtures must be preloaded") })
         }
     }
-    let mut loader = DataLoader::new_norkyst("fixture", MidnightFetcher);
+    let mut loader = NorkystForcing::new("fixture", MidnightFetcher);
     let point = point(&reference()[0]);
     loader
         .prepare_forcing(vec![point.0, point.1], 20261023, 23.75, 0.5)
@@ -114,10 +113,10 @@ fn python_tiles_preserve_fields_and_reject_invalid_headers() {
     let manifest = Manifest::parse(MANIFEST).unwrap();
     let times = &manifest.days[0].timestamps;
     let tile = Tile::parse(LEFT, &manifest.grid, [4, 5], times).unwrap();
-    assert_eq!(tile.fields[2][0], 0.0);
-    assert_eq!(tile.fields[3][0], 4.0);
-    assert_eq!(tile.fields[4][0], 280.0);
-    assert!(tile.fields[0][61 * 122 + 51].is_nan());
+    assert_eq!(tile.grid.fields[2][0], 0.0);
+    assert_eq!(tile.grid.fields[3][0], 4.0);
+    assert_eq!(tile.grid.fields[4][0], 280.0);
+    assert!(tile.grid.fields[0][61 * 122 + 51].is_nan());
     assert!(Tile::parse(LEFT, &manifest.grid, [5, 5], times).is_err());
     assert!(Tile::parse(LEFT, &manifest.grid, [4, 5], &times[..2]).is_err());
     assert!(Tile::parse(&LEFT[..10], &manifest.grid, [4, 5], times).is_err());
@@ -126,20 +125,25 @@ fn python_tiles_preserve_fields_and_reject_invalid_headers() {
 
 #[tokio::test]
 async fn projected_lookup_samples_both_sides_of_a_tile_boundary() {
-    let mut loader = DataLoader::new_norkyst("fixture", MockFetcher);
+    let mut loader = NorkystForcing::new("fixture", MockFetcher);
     let reference = reference();
     let positions: Vec<_> = reference.iter().map(point).collect();
     let flat = positions.iter().flat_map(|p| [p.0, p.1]).collect();
-    loader.try_load_ocean_tiles(flat, 20261023).await.unwrap();
+    loader
+        .prepare_forcing(flat, 20261023, 0.0, 0.0)
+        .await
+        .unwrap();
     assert_eq!(
         loader
-            .get_tile_key(positions[0].0, positions[0].1, 20261023)
+            .key(positions[0].0, positions[0].1, 20261023)
+            .unwrap()
             .lon_idx,
         4
     );
     assert_eq!(
         loader
-            .get_tile_key(positions[1].0, positions[1].1, 20261023)
+            .key(positions[1].0, positions[1].1, 20261023)
+            .unwrap()
             .lon_idx,
         5
     );
@@ -171,17 +175,17 @@ async fn projected_lookup_samples_both_sides_of_a_tile_boundary() {
 
 #[tokio::test]
 async fn invalid_domains_and_dates_return_errors() {
-    let mut loader = DataLoader::new_norkyst("fixture", MockFetcher);
+    let mut loader = NorkystForcing::new("fixture", MockFetcher);
     assert!(loader
-        .try_load_ocean_tiles(vec![0., 0.], 20261023)
+        .prepare_forcing(vec![0., 0.], 20261023, 0.0, 0.0)
         .await
         .is_err());
     assert!(loader
-        .try_load_ocean_tiles(vec![5., 60.], 20261024)
+        .prepare_forcing(vec![5., 60.], 20261024, 0.0, 0.0)
         .await
         .is_err());
     assert!(loader
-        .try_load_ocean_tiles(vec![5.], 20261023)
+        .prepare_forcing(vec![5.], 20261023, 0.0, 0.0)
         .await
         .is_err());
 }

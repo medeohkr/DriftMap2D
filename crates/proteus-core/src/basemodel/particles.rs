@@ -3,7 +3,6 @@ use crate::tracers::{Tracer, TracerKind};
 pub struct Particles {
     pub lons: Vec<f32>,
     pub lats: Vec<f32>,
-    pub depths: Vec<f32>,
     pub tracer: TracerKind,
     pub stranded: Vec<bool>,
     pub len: usize,
@@ -15,17 +14,15 @@ impl Particles {
         Self {
             lons: Vec::with_capacity(capacity),
             lats: Vec::with_capacity(capacity),
-            depths: Vec::with_capacity(capacity),
             tracer: tracer,
             stranded: Vec::with_capacity(capacity),
             len: 0,
         }
     }
 
-    pub fn add_particle(&mut self, lon: f32, lat: f32, depth: f32) {
+    pub fn add_particle(&mut self, lon: f32, lat: f32) {
         self.lons.push(lon);
         self.lats.push(lat);
-        self.depths.push(depth);
         self.tracer.push();
         self.stranded.push(false);
         self.len += 1;
@@ -59,7 +56,6 @@ impl Particles {
         ParticleView {
             lons: &self.lons,
             lats: &self.lats,
-            depths: &self.depths,
             indices,
         }
     }
@@ -68,7 +64,6 @@ impl Particles {
 pub struct ParticleView<'a> {
     lons: &'a [f32],
     lats: &'a [f32],
-    depths: &'a [f32],
     pub indices: Vec<usize>,
 }
 
@@ -81,14 +76,10 @@ impl ParticleView<'_> {
         self.lats[self.indices[i]]
     }
 
-    pub fn depth(&self, i: usize) -> f32 {
-        self.depths[self.indices[i]]
-    }
-
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = (usize, f32, f32, f32)> + '_ {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (usize, f32, f32)> + '_ {
         self.indices
             .iter()
             .enumerate()
-            .map(|(pos, &idx)| (pos, self.lons[idx], self.lats[idx], self.depths[idx]))
+            .map(|(pos, &idx)| (pos, self.lons[idx], self.lats[idx]))
     }
 }

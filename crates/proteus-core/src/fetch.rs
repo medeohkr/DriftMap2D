@@ -3,11 +3,9 @@ use std::pin::Pin;
 
 /// A boxed, non-`Send` future that borrows for `'a` and yields `T`.
 ///
-/// We use this instead of `async fn` in traits because:
-/// - The concrete future type of an `async fn` is unnamed, so a trait method
-///   can't return it directly.
-/// - `async-trait`'s default `Send` bound would break on WASM, where
-///   `gloo-net`'s futures are `!Send` (they hold JS closures).
+/// erases transport-specific future types without requiring `Send`, since
+/// browser futures hold JS closures. the forcing trait uses static dispatch
+/// and can use native async methods without boxing.
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 
 /// Async byte fetcher. Implementations live in the binding crates
