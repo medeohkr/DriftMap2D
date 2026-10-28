@@ -16,6 +16,7 @@ import math
 import sys
 import struct
 import shutil
+import argparse
 import numpy as np
 import zstandard as zstd
 import xarray as xr
@@ -23,6 +24,7 @@ import boto3
 from pathlib import Path
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from scripts.forecast_updates import cmems_update, published_manifest
 
 # ===== CONFIG =====
 
@@ -107,6 +109,7 @@ def smoc_timeline():
     """read source timestamps without downloading the global current fields."""
     import copernicusmarine
     with copernicusmarine.open_dataset(dataset_id=SMOC_DATASET, variables=["utotal", "vtotal"],
+                                      raise_if_updating=True,
                                       username=CMEMS_USER or ".", password=CMEMS_PASS or ".") as dataset:
         return dataset['time'].values.astype('datetime64[s]')
 
@@ -191,6 +194,7 @@ def download_smoc_day(date, end_dt):
     print(f"    Downloading SMOC {date.date()} ({sample_count} samples)...")
 
     copernicusmarine.subset(
+        raise_if_updating=True,
         dataset_id=SMOC_DATASET,
         variables=["utotal", "vtotal"],
         minimum_longitude=-180,
@@ -419,6 +423,21 @@ def tile_and_upload_day(date, wind_file, wind_data_cache, expected_times=None):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--check-for-update', action='store_true',
+                        help='skip generation if the completed source update is already published')
+    args = parser.parse_args()
+    import copernicusmarine
+    catalogue = copernicusmarine.describe(dataset_id=SMOC_DATASET, disable_progress_bar=True)
+    source_update = cmems_update(catalogue, SMOC_DATASET, datetime.utcnow().date())
+    if source_update is None:
+        print('CMEMS source is not ready, no tiles changed')
+        return
+    if args.check_for_update:
+        previous = published_manifest(s3, BUCKET, 'tiles/manifest.json')
+        if previous.get('source_update') == source_update:
+            print('CMEMS update is already published, no tiles changed')
+            return
     print(f"\n{'='*60}")
     print(f"🌊 Daily tile update: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
     print(f"{'='*60}")
@@ -491,6 +510,8 @@ def main():
 
     manifest = {
         'schema_version': 1,
+        'source_update': source_update,
+        'wind_forecast_reference_time': reference.isoformat() + 'Z',
         'generated_at': datetime.utcnow().isoformat(timespec='seconds') + 'Z',
         'hindcast_days': HINDCAST_DAYS,
         'days': [{'date': date.strftime('%Y-%m-%d'), 'timestamps': samples.astype('int64').tolist()}

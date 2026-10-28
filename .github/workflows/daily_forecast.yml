@@ -1,9 +1,16 @@
-name: Daily Forecast Update
+name: Global Forecast Update
 
 on:
   schedule:
-    - cron: '0 8 * * *'
+    - cron: '17 * * * *'
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: global-forcing
+  cancel-in-progress: false
 
 jobs:
   update-tiles:
@@ -16,20 +23,33 @@ jobs:
         with:
           python-version: '3.10'
       
+      - name: Install forecast check dependencies
+        run: pip install boto3 copernicusmarine
+
+      - name: Check for a new completed forecast
+        id: forecast
+        env:
+          ACCOUNT_ID: ${{ secrets.ACCOUNT_ID }}
+          ACCESS_KEY: ${{ secrets.ACCESS_KEY }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+        run: python -u scripts/check_forecast_update.py global
+
       - name: Install dependencies
+        if: steps.forecast.outputs.ready == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgdal-dev
           pip install numpy xarray boto3 scipy cfgrib netCDF4 copernicusmarine ecmwf-opendata zstandard
       
       - name: Run tile generation
+        if: steps.forecast.outputs.ready == 'true'
         env:
           ACCOUNT_ID: ${{ secrets.ACCOUNT_ID }}
           ACCESS_KEY: ${{ secrets.ACCESS_KEY }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           CMEMS_USER: ${{ secrets.CMEMS_USER }}
           CMEMS_PASS: ${{ secrets.CMEMS_PASS }}
-        run: python daily_cron.py
+        run: python -u global_cron.py --check-for-update
       
       - name: Upload logs on failure
         if: failure()

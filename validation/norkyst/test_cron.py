@@ -6,7 +6,7 @@ import struct
 import tempfile
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -18,6 +18,55 @@ import zstandard as zstd
 spec = importlib.util.spec_from_file_location('norkyst_cron', Path(__file__).resolve().parents[2] / 'norkyst_cron.py')
 cron = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cron)
+
+
+class ForecastFreshness(unittest.TestCase):
+    """reject stale cycles before any tile generation or publishing."""
+
+    @staticmethod
+    def dataset(reference):
+        class Variable:
+            units = 'hours since 2026-10-27 00:00:00'
+
+            def __getitem__(self, index):
+                return np.ma.asarray(reference)
+        return SimpleNamespace(variables={'forecast_reference_time': Variable()}, close=Mock())
+
+    def test_reference_decoding(self):
+        self.assertEqual(cron.forecast_reference_time(self.dataset(24)),
+                         datetime(2026, 10, 28, tzinfo=timezone.utc))
+        for invalid in (np.nan, [0, 24], np.ma.masked):
+            with self.subTest(value=invalid), self.assertRaises(ValueError):
+                cron.forecast_reference_time(self.dataset(invalid))
+        with self.assertRaisesRegex(ValueError, 'no forecast_reference_time'):
+            cron.forecast_reference_time(SimpleNamespace(variables={}))
+
+    def test_current_cycle_stays_open(self):
+        dataset = self.dataset(24)
+        with patch.object(cron.netCDF4, 'Dataset', return_value=dataset):
+            self.assertIs(cron.open_fresh_source('source', date(2026, 10, 28)), dataset)
+        dataset.close.assert_not_called()
+
+    def test_stale_cycle_fails_without_waiting(self):
+        dataset = self.dataset(0)
+        with patch.object(cron.netCDF4, 'Dataset', return_value=dataset), \
+                patch.object(cron.time, 'sleep') as sleep:
+            with self.assertRaisesRegex(RuntimeError, 'no tiles published'):
+                cron.open_fresh_source('source', date(2026, 10, 28), wait_seconds=0)
+        dataset.close.assert_called_once()
+        sleep.assert_not_called()
+
+    def test_stale_source_is_closed_and_reopened(self):
+        stale, fresh = self.dataset(0), self.dataset(24)
+        with patch.object(cron.netCDF4, 'Dataset', side_effect=[stale, fresh]) as opened, \
+                patch.object(cron.time, 'sleep') as sleep, \
+                patch.object(cron.time, 'monotonic', return_value=0):
+            result = cron.open_fresh_source('source', date(2026, 10, 28))
+        self.assertIs(result, fresh)
+        self.assertEqual(opened.call_count, 2)
+        stale.close.assert_called_once()
+        fresh.close.assert_not_called()
+        sleep.assert_called_once_with(900)
 
 
 class NativeTiles(unittest.TestCase):

@@ -1,5 +1,19 @@
 # global forcing tile validation
 
+`global_cron.py` is checked hourly at minute 17 UTC. the workflow first reads
+CMEMS catalogue metadata and the published R2 manifest. expensive dependencies
+and tile generation are skipped unless a new completed update is available.
+`arco_updating_start_date` blocks in-progress updates. `arco_updated_date` must
+belong to the current UTC date, and its version and timestamp must differ from
+the published `source_update`. this is a publication marker, not a model
+forecast reference time. the global manifest also records the ECMWF reference
+time separately. data reads reject in-progress CMEMS updates.
+
+workflow concurrency prevents overlapping generators. scheduled generation
+passes `--check-for-update` to recheck before downloads or cleanup. omit that
+flag when manually regenerating the latest completed update. source failures
+remain workflow failures, while stale and unchanged sources are normal skips.
+
 run `python -m unittest discover -s validation/global_forcing` to check hourly
 sample validation and the actual cron writer using synthetic data and a fake
 uploader. no downloads or R2 writes occur.

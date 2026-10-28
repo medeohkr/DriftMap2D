@@ -12,7 +12,9 @@ Each run writes:
 
 Run from any directory; paths are relative to validation/generic/.
 """
+import argparse
 import json
+import subprocess
 import sys
 import time
 from datetime import datetime, timedelta
@@ -114,10 +116,11 @@ def run_opendrift(run_dir, release_lon, release_lat, reader_smoc, reader_wind):
 # ---------------------------------------------------------------------------
 # CLI run
 # ---------------------------------------------------------------------------
-def make_cli_config(release_lon, release_lat):
+def make_cli_config(release_lon, release_lat, tile_url="validation-tiles"):
     config = {
         "start_date": START_TIME.strftime("%Y-%m-%d %H:%M"),
         "tracer_type": "generic",
+        "forcing_model": "global",
         "tracer_json": {
             "wind_factor": WIND_FACTOR,
             "wind_deflection": WIND_DEFLECTION,
@@ -136,16 +139,17 @@ def make_cli_config(release_lon, release_lat):
         "diffusion": "constant",
         "diffusion_coeffs": [0.0, 0.0],
         "steps": CLI_STEPS,
-        "tile_url": "validation-tiles",
+        "tile_url": tile_url,
         "output": "proteus_centroids.json",
     }
     return config
 
 
-def run_cli(run_dir, release_lon, release_lat):
+def run_cli(run_dir, release_lon, release_lat, tile_url="validation-tiles"):
     elapsed, result = run_cli_shared(
-        run_dir, make_cli_config(release_lon, release_lat)
+        run_dir, make_cli_config(release_lon, release_lat, tile_url)
     )
+    (run_dir / "proteus.log").write_text(result.stdout + result.stderr, encoding="utf-8")
 
     if result.returncode != 0:
         print(f"    ❌ CLI failed (exit {result.returncode})")
@@ -168,6 +172,31 @@ def save_opendrift_centroids(run_dir):
 # Main
 # ---------------------------------------------------------------------------
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--cli-only", action="store_true", help="test tile access without running OpenDrift")
+    parser.add_argument("--limit", type=int, help="run only the first N points")
+    parser.add_argument("--tile-url", default="validation-tiles")
+    parser.add_argument("--skip-build", action="store_true")
+    args = parser.parse_args()
+    if args.limit is not None and args.limit < 1:
+        parser.error("limit must be positive")
+    if not args.skip_build:
+        subprocess.run(["cargo", "build", "--release", "-p", "proteus-cli"],
+                       cwd=HERE.parents[1], check=True)
+    points = make_grid()[:args.limit]
+    if args.cli_only:
+        failed = 0
+        for i, (lon, lat) in enumerate(points):
+            # keep access probes separate from existing paired validation outputs
+            directory = RUNS_DIR / "cli_smoke" / f"run_{i:03d}"
+            directory.mkdir(parents=True, exist_ok=True)
+            elapsed, ok = run_cli(directory, lon, lat, args.tile_url)
+            failed += not ok
+            print(f"run {i:03d}, success={ok}, elapsed={elapsed:.1f}s, log={directory / 'proteus.log'}")
+        if failed:
+            raise SystemExit(f"{failed} CLI runs failed")
+        return
+
     print("Step 1: Preparing ECMWF NetCDF")
     prepare_ecmwf_netcdf()
 
@@ -181,7 +210,6 @@ def main():
     )
     reader_wind = reader_netCDF_CF_generic.Reader(str(ECMWF_NC))
 
-    points = make_grid()
     RUNS_DIR.mkdir(exist_ok=True)
 
     total = len(points)
@@ -219,7 +247,7 @@ def main():
         save_opendrift_centroids(run_dir)
         
         print("    DriftMap...", end="", flush=True)
-        cli_sec, ok = run_cli(run_dir, lon, lat)
+        cli_sec, ok = run_cli(run_dir, lon, lat, args.tile_url)
         if ok:
             meta["cli_seconds"] = cli_sec
             print(f" {cli_sec:.1f}s")

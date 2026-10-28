@@ -43,6 +43,48 @@ def plain(value):
     return value
 
 
+def forecast_reference_time(dataset):
+    """decode the source cycle separately from its forecast valid times."""
+    if 'forecast_reference_time' not in dataset.variables:
+        raise ValueError('source has no forecast_reference_time')
+    variable = dataset.variables['forecast_reference_time']
+    values = np.ma.asarray(variable[...])
+    if values.size != 1 or np.ma.getmaskarray(values).any() or not np.isfinite(values).all():
+        raise ValueError('expected one finite forecast reference time')
+    reference = netCDF4.num2date(
+        float(values.item()), variable.units,
+        calendar=getattr(variable, 'calendar', 'standard'),
+        only_use_cftime_datetimes=False, only_use_python_datetimes=True,
+    )
+    return reference.replace(tzinfo=timezone.utc)
+
+
+def open_fresh_source(source, expected_date, wait_seconds=7200, poll_seconds=900):
+    """reopen stale aggregations until today's cycle appears or the wait expires."""
+    deadline = time.monotonic() + wait_seconds
+    while True:
+        dataset = netCDF4.Dataset(source)
+        try:
+            reference = forecast_reference_time(dataset)
+            logging.info('source forecast_reference_time=%s expected_date=%s',
+                         reference.isoformat(), expected_date)
+            if reference.date() == expected_date:
+                return dataset
+            if reference.date() > expected_date:
+                raise ValueError(f'forecast reference {reference.isoformat()} is after expected date {expected_date}')
+        except Exception:
+            dataset.close()
+            raise
+        dataset.close()
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RuntimeError(f'NorKyst forecast is stale, reference={reference.isoformat()}, '
+                               f'expected={expected_date}. no tiles published')
+        delay = min(poll_seconds, remaining)
+        logging.warning('forecast is stale, retrying in %.0f seconds', delay)
+        time.sleep(delay)
+
+
 def read(variable, index):
     """read bounded contiguous requests and preserve reordered time selections."""
     index = index if isinstance(index, tuple) else (index,)
@@ -349,18 +391,43 @@ def cleanup(client, bucket, prefix, cutoff):
 
 def main():
     """generate forcing locally or publish complete days to the NorKyst prefix."""
+    from scripts.forecast_updates import published_manifest
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', default=SOURCE)
     parser.add_argument('--output', type=Path, default=ROOT / 'data' / 'norkyst')
     parser.add_argument('--local-only', action='store_true')
     parser.add_argument('--inspect', action='store_true')
     parser.add_argument('--refresh-hindcast', action='store_true')
+    parser.add_argument('--check-for-update', action='store_true',
+                        help='check once and skip stale or already published source cycles')
+    parser.add_argument('--forecast-wait-minutes', type=int, default=120,
+                        help="wait for today's source cycle before generation, default 120 minutes")
     args = parser.parse_args()
+    if args.forecast_wait_minutes < 0:
+        parser.error('forecast wait minutes must be nonnegative')
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s')
     today = datetime.now(timezone.utc).date()
-    with netCDF4.Dataset(args.source) as dataset:
+    opener = (netCDF4.Dataset(args.source) if args.inspect or args.check_for_update else
+              open_fresh_source(args.source, today, args.forecast_wait_minutes * 60))
+    with opener as dataset:
+        reference = forecast_reference_time(dataset)
+        client = None
+        if args.check_for_update and not args.inspect:
+            if reference.date() < today:
+                logging.info('source cycle %s is stale, checking again next hour', reference.isoformat())
+                return
+            if reference.date() > today:
+                raise ValueError('NorKyst forecast reference date is in the future')
+            if not args.local_only:
+                client = r2_client()
+                previous = published_manifest(client, 'driftmap-tiles', 'norkyst/manifest.json')
+                if (not args.refresh_hindcast and previous.get('grid', {}).get('source') == args.source
+                        and previous.get('grid', {}).get('source_forecast_reference_time') == reference.isoformat()):
+                    logging.info('source cycle %s is already published, no tiles changed', reference.isoformat())
+                    return
         metadata, seconds, surface = describe(dataset)
         metadata['source'] = args.source
+        metadata['source_forecast_reference_time'] = reference.isoformat()
         windows = list(day_windows(seconds, today))
         logging.info('grid=%s days=%s surface_depth=%s', metadata['grid_shape'], len(windows), metadata['surface_depth_m'])
         if args.inspect:
@@ -368,7 +435,8 @@ def main():
             print([(str(day), len(times)) for day, _, times in windows])
             return
         bucket, prefix = 'driftmap-tiles', 'norkyst'
-        client = None if args.local_only else r2_client()
+        if client is None and not args.local_only:
+            client = r2_client()
 
         def publish(path, content_type):
             if client:
@@ -391,7 +459,8 @@ def main():
                     if error.response['Error']['Code'] not in ('NoSuchKey', '404'):
                         raise
             stable_grid = lambda grid: {k: v for k, v in grid.items()
-                                        if k not in ('source_first_time', 'source_last_time')}
+                                        if k not in ('source_first_time', 'source_last_time',
+                                                     'source_forecast_reference_time')}
             if previous and stable_grid(previous.get('grid', {})) == stable_grid(metadata) and previous.get('timestamps') == times:
                 logging.info('retaining complete hindcast day %s', day)
                 details = previous

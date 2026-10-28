@@ -15,7 +15,7 @@ import numpy as np
 import zstandard as zstd
 
 
-source = Path(__file__).resolve().parents[2] / 'daily_cron.py'
+source = Path(__file__).resolve().parents[2] / 'global_cron.py'
 names = {'halo_indices', 'current_sample_count', 'encode_tile_header', 'tile_and_upload_day', 'ecmwf_steps', 'forecast_windows'}
 tree = ast.parse(source.read_text(encoding='utf-8'))
 functions = ast.Module(body=[item for item in tree.body if isinstance(item, ast.FunctionDef) and item.name in names], type_ignores=[])

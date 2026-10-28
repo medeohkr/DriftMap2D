@@ -1,8 +1,8 @@
-name: Daily NorKyst Update
+name: NorKyst Forecast Update
 
 on:
   schedule:
-    - cron: '0 10 * * *'
+    - cron: '17 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -21,11 +21,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install dependencies
-        run: pip install numpy netCDF4 boto3 zstandard pyproj roaring-landmask
-      - name: Generate and publish native grid tiles
+      - name: Install forecast check dependencies
+        run: pip install numpy netCDF4 boto3 zstandard
+      - name: Check for a new completed forecast
+        id: forecast
         env:
           ACCOUNT_ID: ${{ secrets.ACCOUNT_ID }}
           ACCESS_KEY: ${{ secrets.ACCESS_KEY }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
-        run: python -u norkyst_cron.py
+        run: python -u scripts/check_forecast_update.py norkyst
+      - name: Install dependencies
+        if: steps.forecast.outputs.ready == 'true'
+        run: pip install numpy netCDF4 boto3 zstandard pyproj roaring-landmask
+      - name: Generate and publish native grid tiles
+        if: steps.forecast.outputs.ready == 'true'
+        env:
+          ACCOUNT_ID: ${{ secrets.ACCOUNT_ID }}
+          ACCESS_KEY: ${{ secrets.ACCESS_KEY }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+        run: python -u norkyst_cron.py --check-for-update

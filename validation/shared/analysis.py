@@ -6,7 +6,7 @@ from .metrics import aggregate, load_centroids, run_error_series, write_csv
 from .plot import plot_error_vs_step
 
 
-def analyze_runs(runs_dir, out_csv_pct, out_csv_abs, out_png, title, x_label):
+def analyze_runs(runs_dir, out_csv_pct, out_csv_abs, out_png, title, x_label, *, max_step=None):
     run_dirs = sorted(p for p in Path(runs_dir).iterdir() if p.is_dir())
     print(f"Found {len(run_dirs)} runs in {runs_dir}/")
 
@@ -30,6 +30,10 @@ def analyze_runs(runs_dir, out_csv_pct, out_csv_abs, out_png, title, x_label):
             continue
 
         err_pct, abs_km, path_km = run_error_series(od_lon, od_lat, dm_lon, dm_lat)
+        if max_step is not None:
+            err_pct = err_pct[:max_step + 1]
+            abs_km = abs_km[:max_step + 1]
+            path_km = path_km[:max_step + 1]
         per_run_pct.append(err_pct)
         per_run_abs.append(abs_km)
         per_run_path.append(path_km)
