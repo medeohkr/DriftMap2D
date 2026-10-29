@@ -42,8 +42,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--website", type=Path)
     args = parser.parse_args()
-    run = HERE / "runs/run_039"
-    cli = json.loads((run / "proteus_centroids.json").read_text())
+    run = HERE / "runs/worst_case"
+    cli = json.loads((run / "proteus_reference.json").read_text())
     od = json.loads((run / "opendrift_centroids.json").read_text())
     if args.website:
         website = json.loads(args.website.read_text())

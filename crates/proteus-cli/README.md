@@ -62,3 +62,32 @@ SAR defaults are jibe_probability 0.04, random_orientation true, capsizing false
 catalogs are discovered in `catalogs/` near the config or executable, independently of the working directory. set `"catalog_dir": "../catalogs"` to specify a directory relative to the config. use `--oil-source` and `--object-source` on the generator to select NOAA records or the existing frontend object catalog. generated JSON is ignored by Git and no catalog downloads happen during simulation.
 
 full property objects and JSON strings remain supported for existing configs and validation. unknown IDs, selector mismatches, unknown override keys and invalid property types return errors before simulation starts.
+
+## particle snapshots
+
+centroid output remains unchanged. enable optional full-particle output with
+
+```powershell
+proteus config.json --particle-output particles.jsonl --snapshot-every 2
+```
+
+the same options can be set in config as `particle_output` and `snapshot_every`.
+command-line options override config values. paths resolve relative to the
+config directory. the interval must be positive and defaults to every step.
+initial and final states are always included, even if the final step is not an
+interval multiple.
+
+each JSONL line contains `step`, UTC `time`, and `particles`. every released
+particle has `id`, `lon`, `lat`, and `stranded`. IDs are stable zero-based release
+indices, including stranded particles. unreleased particles appear only after
+release. coordinates are geographic degrees and nonfinite coordinates encode
+as JSON null. snapshots stream directly to disk without retaining full particle
+history in memory. completed lines remain useful if a later step fails.
+
+100,000 particles across 49 snapshots can produce several hundred megabytes of
+JSONL. increase the snapshot interval when full temporal resolution is unneeded.
+
+for local coastline validation, `landmask_url` can override the production
+landmask root with a file URL. the root must contain raster tiles and matching
+`polygons/landmask_XXX_YYY.bin.zst` files. see `validation/landmask/README.md` for
+generation and upload instructions. both assets are required by the new loader.

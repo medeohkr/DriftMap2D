@@ -1,6 +1,7 @@
 pub mod diffusion;
 pub mod integrators;
 pub mod landmask_loader;
+mod landmask_polygons;
 pub mod particles;
 pub mod release_manager;
 pub mod simulation;

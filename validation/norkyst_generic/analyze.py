@@ -24,9 +24,9 @@ def main():
         HERE / "error_vs_step_abs.csv",
         HERE / "error_vs_step.png",
         "Proteus vs OpenDrift NorKyst Ocean Drift across {n_runs} runs\n"
-        "first 24 hours from 27 october 2026, no windage, RK4",
+        "28–30 october 2026, no windage, RK4",
         "simulation step (hours since release)",
-        max_step=24,
+        max_step=48,
     )
 
 

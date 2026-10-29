@@ -93,7 +93,7 @@ def main():
         writer.writeheader()
         writer.writerows(rows)
     # preserve the original CLI track rather than fetching a newer forecast
-    reference = HERE / "runs/run_039/proteus_centroids.json"
+    reference = HERE / "runs/worst_case/proteus_reference.json"
     if reference.exists():
         cli = json.loads(reference.read_text())
         (args.output / "proteus_reference.json").write_text(json.dumps(cli, indent=2))

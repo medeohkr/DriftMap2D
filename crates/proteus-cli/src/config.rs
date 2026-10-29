@@ -49,9 +49,23 @@ pub struct Config {
     #[serde(default)]
     pub tile_url: Option<String>,
 
+    /// optional landmask root for local raster and polygon validation
+    #[serde(default)]
+    pub landmask_url: Option<String>,
+
     #[serde(default = "default_output")]
     pub output: String,
+
+    /// optional streamed JSONL particle snapshots, relative to the config
+    #[serde(default)]
+    pub particle_output: Option<std::path::PathBuf>,
+
+    /// particle snapshot interval in simulation steps
+    #[serde(default = "default_snapshot_every")]
+    pub snapshot_every: u32,
 }
+
+fn default_snapshot_every() -> u32 { 1 }
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]

@@ -1,7 +1,7 @@
 # NorKyst generic validation
 
 compare the current Proteus CLI regional backend with OpenDrift OceanDrift from
-2026-10-27 00:00 UTC through 2026-10-29 00:00 UTC.
+2026-10-28 00:00 UTC through 2026-10-30 00:00 UTC.
 
 the default 8 by 8 release grid spans 2–3° E and 58–60° N in the open North Sea,
 well west of the Norwegian coast. each release has one surface particle, zero radius, hourly RK4 steps,
@@ -16,7 +16,7 @@ timeline is sorted and duplicate timestamps retain the last source record,
 matching the cron. every hour of the requested interval must be available.
 
 the suite caches the surface currents for the release region with a 100 km
-margin in `runs/source_surface.nc`. reads use one timestamp per request and
+margin in `runs/source_surface_20261028.nc`. reads use one timestamp per request and
 preserve the native grid and source precision. subsequent runs reuse this
 snapshot. delete it to refresh the source. wind is set to zero in OpenDrift
 because windage is zero in both models.
@@ -42,17 +42,16 @@ standard deviation and 10–90th percentiles to relative and absolute CSVs and a
 two-panel plot. relative error is separation divided by cumulative OpenDrift path
 length, not endpoint displacement.
 
-analysis currently includes only hours 0 through 24, inclusive. the underlying
-48-hour trajectories remain available for diagnosis. this restricts comparisons
-to the first day while the next day's published tiles and source may represent
-different forecast revisions.
+analysis includes hours 0 through 48, inclusive. the previous october 27 run
+directories are retained under `runs/previous_20261027/`. the standalone
+october 27 reproduction retains its original source and CLI reference.
 
 the default source and tile URLs are mutable. source forecasts may differ from
 the forecast used to publish the tiles. save matching source data and tiles for
 strict reproducibility. Proteus uses float16 tile fields while OpenDrift reads
 the source precision. no result should be interpreted as a clean interpolation
 comparison unless the forcing snapshots match. the source archive and published
-tiles must still contain october 27–29 when the suite is run.
+tiles must still contain october 28–30 when the suite is run.
 
 ## standalone worst case
 

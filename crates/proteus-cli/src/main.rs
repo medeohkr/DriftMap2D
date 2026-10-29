@@ -1,6 +1,7 @@
 mod config;
 mod fetch;
 mod tracer;
+mod particle_output;
 
 use anyhow::{Context, Result};
 use chrono::{Datelike, NaiveDateTime, Timelike};
@@ -24,6 +25,14 @@ struct Args {
     /// override the forcing model selected in the config
     #[arg(long, value_enum)]
     forcing_model: Option<ForcingModel>,
+
+    /// stream all released particles to JSONL, relative to the config directory
+    #[arg(long)]
+    particle_output: Option<PathBuf>,
+
+    /// particle snapshot interval in steps, always including initial and final states
+    #[arg(long, value_parser = clap::value_parser!(u32).range(1..))]
+    snapshot_every: Option<u32>,
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -44,10 +53,20 @@ async fn main() -> Result<()> {
     if let Some(model) = args.forcing_model {
         config.forcing_model = model;
     }
+    if let Some(path) = args.particle_output { config.particle_output = Some(path); }
+    if let Some(interval) = args.snapshot_every { config.snapshot_every = interval; }
     run(config, config_dir).await
 }
 
 async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
+    use std::io::{BufWriter, Write};
+    anyhow::ensure!(config.snapshot_every > 0, "snapshot_every must be positive");
+    let mut particle_file = if let Some(path) = &config.particle_output {
+        let path = config_dir.join(path);
+        anyhow::ensure!(path != config_dir.join(&config.output), "particle and centroid outputs must differ");
+        Some(BufWriter::new(std::fs::File::create(&path)
+            .with_context(|| format!("failed to create {}", path.display()))?))
+    } else { None };
     let start_date = NaiveDateTime::parse_from_str(&config.start_date, "%Y-%m-%d %H:%M")
         .context("invalid start_date (expected YYYY-MM-DD HH:MM)")?;
 
@@ -81,7 +100,7 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
     };
     log::info!("forcing model={:?} root={}", config.forcing_model, base_url);
     let mut landmask = LandMaskLoader::new(
-        "https://tiles.driftmap2d.com/roaring_landmask",
+        config.landmask_url.as_deref().unwrap_or("https://tiles.driftmap2d.com/roaring_landmask"),
         MIN_LON,
         -90.0,
         90.0,
@@ -97,6 +116,9 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
         // Step 0 is the seeding step: seed, record initial centroid, do not advance.
         if step_count == 0 {
             simulation.release_particles(0);
+            if let Some(writer) = &mut particle_file {
+                particle_output::write_snapshot(writer, 0, start_date, simulation.get_particles())?;
+            }
             let (lon, lat) = centroid(&simulation);
             results.push((
                 0,
@@ -125,9 +147,15 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
             .await
             .with_context(|| format!("failed to prepare forcing for step {step_count}"))?;
         forcing.validate_forcing_interval(current_date_int, hour, dt_days * 24.0)?;
-        landmask.load_landmask_tiles(positions).await;
+        landmask.load_landmask_tiles(positions).await.map_err(anyhow::Error::msg)?;
 
         simulation.update_particles_batch(dt_days, &forcing, current_date_int, hour, &landmask);
+        if particle_output::should_snapshot(step_count, config.steps, config.snapshot_every) {
+            if let Some(writer) = &mut particle_file {
+                particle_output::write_snapshot(writer, step_count,
+                    simulation_time(start_date, step_count, steps_per_day), simulation.get_particles())?;
+            }
+        }
 
         let (lon, lat) = centroid(&simulation);
         results.push((
@@ -147,6 +175,7 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
         );
     }
 
+    if let Some(writer) = &mut particle_file { writer.flush()?; }
     // Write output
     let out: Vec<serde_json::Value> = results
         .iter()

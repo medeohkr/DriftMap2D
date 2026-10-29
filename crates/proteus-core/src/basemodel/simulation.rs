@@ -191,6 +191,10 @@ impl Simulation {
             lat = lat.clamp(-80.0, 90.0);
 
             if landmask.is_on_land(lon, lat) {
+                let position = landmask.shoreline_position(
+                    (self.particles.lons[idx], self.particles.lats[idx]), (lon, lat));
+                self.particles.lons[idx] = position.0;
+                self.particles.lats[idx] = position.1;
                 self.particles.stranded[idx] = true;
             } else {
                 self.particles.lons[idx] = lon;

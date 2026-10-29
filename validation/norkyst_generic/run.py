@@ -21,8 +21,8 @@ from shared.proteus_utils import CLI_BIN, run_cli
 
 SOURCE = "https://thredds.met.no/thredds/dodsC/fou-hi/norkystv3_800m_m00_be"
 TILE_URL = "https://tiles.driftmap2d.com/norkyst"
-START = datetime(2026, 10, 27)
-END = datetime(2026, 10, 29)
+START = datetime(2026, 10, 28)
+END = datetime(2026, 10, 30)
 STEPS = 48
 RUNS = HERE / "runs"
 
@@ -54,7 +54,7 @@ def make_config(lon, lat, tile_url):
     }
 
 
-def make_reader(source, points=None):
+def make_reader(source, points=None, *, include_wind=False, cache_dir=None):
     """use OpenDrift's projected CF reader used by its NorKyst examples."""
     import xarray as xr
     from opendrift.readers import reader_netCDF_CF_generic
@@ -65,7 +65,9 @@ def make_reader(source, points=None):
         crs = CRS.from_user_input(projection.get("proj4") or CRS.from_cf(projection))
         return Transformer.from_crs("EPSG:4326", crs, always_xy=True).transform(*zip(*points))
 
-    snapshot = RUNS / "source_surface.nc"
+    cache_root = Path(cache_dir) if cache_dir is not None else RUNS
+    suffix = "_wind" if include_wind else ""
+    snapshot = cache_root / f"source_surface_{START:%Y%m%d}{suffix}.nc"
     if points is not None and snapshot.exists():
         cached = xr.open_dataset(snapshot)
         x, y = projected_points(cached)
@@ -74,7 +76,10 @@ def make_reader(source, points=None):
             and max(values) + 100_000 <= float(cached[name].max())
             for name, values in (("X", x), ("Y", y))
         )
-        if cached.attrs.get("validation_source") == source and covers_region:
+        covers_time = (np.datetime64(cached.time.values[0]) == np.datetime64(START)
+                       and np.datetime64(cached.time.values[-1]) == np.datetime64(END))
+        has_fields = not include_wind or all(name in cached for name in ("Uwind_eastward", "Vwind_northward"))
+        if cached.attrs.get("validation_source") == source and covers_region and covers_time and has_fields:
             print(f"using cached source {snapshot}", flush=True)
             return reader_netCDF_CF_generic.Reader(cached, name="NorKyst validation")
         cached.close()
@@ -91,7 +96,7 @@ def make_reader(source, points=None):
     expected = np.arange(np.datetime64(START), np.datetime64(END) + np.timedelta64(1, "h"),
                          np.timedelta64(1, "h"))
     if not np.array_equal(times[selected], expected):
-        raise ValueError("NorKyst source does not cover every hour of october 27–29, 2026")
+        raise ValueError(f"NorKyst source does not cover every hour from {START} to {END}")
     dataset = dataset.isel(time=selected)
     if points is not None:
         # a 100 km margin keeps the downloaded boundary well outside the tracks
@@ -103,7 +108,10 @@ def make_reader(source, points=None):
             last = min(len(axis), int(np.searchsorted(axis, max(values) + 100_000)) + 1)
             subsets[dataset[name].dims[0]] = slice(first, last)
         subsets[dataset.depth.dims[0]] = slice(0, 1)
-        surface = dataset[["u_eastward", "v_northward", "projection_stere"]].isel(subsets)
+        fields = ["u_eastward", "v_northward", "projection_stere"]
+        if include_wind:
+            fields.extend(["Uwind_eastward", "Vwind_northward"])
+        surface = dataset[fields].isel(subsets)
         surface.attrs["validation_source"] = source
         temporary = snapshot.with_suffix(".tmp.nc")
         print(f"caching native surface currents {dict(surface.sizes)}", flush=True)

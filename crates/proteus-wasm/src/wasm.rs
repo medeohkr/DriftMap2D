@@ -131,7 +131,7 @@ impl Proteus {
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         self.landmask
             .load_landmask_tiles(self.get_unstranded_positions())
-            .await;
+            .await.map_err(|e| JsValue::from_str(&e))?;
 
         self.simulation.update_particles_batch(
             dt_days,
@@ -145,8 +145,8 @@ impl Proteus {
         Ok(())
     }
 
-    pub async fn load_landmask_tiles(&mut self, positions: Vec<f32>) {
-        self.landmask.load_landmask_tiles(positions).await
+    pub async fn load_landmask_tiles(&mut self, positions: Vec<f32>) -> Result<(), JsValue> {
+        self.landmask.load_landmask_tiles(positions).await.map_err(|e| JsValue::from_str(&e))
     }
 
     pub fn get_positions(&self) -> Vec<f32> {
