@@ -30,16 +30,33 @@ fn finite_values_and_zeros_do_not_expand_the_grid() {
 }
 
 #[test]
-fn dilation_uses_a_snapshot_and_the_largest_finite_neighbor() {
+fn dilation_uses_a_snapshot_and_the_mean_of_finite_neighbors() {
     let mut grid = [f32::NAN, -5.0, f32::INFINITY, -2.0];
     let values = interpolate_batch(&mut grid, 2, 2, &[sample(0.5, 0.5)], &mut Vec::new());
-    assert_eq!(values, [-2.75]);
-    assert_eq!(grid, [-2.0, -5.0, -2.0, -2.0]);
+    assert_eq!(values, [-3.5]);
+    assert_eq!(grid, [-3.5, -5.0, -3.5, -2.0]);
     let mut grid = [2.0, f32::NAN, f32::NAN, 0.0, f32::NAN, f32::NAN];
     expand_nan_neighbors(&mut grid, 3, 2, &mut Vec::new());
-    assert_eq!(grid[1], 2.0);
+    assert_eq!(grid[1], 1.0);
     assert!(grid[2].is_nan());
     assert_eq!(grid[3], 0.0);
+}
+
+#[test]
+fn dilation_is_symmetric_for_signed_fields_and_preserves_valid_cells() {
+    let mut grid = [-6.0, f32::NAN, 2.0, 0.0, f32::NAN, 4.0];
+    let mut reversed = grid.map(|value| -value);
+    expand_nan_neighbors(&mut grid, 3, 2, &mut Vec::new());
+    expand_nan_neighbors(&mut reversed, 3, 2, &mut Vec::new());
+    assert_eq!(grid, [-6.0, 0.0, 2.0, 0.0, 0.0, 4.0]);
+    assert_eq!(grid, reversed.map(|value| -value));
+}
+
+#[test]
+fn dilation_accumulates_without_float32_overflow() {
+    let mut grid = [f32::MAX, f32::NAN, f32::MAX, f32::MAX];
+    expand_nan_neighbors(&mut grid, 2, 2, &mut Vec::new());
+    assert_eq!(grid, [f32::MAX; 4]);
 }
 
 #[test]
@@ -99,8 +116,8 @@ fn temporal_sampling_is_spatial_first() {
         &[sample(0.5, 0.5)],
         &mut Vec::new(),
     );
-    assert_eq!(values, [7.25]);
-    assert_eq!(data[0], 6.0);
+    assert_eq!(values, [7.0]);
+    assert_eq!(data[0], 4.0);
     assert_eq!(&data[4..], &[10.0; 4]);
 }
 
@@ -207,15 +224,15 @@ fn matches_scipy_reference_for_mixed_missing_values_and_edges() {
     ];
     // expected values from the supplied algorithm using SciPy float32 arrays
     let expected = [
-        -0.1875,
-        1.0350000858306885,
-        1.5,
+        -0.59375,
+        -0.1681250035762787,
+        -0.3125,
         0.0,
         1.0,
-        -0.5,
-        1.1800000667572021,
+        -0.875,
+        0.6759997606277466,
         0.6749998331069946,
-        2.25,
+        0.3125,
     ];
     let values = interpolate_batch(&mut grid, 6, 5, &samples, &mut Vec::new());
     for (value, expected) in values.iter().zip(expected) {
@@ -582,8 +599,8 @@ fn loader_batches_currents_wind_and_sst_into_output_order() {
     for (i, value) in values.into_iter().enumerate() {
         assert_eq!(velocities[i], (value[0], value[1], value[2], value[3]));
         assert_eq!(wind_sst[i], (value[2], value[3], value[4]));
-        assert!((value[0] - meters_per_degree_lon(7.25, positions[0].1)).abs() < 1e-8);
-        assert!((value[1] - meters_per_degree_lat(7.25, positions[0].1)).abs() < 1e-8);
+        assert!((value[0] - meters_per_degree_lon(7.0, positions[0].1)).abs() < 1e-8);
+        assert!((value[1] - meters_per_degree_lat(7.0, positions[0].1)).abs() < 1e-8);
         assert!((value[2] - value[3]).abs() < 1e-6);
         assert_eq!(value[3], value[4]);
     }
@@ -596,7 +613,7 @@ fn loader_batches_currents_wind_and_sst_into_output_order() {
             &tile.atmosphere.as_ref().unwrap().fields[1],
             &tile.atmosphere.as_ref().unwrap().fields[2],
         ] {
-            assert_eq!(data[0], 6.0);
+            assert_eq!(data[0], 4.0);
         }
     }
 }

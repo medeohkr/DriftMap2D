@@ -37,7 +37,7 @@ fn sample_spatial(
     )
 }
 
-/// expand nonfinite cells by one step using a snapshot of the whole slice
+/// fill nonfinite cells with the mean of finite neighbors in a 3x3 snapshot
 pub(super) fn expand_nan_neighbors(
     grid: &mut [f32],
     width: usize,
@@ -52,20 +52,20 @@ pub(super) fn expand_nan_neighbors(
             if scratch[idx].is_finite() {
                 continue;
             }
-            let mut maximum = f32::NEG_INFINITY;
+            let mut sum = 0.0_f64;
+            let mut count = 0;
             for y in row.saturating_sub(1)..=(row + 1).min(height - 1) {
                 for x in col.saturating_sub(1)..=(col + 1).min(width - 1) {
                     let value = scratch[y * width + x];
                     if value.is_finite() {
-                        maximum = maximum.max(value);
+                        sum += f64::from(value);
+                        count += 1;
                     }
                 }
             }
-            grid[idx] = if maximum.is_finite() {
-                maximum
-            } else {
-                f32::NAN
-            };
+            if count > 0 {
+                grid[idx] = (sum / f64::from(count)) as f32;
+            }
         }
     }
 }
