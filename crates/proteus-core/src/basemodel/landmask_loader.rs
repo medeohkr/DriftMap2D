@@ -164,7 +164,7 @@ impl <F: TileFetcher>LandMaskLoader<F> {
     }
 }
 
-/// scan before refining so a later coastline cannot hide an earlier island
+/// use OpenDrift's row-major coastline mesh with its default 0.001 degree spacing
 fn shoreline_crossing(
     start: (f32, f32),
     end: (f32, f32),
@@ -173,35 +173,27 @@ fn shoreline_crossing(
     if ![start.0, start.1, end.0, end.1].iter().all(|v| v.is_finite()) {
         return end;
     }
-    if on_land(start.0, start.1) {
-        return start;
+    if start == end {
+        return end;
     }
-    // follow the short segment across the dateline rather than through longitude zero
+    // retain short dateline crossings instead of sampling across the whole world
     let dx = (end.0 as f64 - start.0 as f64 + 180.0).rem_euclid(360.0) - 180.0;
     let dy = end.1 as f64 - start.1 as f64;
-    let span = dx.abs().max(dy.abs());
-    let position = |fraction: f64| {
-        (normalize_lon((start.0 as f64 + dx * fraction) as f32),
-         (start.1 as f64 + dy * fraction) as f32)
+    let sample_count = |span: f64| (span.abs() / 0.001).floor().max(1.0) as usize;
+    let columns = sample_count(dx);
+    let rows = sample_count(dy);
+    // NumPy linspace with one sample returns the starting coordinate
+    let fraction = |index: usize, count: usize| {
+        if count == 1 { 0.0 } else { index as f64 / (count - 1) as f64 }
     };
-    let samples = (span / 0.001).ceil().max(1.0) as usize;
-    let mut water = 0.0;
-    for i in 1..=samples {
-        let mut land = i as f64 / samples as f64;
-        let point = position(land);
-        if on_land(point.0, point.1) {
-            while (land - water) * span > 0.0001 {
-                let middle = (water + land) * 0.5;
-                let point = position(middle);
-                if on_land(point.0, point.1) {
-                    land = middle;
-                } else {
-                    water = middle;
-                }
+    for row in 0..rows {
+        let lat = (start.1 as f64 + dy * fraction(row, rows)) as f32;
+        for col in 0..columns {
+            let lon = normalize_lon((start.0 as f64 + dx * fraction(col, columns)) as f32);
+            if on_land(lon, lat) {
+                return (lon, lat);
             }
-            return position(land);
         }
-        water = land;
     }
     end
 }
@@ -211,17 +203,17 @@ mod shoreline_tests {
     use super::shoreline_crossing;
 
     #[test]
-    fn stops_on_land_near_the_crossing_instead_of_the_old_position() {
+    fn matches_opendrift_mesh_order_instead_of_refining_along_the_segment() {
         let point = shoreline_crossing((0.0, 0.0), (0.02, 0.01), |x, _| x >= 0.007);
-        assert!(point.0 >= 0.007 && point.0 < 0.0071);
-        assert!((point.1 - point.0 * 0.5).abs() < 0.00001);
+        assert!((point.0 - 0.02 * 7.0 / 18.0).abs() < 1e-8);
+        assert_eq!(point.1, 0.0);
     }
 
     #[test]
     fn detects_an_earlier_island_before_the_final_landmass() {
         let point = shoreline_crossing((0.0, 0.0), (0.02, 0.0),
             |x, _| (0.003..0.006).contains(&x) || x >= 0.015);
-        assert!(point.0 >= 0.003 && point.0 < 0.0031);
+        assert!((point.0 - 0.02 * 3.0 / 18.0).abs() < 1e-8);
     }
 
     #[test]

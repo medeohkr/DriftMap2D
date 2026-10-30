@@ -9,8 +9,9 @@ to allow stranding within 48 hours. the previous offshore run is preserved in
 `runs/offshore/`.
 
 the CLI selects `PIW-1` from the project's local `catalogs/object_catalog.json`
-using `tracer_json.object_id` and an explicit absolute `catalog_dir`. no leeway
-coefficients are embedded in CLI configs. the suite verifies all nine catalog
+using `tracer_json.object_id` and an explicit absolute `catalog_dir`. no base leeway
+coefficients are embedded in CLI configs. overrides retain catalog slopes and
+offsets and set all three coefficient standard deviations to zero. the suite verifies all nine catalog
 coefficients against OpenDrift before starting. `--object-id` selects another
 catalog ID. generate missing catalogs with `python scripts/build_catalogs.py`.
 
@@ -25,8 +26,7 @@ python validation/norkyst_leeway/analyze.py
 paths resolve independently of the working directory. `--particles` accepts a
 positive even ensemble size, `--grid-size` changes the grid, `--skip-build`
 reuses the release CLI, and `--source`, `--tile-url`, and `--catalog-dir` override
-inputs. smaller ensembles are useful for smoke checks but increase sampling
-noise. use a fresh runs directory when changing the object or ensemble size.
+inputs. smaller even ensembles produce the same two deterministic paths. use a fresh runs directory when changing the object or ensemble size.
 
 the shared NorKyst reader helper caches actual native currents and wind in
 `runs/source_surface_20261028_wind.nc`. wind is not replaced with zero. output
@@ -35,11 +35,13 @@ reference record, and the published manifest. incomplete comparisons are
 excluded. analysis produces relative and absolute CSVs and a two-panel plot
 with means and 10–90th percentile bands.
 
-OpenDrift and Proteus use independent random generators for coefficient
-uncertainty. both alternate right and left orientations with jibing disabled.
-OpenDrift uses a recorded per-run random seed. this compares ensemble centroids,
-not identical particle paths. mutable source forecasts and published tiles may
-still represent different revisions, as in the generic suite.
+both models alternate right and left orientations with zero jibing probability,
+zero coefficient uncertainty, no capsizing, and no forcing uncertainty. the
+OpenDrift seed is retained for provenance but does not affect trajectories.
+both use native 0.001 degree rectangular shoreline placement. the validation
+process also uses mean dilation in OpenDrift to match Proteus without modifying
+the installed package. mutable source forecasts and published tiles may still
+represent different revisions, as in the generic suite.
 
 ## visual comparison
 

@@ -19,9 +19,17 @@ sys.path.insert(0, str(HERE.parent))
 from shared.metrics import load_centroids, run_error_series
 
 
+def all_particles_stranded(path):
+    """allow a finished stranding run to retain its terminal positions."""
+    import xarray as xr
+
+    with xr.open_dataset(path) as dataset:
+        return bool((dataset.status == 1).any(dim="time").all())
+
+
 def reproduce(directory, output, config, meta):
     """optionally recreate both models using this run's catalog and settings."""
-    from norkyst_leeway.run import START, RUNS, make_grid, make_reader, run_opendrift, validate_object
+    from norkyst_leeway.run import START, RUNS, make_grid, make_reader, run_opendrift, validate_object, deterministic_overrides
     from shared.opendrift_utils import save_centroids_from_nc
     from shared.proteus_utils import run_cli
 
@@ -35,6 +43,8 @@ def reproduce(directory, output, config, meta):
     catalog_dir = (directory / config.get("catalog_dir", "../../../../catalogs")).resolve()
     object_type, _ = validate_object(catalog_dir, object_id)
     copy = dict(config, catalog_dir=str(catalog_dir), particle_output="particles.jsonl", snapshot_every=1)
+    copy["tracer_json"] = {"object_id": object_id,
+                           "overrides": deterministic_overrides(catalog_dir, object_id)}
     elapsed, result = run_cli(output, copy)
     (output / "proteus.log").write_text(result.stdout + result.stderr, encoding="utf-8")
     if result.returncode:
@@ -84,6 +94,11 @@ def main():
             parser.error(f"missing {inputs / filename}, use --rerun to recreate both models")
     steps, od_lon, od_lat = load_centroids(inputs / "opendrift_centroids.json")
     cli_steps, cli_lon, cli_lat = load_centroids(inputs / "proteus_centroids.json")
+    if (len(steps) < len(cli_steps) and np.array_equal(steps, cli_steps[:len(steps)])
+            and all_particles_stranded(inputs / "opendrift_output.nc")):
+        od_lon = np.pad(od_lon, (0, len(cli_steps) - len(steps)), mode="edge")
+        od_lat = np.pad(od_lat, (0, len(cli_steps) - len(steps)), mode="edge")
+        steps = cli_steps.copy()
     if not np.array_equal(steps, cli_steps) or len(steps) != config["steps"] + 1:
         raise ValueError("trajectories have incomplete or mismatched steps")
     if not np.isfinite([od_lon, od_lat, cli_lon, cli_lat]).all():
@@ -191,7 +206,11 @@ def animate_particles(particle_path, netcdf_path, output, name, config, sample_c
         od_times = np.asarray(dataset.time.values).astype("datetime64[s]")
         frame_times = np.asarray([np.datetime64(value.removesuffix('Z'), 's') for value in times])
         indices = np.searchsorted(od_times, frame_times)
-        if np.any(indices >= len(od_times)) or not np.array_equal(od_times[indices], frame_times):
+        beyond = indices >= len(od_times)
+        if beyond.any() and not all_particles_stranded(netcdf_path):
+            raise ValueError("OpenDrift stopped before every particle stranded")
+        indices = np.minimum(indices, len(od_times) - 1)
+        if not np.array_equal(od_times[indices[~beyond]], frame_times[~beyond]):
             raise ValueError("particle timestamps do not match OpenDrift output")
         subset = subset.isel(time=indices)
         od = np.stack([subset.lon.transpose("time", "trajectory").values,
@@ -227,13 +246,15 @@ def animate_particles(particle_path, netcdf_path, output, name, config, sample_c
         if land_mask.any() and not land_mask.all():
             ax.contour(map_x, map_y, land_mask, levels=[0.5], colors=["#777777"], linewidths=0.4)
         ax.grid(alpha=0.25)
-        marker_size = 0.25 if count >= 10000 else 5
-        opacity = 0.12 if count >= 10000 else 0.5
+        marker_size = 4 if count >= 10000 else 8
+        opacity = 0.6
         active = ax.scatter([], [], s=marker_size, alpha=opacity, color=color,
                             edgecolors="none", linewidths=0, label="active")
-        land = ax.scatter([], [], s=max(marker_size, 0.8), alpha=0.65, color="black",
+        land = ax.scatter([], [], s=max(marker_size, 5), alpha=0.75, color="black",
                           edgecolors="none", linewidths=0, label="stranded")
-        ax.legend(loc="upper left")
+        legend = ax.legend(loc="upper left", fontsize=11, markerscale=2)
+        for handle in legend.legend_handles:
+            handle.set_alpha(1.0)
         artists.append((active, land, data, stranded))
     heading = fig.suptitle("")
 

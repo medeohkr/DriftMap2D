@@ -23,6 +23,13 @@ from shared.proteus_utils import CLI_BIN, run_cli
 RUNS = HERE / "runs"
 
 
+def deterministic_overrides(catalog_dir, object_id):
+    """keep catalog slopes and offsets while disabling coefficient uncertainty."""
+    record = json.loads((Path(catalog_dir) / "object_catalog.json").read_text(encoding="utf-8"))["objects"][object_id]
+    return {"jibe_probability": 0.0, "random_orientation": False, "capsizing": False,
+            **{field: [*record[field][:2], 0.0] for field in ("downwind", "right", "left")}}
+
+
 def make_grid(size):
     """place water releases west of Stavanger and Karmøy for stranding comparisons."""
     from roaring_landmask import RoaringLandmask
@@ -40,8 +47,8 @@ def make_config(lon, lat, particles, object_id, catalog_dir, tile_url):
         "start_date": START.strftime("%Y-%m-%d %H:%M"),
         "forcing_model": "norkyst", "tile_url": tile_url,
         "tracer_type": "sar", "catalog_dir": str(catalog_dir),
-        "tracer_json": {"object_id": object_id, "overrides": {
-            "jibe_probability": 0.0, "random_orientation": False, "capsizing": False}},
+        "tracer_json": {"object_id": object_id,
+                        "overrides": deterministic_overrides(catalog_dir, object_id)},
         "releases": [{"lon": lon, "lat": lat, "radius": 0.0,
                       "schedule": [{"amount": 1.0, "duration": 0}]}],
         "particles": particles, "time_step_minutes": 60,
@@ -76,18 +83,30 @@ def validate_object(catalog_dir, object_id):
 
 
 def run_opendrift(directory, lon, lat, reader, particles, object_type, seed):
-    """retain coefficient uncertainty while disabling jibing and capsizing."""
+    """alternate orientations with fixed coefficients and no stochastic processes."""
+    from opendrift.readers.interpolation import interpolators
+    from landmask_stranding.run import mean_dilation
+
+    interpolators.expand_numpy_array = mean_dilation
     np.random.seed(seed)
     model = Leeway(loglevel=30)
+    for key in ("DWSTD", "CWRSTD", "CWLSTD"):
+        model.leewayprop[object_type][key] = 0.0
     model.add_reader(reader)
     for key, value in {
         "drift:advection_scheme": "euler", "drift:current_uncertainty": 0,
         "drift:current_uncertainty_uniform": 0, "drift:wind_uncertainty": 0,
         "drift:stokes_drift": False, "processes:capsizing": False,
+        "general:coastline_action": "stranding",
+        "general:coastline_approximation_precision": 0.001,
     }.items():
         model.set_config(key, value)
     model.seed_elements(lon=lon, lat=lat, radius=0, number=particles,
                         time=START, object_type=object_type, jibe_probability=0)
+    np.testing.assert_array_equal(model.elements_scheduled.orientation, np.arange(particles) % 2)
+    for field in ("downwind_eps", "crosswind_eps"):
+        if np.any(getattr(model.elements_scheduled, field) != 0):
+            raise ValueError(f"nonzero {field} in deterministic seeding")
     model.run(duration=END - START, time_step=3600, time_step_output=3600,
               export_variables=["lon", "lat", "status"],
               outfile=str(directory / "opendrift_output.nc"))
@@ -98,6 +117,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", default=SOURCE)
     parser.add_argument("--tile-url", default=TILE_URL)
+    parser.add_argument("--landmask-url")
     parser.add_argument("--catalog-dir", type=Path, default=ROOT / "catalogs")
     parser.add_argument("--object-id", default="PIW-1")
     parser.add_argument("--particles", type=int, default=100_000)
@@ -143,11 +163,15 @@ def main():
                 "n_particles": args.particles, "object_id": args.object_id,
                 "catalog_dir": str(catalog_dir), "source": args.source, "tile_url": args.tile_url,
                 "opendrift_seed": 20261028 + i, "time_step_seconds": 3600,
-                "jibe_probability": 0, "capsizing": False, "status": "failed"}
+                "jibe_probability": 0, "capsizing": False, "coefficient_uncertainty": False,
+                "orientation": "alternating", "coastline_precision_degrees": 0.001,
+                "dilation": "mean", "status": "failed"}
         print(f"[{i + 1}/{len(points)}] lon={lon:.4f} lat={lat:.4f}, {args.particles} particles", flush=True)
         try:
-            seconds, result = run_cli(directory, make_config(
-                lon, lat, args.particles, args.object_id, catalog_dir, args.tile_url))
+            config = make_config(lon, lat, args.particles, args.object_id, catalog_dir, args.tile_url)
+            if args.landmask_url:
+                config["landmask_url"] = args.landmask_url
+            seconds, result = run_cli(directory, config)
             (directory / "proteus.log").write_text(result.stdout + result.stderr, encoding="utf-8")
             if result.returncode:
                 raise RuntimeError(f"CLI failed with exit {result.returncode}, see proteus.log")

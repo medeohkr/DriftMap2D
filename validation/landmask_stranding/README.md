@@ -2,6 +2,8 @@
 
 compares Proteus generic and OpenDrift OceanDrift near 59 N, 5.1 E using NorKyst currents and wind from october 28 to 30, 2026.
 
+Proteus now uses OpenDrift's default 0.001 degree rectangular placement mesh. the results and matched segment experiment below describe the earlier segment search implementation and are retained as historical diagnostics. rerun the suite to measure the new production placement. short dateline crossings remain wrapped safely in Proteus.
+
 both use Euler with a 15 minute timestep, 2 percent windage, zero deflection, zero release radius, and no diffusion, wave drift, or uncertainty. 9,600 particles are allocated over a 24 hour release. identical particles within each release batch follow the same trajectory, leaving release time as the source of shear.
 
 OpenDrift receives the exact birth batches recorded by the CLI. the current CLI releases the first two batches at the initial time and finishes releasing at hour 23.5 for this timestep. this suite mirrors that existing discretization rather than changing the release engine. the CLI is run twice and particle outputs must match byte for byte.
