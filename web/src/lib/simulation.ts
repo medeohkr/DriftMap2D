@@ -86,9 +86,7 @@ export async function simulationStep(version: number) {
         }
 
         simulation.currentTime = simulation.proteus.current_time_str();
-        if (simulation.stepCount < getTotalDays() * Math.floor(1440 / config.timeStepMin)
-            && simulation.proteus.total_floating_mass_tons() > 0.0
-        ) {
+        if (simulation.stepCount < getTotalDays() * Math.floor(1440 / config.timeStepMin)) {
             simulation.animationId = requestAnimationFrame(() =>
                 simulationStep(version)
             );
