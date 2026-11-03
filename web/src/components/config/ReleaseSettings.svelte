@@ -174,7 +174,7 @@
                     Release {index + 1}&nbsp;:
                 </span>
             </div>
-            <span class="interval-text">{release.lat.toFixed(2)}° N, {release.lon.toFixed(2)}° E</span>
+            <span class="interval-text">{release.lat.toFixed(3)}° N, {release.lon.toFixed(3)}° E</span>
             {#if releaseConfig.releases.length > 1}
                 <button
                     style="background-color: transparent; border: none; cursor: pointer"

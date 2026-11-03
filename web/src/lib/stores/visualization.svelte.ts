@@ -17,7 +17,7 @@ export interface Visualization {
 export const visualization: Visualization = $state({
     particleRadius: 1.5,
     gridUpdateInterval: 100,
-    gridSize: 0.02,
+    gridSize: 0.01,
     smoothLevel: 2,
     snapshotInterval: 2,
 

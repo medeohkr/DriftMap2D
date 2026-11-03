@@ -59,7 +59,7 @@ import { importScenario } from "$lib/io/importScenario";
 
         visualization.particleRadius = 1.5;
         visualization.gridUpdateInterval = 100;
-        visualization.gridSize = 0.02;
+        visualization.gridSize = 0.01;
         visualization.smoothLevel = 2;
         visualization.autoZoom = true;
 
