@@ -37,10 +37,27 @@ def cmems_update(catalogue, dataset_id, today):
     if updated.tzinfo is None:
         raise ValueError('CMEMS update timestamp has no timezone')
     updated = updated.astimezone(timezone.utc)
-    if updated.date() < today:
-        logging.info('CMEMS latest completed update is %s, checking again next hour', updated)
-        return None
     if updated.date() > today:
         raise ValueError('CMEMS update timestamp is in the future')
     return {'dataset_id': dataset_id, 'dataset_version': version.label,
             'arco_updated_at': updated.isoformat()}
+
+
+def newer_source_update(source, published):
+    """publish completed revisions newer than the manifest regardless of UTC midnight."""
+    if source is None:
+        return False
+    if not published:
+        return True
+    current = datetime.fromisoformat(source['arco_updated_at'].replace('Z', '+00:00'))
+    previous = datetime.fromisoformat(published['arco_updated_at'].replace('Z', '+00:00'))
+    return current > previous or (current == previous and source != published)
+
+
+def newer_norkyst_cycle(source, reference, published):
+    """compare available cycles with published cycles without requiring today's date."""
+    grid = published.get('grid', {})
+    previous = grid.get('source_forecast_reference_time')
+    if grid.get('source') != source or not previous:
+        return True
+    return reference > datetime.fromisoformat(previous.replace('Z', '+00:00'))

@@ -4,7 +4,7 @@ import io
 import sys
 import unittest
 import tempfile
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -12,12 +12,12 @@ from unittest.mock import Mock, patch
 from botocore.exceptions import ClientError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from scripts.forecast_updates import cmems_update, published_manifest
+from scripts.forecast_updates import cmems_update, published_manifest, newer_source_update, newer_norkyst_cycle
 from scripts import check_forecast_update as check
 
 
 class SourceUpdates(unittest.TestCase):
-    """only completed updates from the current UTC date are eligible."""
+    """completed updates remain eligible after midnight without rolling back revisions."""
 
     def catalogue(self, updated='2026-10-28T09:00:00Z', updating=None):
         part = SimpleNamespace(name='default', arco_updated_date=updated,
@@ -31,10 +31,24 @@ class SourceUpdates(unittest.TestCase):
         self.assertEqual(result, {'dataset_id': 'smoc', 'dataset_version': '202211',
                                   'arco_updated_at': '2026-10-28T09:00:00+00:00'})
 
-    def test_stale_or_in_progress_updates_are_not_ready(self):
-        self.assertIsNone(cmems_update(self.catalogue(), 'smoc', date(2026, 10, 29)))
+    def test_previous_day_updates_remain_eligible_but_in_progress_updates_do_not(self):
+        self.assertIsNotNone(cmems_update(self.catalogue(), 'smoc', date(2026, 10, 29)))
         self.assertIsNone(cmems_update(self.catalogue(updating='2026-10-28'),
                                       'smoc', date(2026, 10, 28)))
+
+    def test_delayed_updates_publish_once_and_never_roll_back(self):
+        source = cmems_update(self.catalogue(), 'smoc', date(2026, 10, 29))
+        old = dict(source, arco_updated_at='2026-10-27T09:00:00+00:00')
+        self.assertTrue(newer_source_update(source, old))
+        self.assertFalse(newer_source_update(source, source))
+        self.assertFalse(newer_source_update(old, source))
+        reference = datetime(2026, 10, 28, tzinfo=timezone.utc)
+        manifest = {'grid': {'source': 'norkyst',
+                            'source_forecast_reference_time': '2026-10-27T00:00:00+00:00'}}
+        self.assertTrue(newer_norkyst_cycle('norkyst', reference, manifest))
+        manifest['grid']['source_forecast_reference_time'] = reference.isoformat()
+        self.assertFalse(newer_norkyst_cycle('norkyst', reference, manifest))
+        self.assertFalse(newer_norkyst_cycle('norkyst', reference.replace(day=27), manifest))
 
     def test_missing_future_or_ambiguous_metadata_fails(self):
         for updated in (None, '2026-10-29T00:00:00Z', '2026-10-28T00:00:00'):

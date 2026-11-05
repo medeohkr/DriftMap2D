@@ -9,7 +9,7 @@ from pathlib import Path
 import boto3
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from scripts.forecast_updates import cmems_update, published_manifest
+from scripts.forecast_updates import cmems_update, published_manifest, newer_source_update, newer_norkyst_cycle
 
 
 def main():
@@ -28,7 +28,7 @@ def main():
         catalogue = copernicusmarine.describe(dataset_id=dataset_id, disable_progress_bar=True)
         source = cmems_update(catalogue, dataset_id, today)
         previous = published_manifest(client, 'driftmap-tiles', 'tiles/manifest.json') if source else {}
-        ready = source is not None and previous.get('source_update') != source
+        ready = newer_source_update(source, previous.get('source_update'))
     else:
         import netCDF4
         from norkyst_cron import SOURCE, forecast_reference_time
@@ -36,11 +36,8 @@ def main():
             reference = forecast_reference_time(dataset)
         if reference.date() > today:
             raise ValueError('NorKyst forecast reference date is in the future')
-        previous = (published_manifest(client, 'driftmap-tiles', 'norkyst/manifest.json')
-                    if reference.date() == today else {})
-        grid = previous.get('grid', {})
-        ready = reference.date() == today and (grid.get('source') != SOURCE or
-                grid.get('source_forecast_reference_time') != reference.isoformat())
+        previous = published_manifest(client, 'driftmap-tiles', 'norkyst/manifest.json')
+        ready = newer_norkyst_cycle(SOURCE, reference, previous)
     print(f'{args.model} new completed update available={ready}')
     if os.environ.get('GITHUB_OUTPUT'):
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:

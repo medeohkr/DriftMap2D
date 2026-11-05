@@ -391,7 +391,7 @@ def cleanup(client, bucket, prefix, cutoff):
 
 def main():
     """generate forcing locally or publish complete days to the NorKyst prefix."""
-    from scripts.forecast_updates import published_manifest
+    from scripts.forecast_updates import published_manifest, newer_norkyst_cycle
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', default=SOURCE)
     parser.add_argument('--output', type=Path, default=ROOT / 'data' / 'norkyst')
@@ -413,16 +413,12 @@ def main():
         reference = forecast_reference_time(dataset)
         client = None
         if args.check_for_update and not args.inspect:
-            if reference.date() < today:
-                logging.info('source cycle %s is stale, checking again next hour', reference.isoformat())
-                return
             if reference.date() > today:
                 raise ValueError('NorKyst forecast reference date is in the future')
             if not args.local_only:
                 client = r2_client()
                 previous = published_manifest(client, 'driftmap-tiles', 'norkyst/manifest.json')
-                if (not args.refresh_hindcast and previous.get('grid', {}).get('source') == args.source
-                        and previous.get('grid', {}).get('source_forecast_reference_time') == reference.isoformat()):
+                if not args.refresh_hindcast and not newer_norkyst_cycle(args.source, reference, previous):
                     logging.info('source cycle %s is already published, no tiles changed', reference.isoformat())
                     return
         metadata, seconds, surface = describe(dataset)

@@ -24,7 +24,7 @@ import boto3
 from pathlib import Path
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from scripts.forecast_updates import cmems_update, published_manifest
+from scripts.forecast_updates import cmems_update, published_manifest, newer_source_update
 
 # ===== CONFIG =====
 
@@ -435,7 +435,7 @@ def main():
         return
     if args.check_for_update:
         previous = published_manifest(s3, BUCKET, 'tiles/manifest.json')
-        if previous.get('source_update') == source_update:
+        if not newer_source_update(source_update, previous.get('source_update')):
             print('CMEMS update is already published, no tiles changed')
             return
     print(f"\n{'='*60}")
