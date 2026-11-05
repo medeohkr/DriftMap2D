@@ -9,3 +9,4 @@ export * from "./forcing";
 export * from "./forcingCoverage";
 export * from "./forcingCoverageLayers";
 export * from "./stereographic";
+export * from "./graticule";

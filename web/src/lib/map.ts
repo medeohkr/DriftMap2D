@@ -7,6 +7,7 @@ import MapDisplay from "../components/MapDisplay.svelte";
 import { simulation, config, visualization, releaseConfig } from "./stores/index.svelte";
 import { preloader } from "./preloader";
 import { getReleasePositions, normalizeLongitude, getReleaseBounds, getReleaseColor, renderForcingCoverage } from "./utils";
+import { getGraticuleSpacing, formatGraticuleLabel, hideOverlappingGraticuleLabels } from "./utils";
 
 
 
@@ -42,14 +43,11 @@ export function initMap() {
         graticule = new GeoGrid({
             map,
             beforeLayerId,
-            gridDensity: (zoom) => {
-                const spacing = [15, 7.5, 5, 3.75, 2.5, 1.5, 1, 0.75, 0.375, 0.25, 0.125, 0.0625, 0.0375, 0.025, 0.0125];
-                const level = Math.max(0, Math.floor(zoom));
-                return spacing[Math.min(level, spacing.length - 1)] / 2 ** Math.max(0, level - spacing.length + 1);
-            },
-            gridStyle: { color: "rgba(220, 220, 220, 0.1)", width: 1 },
+            gridDensity: getGraticuleSpacing,
+            formatLabels: value => formatGraticuleLabel(value, getGraticuleSpacing(map.getZoom())),
+            gridStyle: { color: "rgba(220, 220, 220, 0.2)", width: 1 },
             labelStyle: {
-                color: "rgb(120, 120, 120)",
+                color: "rgb(220, 220, 220)",
                 fontSize: "11px",
                 fontFamily: "Montserrat, sans-serif",
                 textShadow: "0 1px 3px black",
@@ -58,6 +56,9 @@ export function initMap() {
         // the style is already loaded so add the grid without waiting for another load event
         map.off("load", graticule.add);
         if (showGraticule) graticule.add();
+        map.on("render", () => {
+            if (showGraticule) hideOverlappingGraticuleLabels(map.getContainer());
+        });
     });
 
     const scale = new maplibregl.ScaleControl({ maxWidth: 100, unit: "metric" });
