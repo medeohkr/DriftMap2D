@@ -35,6 +35,7 @@ pub struct ParticleSeed {
 struct Release {
     lon: f32,
     lat: f32,
+    /// gaussian release standard deviation in meters
     radius: f32,
     schedule: Vec<Schedule>,
 }
@@ -178,7 +179,7 @@ fn seed(
     count: usize,
     release: &Release,
     normal: Normal<f32>,
-    rng: &mut ThreadRng,
+    rng: &mut impl rand::Rng,
     mass_per_particle: f32,
 ) -> Vec<ParticleSeed> {
     (0..count)
@@ -186,8 +187,8 @@ fn seed(
             let dx = normal.sample(rng);
             let dy = normal.sample(rng);
 
-            let lat = release.lat + meters_per_degree_lat(dy * 1000.0, release.lat);
-            let lon = release.lon + meters_per_degree_lon(dx * 1000.0, lat);
+            let lat = release.lat + meters_per_degree_lat(dy, release.lat);
+            let lon = release.lon + meters_per_degree_lon(dx, lat);
 
             ParticleSeed {
                 lon,
@@ -196,4 +197,32 @@ fn seed(
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::{rngs::StdRng, SeedableRng};
+
+    #[test]
+    fn five_hundred_meter_radius_produces_a_half_kilometer_standard_deviation() {
+        let release = Release { lon: 0.0, lat: 0.0, radius: 500.0, schedule: vec![] };
+        let mut rng = StdRng::seed_from_u64(42);
+        let particles = seed(20_000, &release, Normal::new(0.0, release.radius).unwrap(), &mut rng, 1.0);
+        let latitude_rms = (particles.iter().map(|p| p.lat.powi(2)).sum::<f32>()
+            / particles.len() as f32).sqrt();
+        let longitude_rms = (particles.iter().map(|p| p.lon.powi(2)).sum::<f32>()
+            / particles.len() as f32).sqrt();
+        // half a kilometer is about 0.0045 degrees at the equator
+        assert!((0.0043..0.0047).contains(&latitude_rms));
+        assert!((0.0043..0.0047).contains(&longitude_rms));
+    }
+
+    #[test]
+    fn zero_meter_radius_keeps_the_release_position() {
+        let release = Release { lon: 4.5, lat: 60.0, radius: 0.0, schedule: vec![] };
+        let mut rng = StdRng::seed_from_u64(42);
+        let particles = seed(100, &release, Normal::new(0.0, release.radius).unwrap(), &mut rng, 1.0);
+        assert!(particles.iter().all(|p| p.lon == release.lon && p.lat == release.lat));
+    }
 }

@@ -45,7 +45,7 @@ import { importScenario } from "$lib/io/importScenario";
             {
                 lat: 48.4,
                 lon: -125.0,
-                radius: 0.5,
+                radius: 500,
                 schedule: [
                     {
                         amount: 100,

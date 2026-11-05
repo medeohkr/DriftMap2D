@@ -42,6 +42,11 @@ export function initMap() {
         graticule = new GeoGrid({
             map,
             beforeLayerId,
+            gridDensity: (zoom) => {
+                const spacing = [15, 7.5, 5, 3.75, 2.5, 1.5, 1, 0.75, 0.375, 0.25, 0.125, 0.0625, 0.0375, 0.025, 0.0125];
+                const level = Math.max(0, Math.floor(zoom));
+                return spacing[Math.min(level, spacing.length - 1)] / 2 ** Math.max(0, level - spacing.length + 1);
+            },
             gridStyle: { color: "rgba(220, 220, 220, 0.1)", width: 1 },
             labelStyle: {
                 color: "rgb(120, 120, 120)",

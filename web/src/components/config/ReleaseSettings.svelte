@@ -69,13 +69,13 @@
             />
         </div>
         <div class="container-secondary">
-            <span class="release-radius-text">Radius (km)</span>
+            <span class="release-radius-text">Radius (m)</span>
             <input
                 bind:value={releaseConfig.activeRelease.radius}
                 type="number"
                 class="field-primary"
                 step="any"
-                use:numberInput={{ min: 0, max: 1e3 }}
+                use:numberInput={{ min: 0, max: 1e6 }}
             />
         </div>
     </div>

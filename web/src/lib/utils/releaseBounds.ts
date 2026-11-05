@@ -24,9 +24,9 @@ export function getReleaseBounds(releases: ReleasePosition[], centerLon: number)
     let west = Infinity, east = -Infinity, south = Infinity, north = -Infinity;
     for (const release of sorted) {
         const lon = release.lon < start ? release.lon + 360 : release.lon;
-        // Release radius is in km. Frame three standard deviations of the
+        // Release radius is in meters. Frame three standard deviations of the
         // Gaussian release distribution used by Proteus.
-        const angle = Math.min(Math.PI, 3 * release.radius / 6371);
+        const angle = Math.min(Math.PI, 3 * release.radius / 6_371_000);
         const latitude = release.lat * Math.PI / 180;
         const latitudeSpan = angle * 180 / Math.PI;
         const longitudeSpan = Math.abs(latitude) + angle >= Math.PI / 2 ? 180

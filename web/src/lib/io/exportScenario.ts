@@ -29,6 +29,7 @@ export interface DriftMap2DConfig {
     releases: Array<{
         lat: number;
         lon: number;
+        /** gaussian release standard deviation in meters */
         radius: number;
         schedule: Array<{ amount: number; duration: number }>;
     }>;
@@ -197,7 +198,7 @@ export function exportScenario(filename?: string): void {
         type: "FeatureCollection",
         properties: {
             model: "DriftMap2D",
-            version: "0.1",
+            version: "0.2",
             date: new Date().toISOString(),
             includesSnapshots: hasSnapshots,
             config,

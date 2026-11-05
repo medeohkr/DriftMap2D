@@ -1,6 +1,7 @@
 export interface Release {
     lat: number;
     lon: number;
+    /** gaussian release standard deviation in meters */
     radius: number;
     schedule: Schedule[];
 }
@@ -15,7 +16,7 @@ export const releaseConfig = $state({
         {
             lat: 48.4,
             lon: -125.0,
-            radius: 0.5,
+            radius: 500,
             schedule: [
                 {
                     amount: 100,

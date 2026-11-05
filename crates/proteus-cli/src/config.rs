@@ -25,7 +25,7 @@ pub struct Config {
     #[serde(default)]
     pub catalog_dir: Option<std::path::PathBuf>,
 
-    /// Releases spec (see below)
+    /// releases with Gaussian radius in meters, inline or in a separate file
     pub releases: ReleasesSpec,
 
     pub particles: usize,

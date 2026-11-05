@@ -1,4 +1,4 @@
-import { config, releaseConfig } from "../stores/index.svelte";
+import { config, releaseConfig, simulation } from "../stores/index.svelte";
 import type { ForcingModel } from "./forcing";
 
 const defaultLocations = {
@@ -68,6 +68,28 @@ export function getAverageReleasePosition() {
         totals.lon / releaseConfig.releases.length,
         totals.lat / releaseConfig.releases.length,
     ];
+}
+
+/** average particle positions with circular longitude handling */
+export function getCentroidPosition(
+    positions: ArrayLike<number> = simulation.proteus?.get_positions() ?? [],
+): [number, number] | null {
+    let sinLon = 0;
+    let cosLon = 0;
+    let latSum = 0;
+    let count = 0;
+    for (let i = 0; i + 1 < positions.length; i += 2) {
+        const lon = positions[i];
+        const lat = positions[i + 1];
+        if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+        const radians = lon * Math.PI / 180;
+        sinLon += Math.sin(radians);
+        cosLon += Math.cos(radians);
+        latSum += lat;
+        count++;
+    }
+    if (count === 0 || Math.hypot(sinLon, cosLon) < count * 1e-12) return null;
+    return [Math.atan2(sinLon, cosLon) * 180 / Math.PI, latSum / count];
 }
 
 export function releasesToJson() {

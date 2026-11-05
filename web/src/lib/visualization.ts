@@ -145,7 +145,7 @@ export function toggleParticleMode() {
     if (visualization.visualizationMode === "particles") return;
     visualization.visualizationMode = "particles";
     toggleVisualizationMode();
-    if (!timeline.playbackMode && simulation.simulationActive)
+    if (timeline.playbackMode || simulation.simulationActive)
         updateParticleVisualization();
 }
 
@@ -153,11 +153,19 @@ export function toggleHeatmapMode() {
     if (visualization.visualizationMode === "heatmap") return;
     visualization.visualizationMode = "heatmap";
     toggleVisualizationMode();
-    if (!timeline.playbackMode && simulation.simulationActive)
+    if (timeline.playbackMode || simulation.simulationActive)
         updateHeatmapVisualization();
 }
 
 export function updateParticleVisualization() {
+    if (timeline.playbackMode) {
+        const snapshot = history.simulationHistory[timeline.timelineDay];
+        if (snapshot) {
+            map.getSource("particles-unstranded").setData(snapshot.unstrandedGeojson);
+            map.getSource("particles-stranded").setData(snapshot.strandedGeojson);
+        }
+        return;
+    }
     const unstranded = simulation.proteus?.get_unstranded_positions();
     const stranded = simulation.proteus?.get_stranded_positions();
 
@@ -196,8 +204,10 @@ export function updateParticleVisualization() {
 }
 
 export function updateHeatmapVisualization() {
-    const geojson = getHeatmapGeojson();
-    map.getSource("concentration").setData(geojson);
+    const geojson = timeline.playbackMode
+        ? history.simulationHistory[timeline.timelineDay]?.heatmapGeojson
+        : getHeatmapGeojson();
+    if (geojson) map.getSource("concentration").setData(geojson);
 }
 
 export function buildHeatmap() {

@@ -25,6 +25,8 @@ select native NorKyst forcing with `"forcing_model": "norkyst"` or override the 
 
 choose a start date within the current forcing window. start times are UTC and include the configured hour and minute. native forcing errors, including positions outside the grid and advances past the last forecast sample, stop the run.
 
+release `radius` is the Gaussian standard deviation in meters. use `500` for a 500 m spread or `0` for a point release. older CLI configs that specified kilometers must multiply nonzero radii by 1,000. inline releases and separate release files use the same units.
+
 without `tile_url`, the forcing roots are `https://tiles.driftmap2d.com/tiles` for global and `https://tiles.driftmap2d.com/norkyst` for NorKyst. NorKyst reads `manifest.json` directly under that root and daily tiles under `YYYY/MM/DD/XXX_YYY.bin`.
 
 an explicit `tile_url` always wins, including when the model is overridden on the command line. use a complete `https://` or `file://` forcing root, or a CDN prefix such as `norkyst` or `validation-tiles`. no extra model prefix is appended. a local native root must contain both the manifest and the daily tile directories.

@@ -124,7 +124,15 @@ export async function importScenario(file: File): Promise<void> {
         }
         
         resetSimulation();
-        applyConfig(data.properties.config);
+        const cfg = data.properties.config;
+        const radiusScale = data.properties.version === "0.1" ? 1000 : 1;
+        applyConfig({
+            ...cfg,
+            releases: cfg.releases.map(release => ({
+                ...release,
+                radius: release.radius * radiusScale,
+            })),
+        });
         
         if (data.properties.includesSnapshots && data.features.length > 0) {
             simulation.simulationActive = true;
