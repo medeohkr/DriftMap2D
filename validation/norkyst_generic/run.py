@@ -185,7 +185,7 @@ def main():
         print(f"wrote {len(points)} configs to {RUNS}")
         return
     if not args.skip_build:
-        subprocess.run(["cargo", "build", "--release", "-p", "proteus-cli"], cwd=ROOT, check=True)
+        subprocess.run(["cargo", "build", "--profile", "cli", "-p", "proteus-cli"], cwd=ROOT, check=True)
     if not CLI_BIN.exists():
         raise FileNotFoundError(f"build the CLI first at {CLI_BIN}")
     request = urllib.request.Request(

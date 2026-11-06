@@ -117,6 +117,9 @@ impl ReleaseManager {
     }
 
     pub fn update(&mut self, step_count: u32) -> Vec<ParticleSeed> {
+        if self.total_released >= self.total_particles {
+            return Vec::new();
+        }
         let mut seeds = Vec::with_capacity(self.total_particles);
         let hours = self.hours_per_step * (step_count + 1) as f32;
 
@@ -203,6 +206,31 @@ fn seed(
 mod tests {
     use super::*;
     use rand::{rngs::StdRng, SeedableRng};
+
+    #[test]
+    fn completed_releases_return_an_unallocated_empty_vector() {
+        let mut manager = ReleaseManager::new(
+            r#"[{"lon":3,"lat":59,"radius":0,"schedule":[{"amount":1,"duration":0}]}]"#,
+            1000, 24,
+        );
+        assert_eq!(manager.update(0).len(), 1000);
+        for step in 1..10 {
+            let seeds = manager.update(step);
+            assert!(seeds.is_empty());
+            assert_eq!(seeds.capacity(), 0);
+        }
+    }
+
+    #[test]
+    fn waiting_for_a_scheduled_release_does_not_mark_seeding_complete() {
+        let mut manager = ReleaseManager::new(
+            r#"[{"lon":3,"lat":59,"radius":0,"schedule":[{"amount":0,"duration":12},{"amount":1,"duration":0}]}]"#,
+            1000, 24,
+        );
+        assert!(manager.update(0).is_empty());
+        assert_eq!(manager.update(11).len(), 1000);
+        assert_eq!(manager.update(12).capacity(), 0);
+    }
 
     #[test]
     fn five_hundred_meter_radius_produces_a_half_kilometer_standard_deviation() {

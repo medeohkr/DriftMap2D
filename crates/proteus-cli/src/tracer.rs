@@ -88,7 +88,7 @@ fn object(catalog: &Value, id: &str) -> Result<Map<String, Value>> {
         matches[0]
     };
     let mut properties = json!({
-        "jibe_probability": 0.04, "random_orientation": true, "capsizing": false,
+        "jibe_probability": 0.04, "capsizing": false,
         "capsize_threshold": 30.0, "capsize_fraction": 0.4, "capsize_sigma": 5.0,
     }).as_object().unwrap().clone();
     for key in ["downwind", "right", "left"] {
@@ -190,8 +190,8 @@ mod tests {
         assert_eq!(by_code, by_name);
         assert_eq!(by_code["jibe_probability"], 0.04);
         assert_eq!(by_code["capsize_fraction"], 0.4);
-        let overridden = fixture.resolve("sar", json!({"object_id": "PIW-1", "overrides": {"random_orientation": false}})).unwrap();
-        assert_eq!(overridden["random_orientation"], false);
+        let overridden = fixture.resolve("sar", json!({"object_id": "PIW-1", "overrides": {"jibe_probability": 0}})).unwrap();
+        assert_eq!(overridden["jibe_probability"], 0);
     }
 
     #[test]

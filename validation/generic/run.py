@@ -181,7 +181,7 @@ def main():
     if args.limit is not None and args.limit < 1:
         parser.error("limit must be positive")
     if not args.skip_build:
-        subprocess.run(["cargo", "build", "--release", "-p", "proteus-cli"],
+        subprocess.run(["cargo", "build", "--profile", "cli", "-p", "proteus-cli"],
                        cwd=HERE.parents[1], check=True)
     points = make_grid()[:args.limit]
     if args.cli_only:

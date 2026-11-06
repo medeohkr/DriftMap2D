@@ -126,7 +126,7 @@ def main():
     if args.particles < 96 or args.particles % 96:
         parser.error("particles must be a positive multiple of 96")
     if not args.skip_build:
-        subprocess.run(["cargo", "build", "--release", "-p", "proteus-cli"], cwd=ROOT, check=True)
+        subprocess.run(["cargo", "build", "--profile", "cli", "-p", "proteus-cli"], cwd=ROOT, check=True)
     RUNS.mkdir(exist_ok=True)
     from roaring_landmask import RoaringLandmask
     mask = RoaringLandmask.new()

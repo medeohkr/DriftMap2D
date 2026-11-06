@@ -178,7 +178,7 @@ impl Simulation {
         let final_positions = self.diffusion.diffusion_step(
             forcing,
             &unstranded_view,
-            &advected_positions,
+            advected_positions,
             current_day,
             dt_days,
             hour,

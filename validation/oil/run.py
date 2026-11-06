@@ -150,7 +150,7 @@ def validate_cli_output(run_dir, config):
             if key not in row:
                 raise ValueError(
                     f"CLI output is missing {key}; rebuild with "
-                    "`cargo build --release -p proteus-cli` before running oil validation")
+                    "`cargo build --profile cli -p proteus-cli` before running oil validation")
             if row[key] is None or not np.isfinite(row[key]):
                 raise ValueError(f"Invalid {key} at CLI step {step}")
         if row["step"] != step:

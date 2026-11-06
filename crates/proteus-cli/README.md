@@ -1,8 +1,10 @@
 run Proteus with a JSON config
 
 ```sh
-cargo run --release -p proteus-cli -- config.json
+cargo run --profile cli -p proteus-cli -- config.json
 ```
+
+the `cli` profile uses optimization level 3 for native speed and writes the executable to `target/cli/`. the standard release profile also uses level 3 for WASM.
 
 select native NorKyst forcing with `"forcing_model": "norkyst"` or override the config selection with `--forcing-model norkyst`. the default model remains `global`.
 
@@ -55,11 +57,11 @@ select a leeway object by code or exact name
 "tracer_type": "sar",
 "tracer_json": {
   "object_id": "PIW-1",
-  "overrides": { "random_orientation": false }
+  "overrides": { "jibe_probability": 0 }
 }
 ```
 
-SAR defaults are jibe_probability 0.04, random_orientation true, capsizing false, capsize_threshold 30, capsize_fraction 0.4 and capsize_sigma 5. probabilities and capsize_fraction use fractions from zero to one. coefficients retain the units used by OpenDrift's OBJECTPROP.DAT.
+SAR orientations always alternate right and left when particles are seeded. defaults are jibe_probability 0.04, capsizing false, capsize_threshold 30, capsize_fraction 0.4 and capsize_sigma 5. probabilities and capsize_fraction use fractions from zero to one. coefficients retain the units used by OpenDrift's OBJECTPROP.DAT. coefficient perturbations, jibing, and enabled capsizing remain stochastic.
 
 catalogs are discovered in `catalogs/` near the config or executable, independently of the working directory. set `"catalog_dir": "../catalogs"` to specify a directory relative to the config. use `--oil-source` and `--object-source` on the generator to select NOAA records or the existing frontend object catalog. generated JSON is ignored by Git and no catalog downloads happen during simulation.
 

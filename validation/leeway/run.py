@@ -122,7 +122,6 @@ def make_cli_config(release_lon, release_lat):
             "right": [0.54, 0.00, 9.40],
             "left": [-0.54, 0.00, 9.40],
             "jibe_probability": 0.00,
-            "random_orientation": False,
             "capsizing": False,
             "capsize_threshold": 30,
             "capsize_fraction": 0.4,     

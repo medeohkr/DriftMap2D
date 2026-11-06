@@ -26,7 +26,7 @@ RUNS = HERE / "runs"
 def deterministic_overrides(catalog_dir, object_id):
     """keep catalog slopes and offsets while disabling coefficient uncertainty."""
     record = json.loads((Path(catalog_dir) / "object_catalog.json").read_text(encoding="utf-8"))["objects"][object_id]
-    return {"jibe_probability": 0.0, "random_orientation": False, "capsizing": False,
+    return {"jibe_probability": 0.0, "capsizing": False,
             **{field: [*record[field][:2], 0.0] for field in ("downwind", "right", "left")}}
 
 
@@ -141,7 +141,7 @@ def main():
         print(f"validated {args.object_id} and wrote {len(points)} catalog-based configs")
         return
     if not args.skip_build:
-        subprocess.run(["cargo", "build", "--release", "-p", "proteus-cli"], cwd=ROOT, check=True)
+        subprocess.run(["cargo", "build", "--profile", "cli", "-p", "proteus-cli"], cwd=ROOT, check=True)
     if not CLI_BIN.exists():
         raise FileNotFoundError(f"build the CLI first at {CLI_BIN}")
     request = urllib.request.Request(args.tile_url.rstrip("/") + "/manifest.json",

@@ -21,8 +21,8 @@
             bind:value={config.particleCount}
             step="any"
             min="1"
-            max="50000"
-            use:numberInput={{ min: 1, max: 50000 }}
+            max="100000"
+            use:numberInput={{ min: 1, max: 100000 }}
         />
     </div>
     <div class="container-secondary">

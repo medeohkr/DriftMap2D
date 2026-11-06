@@ -2,7 +2,7 @@ run the catalog-based oil comparison in an OpenDrift environment
 
 ```sh
 python scripts/build_catalogs.py
-cargo build --release -p proteus-cli
+cargo build --profile cli -p proteus-cli
 python validation/oil/run.py
 python validation/oil/analyze.py
 ```

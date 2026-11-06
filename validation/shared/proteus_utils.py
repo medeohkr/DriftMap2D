@@ -4,7 +4,7 @@ from pathlib import Path
 
 # Path to the CLI binary, relative to this module's parent (validation/shared/)
 # → repo root is ../../ from validation/shared/
-CLI_BIN = Path(__file__).resolve().parent.parent.parent / "target" / "release" / "proteus.exe"
+CLI_BIN = Path(__file__).resolve().parent.parent.parent / "target" / "cli" / "proteus.exe"
 
 
 def write_config(run_dir, config):

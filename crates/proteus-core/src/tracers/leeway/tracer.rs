@@ -13,11 +13,7 @@ pub struct LeewayTracer {
 impl Tracer for LeewayTracer {
     fn push(&mut self) {
         self.data.capsized.push(false);
-        if self.properties.random_orientation {
-            self.data.orientation.push(self.rng.gen());
-        } else {
-            self.data.orientation.push(self.data.orientation.len() % 2 == 0);
-        }
+        self.data.orientation.push(self.data.orientation.len() % 2 == 0);
         loop {
             let rdw: f32 = self.rng.sample(StandardNormal);
             let dweps = rdw * self.properties.downwind[2];
@@ -112,4 +108,33 @@ impl LeewayTracer {
 
 fn leeway(wind: f32, slope: f32, offset: f32, eps: f32) -> f32 {
     0.01 * ((slope + eps / 20.0) * wind + offset + eps / 2.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn orientation_alternates_across_release_batches_without_a_setting() {
+        let properties = serde_json::json!({
+            "downwind": [0.96, 0.0, 12.0],
+            "right": [0.54, 0.0, 9.4],
+            "left": [-0.54, 0.0, 9.4],
+            "jibe_probability": 0.0,
+            "capsizing": false,
+            "capsize_threshold": 30.0,
+            "capsize_fraction": 0.4,
+            "capsize_sigma": 5.0,
+        });
+        let mut first = LeewayTracer::new(&properties.to_string(), 10);
+        let mut second = LeewayTracer::new(&properties.to_string(), 10);
+        for batch in [3, 2, 5] {
+            for _ in 0..batch {
+                first.push();
+                second.push();
+            }
+        }
+        assert_eq!(first.data.orientation, vec![true, false, true, false, true, false, true, false, true, false]);
+        assert_eq!(first.data.orientation, second.data.orientation);
+    }
 }
