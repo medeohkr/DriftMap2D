@@ -17,7 +17,7 @@ import {
 } from "./visualization";
 import { Proteus } from "../pkg/proteus_wasm";
 import { showToast } from "./stores/toast.svelte";
-import { getTotalDays, startDateTime, releasesToJson, getTracerJson } from "./utils";
+import { getTotalDays, startDateTime, releasesToJson, getTracerJson, getCentroidPosition } from "./utils";
 import { validateSimulationStart } from "./validation";
 
 
@@ -93,6 +93,8 @@ export async function simulationStep(version: number) {
         } else {
             simulation.simulationRunning = false;
             timeline.playbackMode = true;
+            console.log(`total simulation time: ${((performance.now() - simulationStartedAt) / 1000).toFixed(3)} s`);
+            console.log("centroid:", getCentroidPosition());
         }
     } finally {
         simulation.stepCount++;
@@ -100,6 +102,7 @@ export async function simulationStep(version: number) {
 }
 
 let startInFlight = false;
+let simulationStartedAt = 0;
 
 export async function startSimulation(): Promise<boolean> {
     if (startInFlight) {
@@ -114,6 +117,7 @@ export async function startSimulation(): Promise<boolean> {
     let started = false;
     try {
         if (!await validateSimulationStart()) return false;
+        simulationStartedAt = performance.now();
         createProteus();
         simulation.simulationActive = true;
         simulation.simulationRunning = true;
