@@ -111,6 +111,7 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
     let mut results: Vec<(usize, f32, f32, f32, f32)> =
         Vec::with_capacity(config.steps as usize + 1);
     let dt_days = 1.0 / steps_per_day as f32;
+    let mut preparation_positions = Vec::new();
 
     for step_count in 0..=config.steps {
         // Step 0 is the seeding step: seed, record initial centroid, do not advance.
@@ -141,13 +142,13 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
 
         simulation.release_particles(step_count);
 
-        let positions = unstranded_flat(&simulation);
+        simulation.particles.active_positions_into(&mut preparation_positions);
         forcing
-            .prepare_forcing(positions.clone(), current_date_int, hour, dt_days * 24.0)
+            .prepare_forcing_slice(&preparation_positions, current_date_int, hour, dt_days * 24.0)
             .await
             .with_context(|| format!("failed to prepare forcing for step {step_count}"))?;
         forcing.validate_forcing_interval(current_date_int, hour, dt_days * 24.0)?;
-        landmask.load_landmask_tiles(positions).await.map_err(anyhow::Error::msg)?;
+        landmask.load_landmask_tiles_slice(&preparation_positions).await.map_err(anyhow::Error::msg)?;
 
         simulation.update_particles_batch(dt_days, &forcing, current_date_int, hour, &landmask);
         if particle_output::should_snapshot(step_count, config.steps, config.snapshot_every) {
@@ -217,18 +218,6 @@ fn resolve_releases(spec: &ReleasesSpec, config_dir: &std::path::Path) -> Result
                 .with_context(|| format!("failed to read releases file: {}", path.display()))
         }
     }
-}
-
-fn unstranded_flat(simulation: &Simulation) -> Vec<f32> {
-    let p = simulation.get_particles();
-    let mut out = Vec::with_capacity(p.len * 2);
-    for i in 0..p.len {
-        if !p.stranded[i] {
-            out.push(p.lons[i]);
-            out.push(p.lats[i]);
-        }
-    }
-    out
 }
 
 fn centroid(simulation: &Simulation) -> (f32, f32) {

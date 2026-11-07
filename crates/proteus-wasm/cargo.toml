@@ -30,6 +30,10 @@ log = { workspace = true }
 
 # Init logging in browser
 console_log = "1.0"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+
+[dev-dependencies]
+tokio = { workspace = true }
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = ["-O3", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]

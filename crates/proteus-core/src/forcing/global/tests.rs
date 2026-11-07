@@ -616,4 +616,58 @@ fn loader_batches_currents_wind_and_sst_into_output_order() {
             assert_eq!(data[0], 4.0);
         }
     }
+    let mut output = Vec::new();
+    loader.sample_fields_into(
+        positions.iter().copied(),
+        1,
+        0.5,
+        ForcingFields::All,
+        &mut output,
+    );
+    let expected = output.clone();
+    let pointers = {
+        let scratch = loader.sampling.borrow();
+        (
+            output.as_ptr(),
+            scratch.samples.as_ptr(),
+            scratch.values.as_ptr(),
+        )
+    };
+    loader.sample_fields_into(
+        positions.iter().copied(),
+        1,
+        0.5,
+        ForcingFields::All,
+        &mut output,
+    );
+    assert_eq!(output, expected);
+    {
+        let scratch = loader.sampling.borrow();
+        assert_eq!(
+            pointers,
+            (
+                output.as_ptr(),
+                scratch.samples.as_ptr(),
+                scratch.values.as_ptr()
+            )
+        );
+    }
+    loader.sample_fields_into(
+        positions[..1].iter().copied(),
+        1,
+        0.5,
+        ForcingFields::Wind,
+        &mut output,
+    );
+    assert_eq!(output.len(), 1);
+    assert!(output[0][0].is_nan() && output[0][1].is_nan() && output[0][4].is_nan());
+    assert_eq!(&output[0][2..4], &expected[0][2..4]);
+    loader.sample_fields_into(
+        positions.iter().copied(),
+        2,
+        0.5,
+        ForcingFields::All,
+        &mut output,
+    );
+    assert!(output.iter().flatten().all(|v| v.is_nan()));
 }

@@ -70,32 +70,47 @@ pub(super) fn expand_nan_neighbors(
     }
 }
 
+/// interpolation storage reused across fields, temporal slices, and engine steps
+#[derive(Default)]
+pub(super) struct InterpolationScratch {
+    after: Vec<f32>,
+    missing: Vec<usize>,
+    grid: Vec<f32>,
+}
+
 /// preserve successful samples and retry only failures after each expansion
-pub(super) fn interpolate_batch(
+fn interpolate_into(
     grid: &mut [f32],
     width: usize,
     height: usize,
     samples: &[GridSample],
+    values: &mut Vec<f32>,
+    missing: &mut Vec<usize>,
     scratch: &mut Vec<f32>,
-) -> Vec<f32> {
+) {
+    values.clear();
+    missing.clear();
     if width < 2 || height < 2 || grid.len() != width * height {
-        return vec![f32::NAN; samples.len()];
+        values.resize(samples.len(), f32::NAN);
+        return;
     }
-    let mut values: Vec<_> = samples
-        .iter()
-        .map(|sample| sample_spatial(grid, width, height, sample, false))
-        .collect();
-    let mut missing: Vec<_> = values
-        .iter()
-        .enumerate()
-        .filter_map(|(i, value)| (!value.is_finite()).then_some(i))
-        .collect();
+    values.extend(
+        samples
+            .iter()
+            .map(|sample| sample_spatial(grid, width, height, sample, false)),
+    );
+    missing.extend(
+        values
+            .iter()
+            .enumerate()
+            .filter_map(|(i, value)| (!value.is_finite()).then_some(i)),
+    );
     if missing.is_empty() {
-        return values;
+        return;
     }
     if !grid.iter().any(|v| v.is_finite()) {
         values.fill(f32::NAN);
-        return values;
+        return;
     }
     let initially_missing = missing.len();
     let mut rounds = 0;
@@ -121,11 +136,78 @@ pub(super) fn interpolate_batch(
             missing.len()
         );
     }
+}
 
+/// spatially sample each time slice before interpolating between times
+pub(super) fn interpolate_time_into(
+    data: &mut [f32],
+    width: usize,
+    height: usize,
+    times: usize,
+    time: f32,
+    samples: &[GridSample],
+    values: &mut Vec<f32>,
+    scratch: &mut InterpolationScratch,
+) {
+    let cells = width * height;
+    if times == 0 || cells == 0 || !time.is_finite() || data.len() != times * cells {
+        values.clear();
+        values.resize(samples.len(), f32::NAN);
+        return;
+    }
+    let time = time.clamp(0.0, (times - 1) as f32);
+    let before = time.floor() as usize;
+    let fraction = time - before as f32;
+    let offset = before * cells;
+    interpolate_into(
+        &mut data[offset..offset + cells],
+        width,
+        height,
+        samples,
+        values,
+        &mut scratch.missing,
+        &mut scratch.grid,
+    );
+    if fraction == 0.0 {
+        return;
+    }
+    let offset = (before + 1) * cells;
+    interpolate_into(
+        &mut data[offset..offset + cells],
+        width,
+        height,
+        samples,
+        &mut scratch.after,
+        &mut scratch.missing,
+        &mut scratch.grid,
+    );
+    for (value, &next) in values.iter_mut().zip(&scratch.after) {
+        *value = lerp(*value, next, fraction);
+    }
+}
+
+#[cfg(test)]
+pub(super) fn interpolate_batch(
+    grid: &mut [f32],
+    width: usize,
+    height: usize,
+    samples: &[GridSample],
+    scratch: &mut Vec<f32>,
+) -> Vec<f32> {
+    let mut values = Vec::new();
+    interpolate_into(
+        grid,
+        width,
+        height,
+        samples,
+        &mut values,
+        &mut Vec::new(),
+        scratch,
+    );
     values
 }
 
-/// spatially sample surface slices before interpolating between times
+#[cfg(test)]
 pub(super) fn interpolate_time_batch(
     data: &mut [f32],
     width: usize,
@@ -135,35 +217,21 @@ pub(super) fn interpolate_time_batch(
     samples: &[GridSample],
     scratch: &mut Vec<f32>,
 ) -> Vec<f32> {
-    let cells = width * height;
-    if times == 0 || cells == 0 || !time.is_finite() || data.len() != times * cells {
-        return vec![f32::NAN; samples.len()];
-    }
-    let time = time.clamp(0.0, (times - 1) as f32);
-    let before = time.floor() as usize;
-    let fraction = time - before as f32;
-    let offset = before * cells;
-    let mut values = interpolate_batch(
-        &mut data[offset..offset + cells],
+    let mut workspace = InterpolationScratch {
+        grid: std::mem::take(scratch),
+        ..Default::default()
+    };
+    let mut values = Vec::new();
+    interpolate_time_into(
+        data,
         width,
         height,
+        times,
+        time,
         samples,
-        scratch,
+        &mut values,
+        &mut workspace,
     );
-    // an exact timestamp does not require the next slice
-    if fraction == 0.0 {
-        return values;
-    }
-    let offset = (before + 1) * cells;
-    let after = interpolate_batch(
-        &mut data[offset..offset + cells],
-        width,
-        height,
-        samples,
-        scratch,
-    );
-    for (value, next) in values.iter_mut().zip(after) {
-        *value = lerp(*value, next, fraction);
-    }
+    *scratch = workspace.grid;
     values
 }

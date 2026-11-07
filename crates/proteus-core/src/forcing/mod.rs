@@ -5,7 +5,9 @@ mod format;
 pub mod global;
 mod interpolation;
 pub mod norkyst;
+mod preload;
 mod projection;
+mod sampling;
 
 use crate::fetch::TileFetcher;
 pub use cache::GridData;
@@ -24,22 +26,27 @@ pub struct TileKey {
 }
 
 /// fields needed by an advection, diffusion, or weathering query
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ForcingFields {
     Currents,
     CurrentsWind,
     WindTemperature,
+    Wind,
+    All,
 }
 
 impl ForcingFields {
     fn current(self) -> bool {
-        matches!(self, Self::Currents | Self::CurrentsWind)
+        matches!(self, Self::Currents | Self::CurrentsWind | Self::All)
     }
     fn wind(self) -> bool {
-        matches!(self, Self::CurrentsWind | Self::WindTemperature)
+        matches!(
+            self,
+            Self::CurrentsWind | Self::WindTemperature | Self::Wind | Self::All
+        )
     }
     fn sst(self) -> bool {
-        matches!(self, Self::WindTemperature)
+        matches!(self, Self::WindTemperature | Self::All)
     }
 }
 
@@ -63,6 +70,18 @@ pub trait Forcing {
         duration_hours: f32,
     ) -> Result<(), LoaderError>;
 
+    /// prepare from retained coordinates without transferring their ownership
+    async fn prepare_forcing_slice(
+        &mut self,
+        positions: &[f32],
+        date: usize,
+        hour: f32,
+        duration_hours: f32,
+    ) -> Result<(), LoaderError> {
+        self.prepare_forcing(positions.to_vec(), date, hour, duration_hours)
+            .await
+    }
+
     /// reject steps outside the available timeline
     fn validate_forcing_interval(
         &self,
@@ -79,6 +98,19 @@ pub trait Forcing {
         hour: f32,
         fields: ForcingFields,
     ) -> Vec<[f32; 5]>;
+
+    /// write into caller-owned storage while retaining the allocating convenience API
+    fn sample_fields_into(
+        &self,
+        positions: impl ExactSizeIterator<Item = (f32, f32)>,
+        day: usize,
+        hour: f32,
+        fields: ForcingFields,
+        output: &mut Vec<[f32; 5]>,
+    ) {
+        output.clear();
+        output.extend(self.sample_fields(positions, day, hour, fields));
+    }
 
     /// physical grid cell area for the diffusion scheme, in square metres
     fn cell_area_m2(&self, lat: f32) -> f32;
@@ -136,6 +168,27 @@ pub enum ForcingKind<F: TileFetcher> {
 }
 
 impl<F: TileFetcher> ForcingKind<F> {
+    /// background requests reuse the spatial plan from the latest preparation
+    pub fn preload_urls(&self) -> Vec<String> {
+        match self {
+            Self::Global(source) => source.preload_urls(),
+            Self::Norkyst(source) => source.preload_urls(),
+        }
+    }
+
+    /// plan early release-location preloads without decoding forcing tiles
+    pub async fn plan_preload(
+        &mut self,
+        positions: Vec<f32>,
+        date: usize,
+    ) -> Result<(), LoaderError> {
+        match self {
+            Self::Global(source) => source.plan_preload(&positions, date),
+            Self::Norkyst(source) => source.plan_preload(&positions, date).await?,
+        }
+        Ok(())
+    }
+
     pub fn global(base_url: &str, min_lon: f32, min_lat: f32, fetcher: F) -> Self {
         Self::Global(GlobalForcing::new(base_url, min_lon, min_lat, fetcher))
     }
@@ -146,6 +199,26 @@ impl<F: TileFetcher> ForcingKind<F> {
 }
 
 impl<F: TileFetcher> Forcing for ForcingKind<F> {
+    async fn prepare_forcing_slice(
+        &mut self,
+        positions: &[f32],
+        date: usize,
+        hour: f32,
+        duration_hours: f32,
+    ) -> Result<(), LoaderError> {
+        match self {
+            Self::Global(source) => {
+                source
+                    .prepare_forcing_slice(positions, date, hour, duration_hours)
+                    .await
+            }
+            Self::Norkyst(source) => {
+                source
+                    .prepare_forcing_slice(positions, date, hour, duration_hours)
+                    .await
+            }
+        }
+    }
     async fn prepare_forcing(
         &mut self,
         positions: Vec<f32>,
@@ -196,6 +269,22 @@ impl<F: TileFetcher> Forcing for ForcingKind<F> {
         match self {
             Self::Global(source) => source.cell_area_m2(lat),
             Self::Norkyst(source) => source.cell_area_m2(lat),
+        }
+    }
+
+    fn sample_fields_into(
+        &self,
+        positions: impl ExactSizeIterator<Item = (f32, f32)>,
+        day: usize,
+        hour: f32,
+        fields: ForcingFields,
+        output: &mut Vec<[f32; 5]>,
+    ) {
+        match self {
+            Self::Global(source) => source.sample_fields_into(positions, day, hour, fields, output),
+            Self::Norkyst(source) => {
+                source.sample_fields_into(positions, day, hour, fields, output)
+            }
         }
     }
 }

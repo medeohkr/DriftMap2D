@@ -7,6 +7,179 @@ const MANIFEST: &[u8] = include_bytes!("fixtures/manifest.json");
 const LEFT: &[u8] = include_bytes!("fixtures/004_005.bin");
 const RIGHT: &[u8] = include_bytes!("fixtures/005_005.bin");
 
+#[tokio::test]
+async fn preload_envelopes_cover_every_particle_margin_and_only_available_dates() {
+    let positions: Vec<_> = reference().iter().map(point).collect();
+    let flat: Vec<f32> = positions.iter().flat_map(|&(x, y)| [x, y]).collect();
+    let mut loader = NorkystForcing::new("fixture/", MockFetcher);
+    loader.plan_preload(&flat, 20261023).await.unwrap();
+    let grid = &loader.manifest.as_ref().unwrap().grid;
+    let urls = loader.preload_urls();
+    assert!(!urls.is_empty());
+    assert!(loader.tiles.is_empty());
+    assert!(urls
+        .iter()
+        .all(|url| url.starts_with("fixture/2026/10/23/")));
+    for &(lon, lat) in &positions {
+        let (x, y) = grid.position(normalize_lon(lon), lat).unwrap();
+        let left = (x - 60.0).max(0.0) as usize / 120;
+        let right = (x + 60.0).min((grid.grid_shape[1] - 1) as f64) as usize / 120;
+        let top = (y - 60.0).max(0.0) as usize / 120;
+        let bottom = (y + 60.0).min((grid.grid_shape[0] - 1) as f64) as usize / 120;
+        for lon_idx in left..=right {
+            for lat_idx in top..=bottom {
+                assert!(urls.contains(&tile_url(
+                    "fixture",
+                    &TileKey {
+                        lon_idx,
+                        lat_idx,
+                        day: 20261023
+                    }
+                )));
+            }
+        }
+    }
+    loader
+        .prepare_forcing(
+            positions.iter().flat_map(|&(x, y)| [x, y]).collect(),
+            20261023,
+            0.0,
+            0.0,
+        )
+        .await
+        .unwrap();
+    let urls = loader.preload_urls();
+    for key in loader.tiles.keys() {
+        assert!(!urls.contains(&tile_url("fixture", key)));
+    }
+    loader.plan_preload(&[], 20261023).await.unwrap();
+    assert!(loader.preload_urls().is_empty());
+    assert!(loader.prepared.is_empty());
+}
+
+#[tokio::test]
+async fn projected_samples_stay_correct_after_reordering_moving_and_shrinking_batches() {
+    let positions: Vec<_> = reference().iter().map(point).collect();
+    let mut loader = NorkystForcing::new("fixture", MockFetcher);
+    loader
+        .prepare_forcing(
+            positions.iter().flat_map(|&(x, y)| [x, y]).collect(),
+            20261023,
+            0.5,
+            0.0,
+        )
+        .await
+        .unwrap();
+    let expected =
+        loader.sample_fields(positions.iter().copied(), 20261023, 0.5, ForcingFields::All);
+    let reversed = loader.sample_fields(
+        positions.iter().copied().rev(),
+        20261023,
+        0.5,
+        ForcingFields::All,
+    );
+    assert_eq!(expected, reversed.into_iter().rev().collect::<Vec<_>>());
+    let moved: Vec<_> = positions.iter().map(|&(x, y)| (x + 0.0001, y)).collect();
+    let fresh = {
+        let mut other = NorkystForcing::new("fixture", MockFetcher);
+        other
+            .prepare_forcing(
+                moved.iter().flat_map(|&(x, y)| [x, y]).collect(),
+                20261023,
+                0.5,
+                0.0,
+            )
+            .await
+            .unwrap();
+        other.sample_fields(moved.iter().copied(), 20261023, 0.5, ForcingFields::All)
+    };
+    assert_eq!(
+        loader.sample_fields(moved.iter().copied(), 20261023, 0.5, ForcingFields::All),
+        fresh
+    );
+    loader
+        .prepare_forcing(vec![positions[0].0, positions[0].1], 20261023, 0.5, 0.0)
+        .await
+        .unwrap();
+    assert_eq!(loader.prepared.len(), 1);
+    assert_eq!(
+        loader.sample_fields(positions.iter().copied(), 20261023, 0.5, ForcingFields::All),
+        expected
+    );
+}
+
+#[tokio::test]
+async fn combined_samples_reuse_storage_and_clear_unrequested_fields() {
+    let points: Vec<_> = reference().iter().take(3).map(point).collect();
+    let mut loader = NorkystForcing::new("fixture", MockFetcher);
+    loader
+        .prepare_forcing(
+            points.iter().flat_map(|p| [p.0, p.1]).collect(),
+            20261023,
+            0.5,
+            0.0,
+        )
+        .await
+        .unwrap();
+    let velocities = loader.get_velocities_wind(points.iter().copied(), 20261023, 0.5);
+    let temperature = loader.get_wind_sst(points.iter().copied(), 20261023, 0.5);
+    let mut output = Vec::new();
+    loader.sample_fields_into(
+        points.iter().copied(),
+        20261023,
+        0.5,
+        ForcingFields::All,
+        &mut output,
+    );
+    for (i, v) in output.iter().enumerate() {
+        assert_eq!((v[0], v[1], v[2], v[3]), velocities[i]);
+        assert_eq!(v[4], temperature[i].2);
+    }
+    let pointers = {
+        let scratch = loader.sampling.borrow();
+        (
+            output.as_ptr(),
+            scratch.samples.as_ptr(),
+            scratch.values.as_ptr(),
+        )
+    };
+    loader.sample_fields_into(
+        points.iter().copied(),
+        20261023,
+        0.5,
+        ForcingFields::All,
+        &mut output,
+    );
+    {
+        let scratch = loader.sampling.borrow();
+        assert_eq!(
+            pointers,
+            (
+                output.as_ptr(),
+                scratch.samples.as_ptr(),
+                scratch.values.as_ptr()
+            )
+        );
+    }
+    loader.sample_fields_into(
+        points[..1].iter().copied(),
+        20261023,
+        0.0,
+        ForcingFields::CurrentsWind,
+        &mut output,
+    );
+    assert_eq!(output.len(), 1);
+    assert!(output[0][4].is_nan());
+    loader.sample_fields_into(
+        points.iter().copied(),
+        19990101,
+        0.0,
+        ForcingFields::All,
+        &mut output,
+    );
+    assert!(output.iter().flatten().all(|v| v.is_nan()));
+}
+
 struct MockFetcher;
 
 impl TileFetcher for MockFetcher {

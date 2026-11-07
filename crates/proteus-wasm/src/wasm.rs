@@ -1,4 +1,5 @@
 use super::fetch::GlooFetcher;
+use super::heatmap::simulation::SimulationHeatmap;
 use chrono::Duration;
 use chrono::Timelike;
 use chrono::{Datelike, NaiveDateTime};
@@ -15,11 +16,53 @@ pub struct Proteus {
     start_date: NaiveDateTime,
     steps_per_day: u32,
     last_step_count: u32,
+    heatmap: SimulationHeatmap,
+    preparation_positions: Vec<f32>,
+    frame: crate::frame::ParticleFrame,
 }
 
 #[wasm_bindgen]
 pub fn setup_panic_hook() {
     console_error_panic_hook::set_once();
+}
+
+fn make_forcing(model: &str) -> Result<ForcingKind<GlooFetcher>, JsValue> {
+    match model {
+        "global" => Ok(ForcingKind::global(
+            "https://tiles.driftmap2d.com/tiles",
+            -180.0,
+            -80.0,
+            GlooFetcher,
+        )),
+        "norkyst" => Ok(ForcingKind::norkyst(
+            "https://tiles.driftmap2d.com/norkyst",
+            GlooFetcher,
+        )),
+        _ => Err(JsValue::from_str("forcing model must be global or norkyst")),
+    }
+}
+
+/// warm release locations before a simulation exists without scanning particles in JavaScript
+#[wasm_bindgen]
+pub fn preload_forcing(positions: Vec<f32>, date: usize, model: &str) -> js_sys::Promise {
+    let forcing = make_forcing(model);
+    let revision = crate::preloader::begin_plan();
+    wasm_bindgen_futures::future_to_promise(async move {
+        let mut forcing = forcing?;
+        forcing
+            .plan_preload(positions, date)
+            .await
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        crate::preloader::finish_plan(revision, forcing.preload_urls());
+        Ok(JsValue::UNDEFINED)
+    })
+}
+
+/// stop queued preloads and discard cached tiles when a simulation is reset
+#[wasm_bindgen]
+pub fn clear_preloads() {
+    let revision = crate::preloader::begin_plan();
+    crate::preloader::finish_plan(revision, Vec::new());
 }
 
 #[wasm_bindgen]
@@ -61,18 +104,7 @@ impl Proteus {
             diffusion_coeffs,
         );
 
-        let forcing = match forcing_model {
-            "global" => ForcingKind::global(
-                "https://tiles.driftmap2d.com/tiles",
-                -180.0,
-                -80.0,
-                GlooFetcher,
-            ),
-            "norkyst" => {
-                ForcingKind::norkyst("https://tiles.driftmap2d.com/norkyst", GlooFetcher)
-            }
-            _ => return Err(JsValue::from_str("forcing model must be global or norkyst")),
-        };
+        let forcing = make_forcing(forcing_model)?;
         let landmask = LandMaskLoader::new(
             "https://tiles.driftmap2d.com/roaring_landmask",
             -180.0,
@@ -88,6 +120,9 @@ impl Proteus {
             start_date,
             steps_per_day,
             last_step_count: 0,
+            heatmap: SimulationHeatmap::default(),
+            preparation_positions: Vec::new(),
+            frame: crate::frame::ParticleFrame::default(),
         })
     }
 
@@ -101,6 +136,8 @@ impl Proteus {
         }
 
         self.simulation.release_particles(step_count);
+
+        let preload_revision = crate::preloader::begin_plan();
 
         let elapsed = simulation_time(
             self.start_date,
@@ -117,9 +154,12 @@ impl Proteus {
             + forcing_date.month() as usize * 100
             + forcing_date.day() as usize;
 
+        self.simulation
+            .particles
+            .active_positions_into(&mut self.preparation_positions);
         self.forcing
-            .prepare_forcing(
-                self.get_unstranded_positions(),
+            .prepare_forcing_slice(
+                &self.preparation_positions,
                 current_date_int,
                 hour,
                 dt_days * 24.0,
@@ -129,9 +169,11 @@ impl Proteus {
         self.forcing
             .validate_forcing_interval(current_date_int, hour, dt_days * 24.0)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        crate::preloader::finish_plan(preload_revision, self.forcing.preload_urls());
         self.landmask
-            .load_landmask_tiles(self.get_unstranded_positions())
-            .await.map_err(|e| JsValue::from_str(&e))?;
+            .load_landmask_tiles_slice(&self.preparation_positions)
+            .await
+            .map_err(|e| JsValue::from_str(&e))?;
 
         self.simulation.update_particles_batch(
             dt_days,
@@ -146,7 +188,25 @@ impl Proteus {
     }
 
     pub async fn load_landmask_tiles(&mut self, positions: Vec<f32>) -> Result<(), JsValue> {
-        self.landmask.load_landmask_tiles(positions).await.map_err(|e| JsValue::from_str(&e))
+        self.landmask
+            .load_landmask_tiles(positions)
+            .await
+            .map_err(|e| JsValue::from_str(&e))
+    }
+
+    /// bin current active particles without exporting and reimporting their coordinates
+    pub fn generate_heatmap(&mut self, cell_size: f64, smoothing: f64, levels: &[f32]) -> String {
+        self.heatmap
+            .geojson(&self.simulation.particles, cell_size, smoothing, levels)
+    }
+
+    /// export one owned frame for rendering, snapshots, bounds, and statistics
+    pub fn get_particle_frame(&mut self) -> JsValue {
+        self.frame.collect(
+            &self.simulation.particles,
+            self.simulation.release_manager.initial_mass_per_particle(),
+        );
+        self.frame.to_js()
     }
 
     pub fn get_positions(&self) -> Vec<f32> {

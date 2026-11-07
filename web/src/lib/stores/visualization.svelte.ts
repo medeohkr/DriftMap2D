@@ -6,7 +6,6 @@ export interface Visualization {
     gridSize: number;
     smoothLevel: number;
     snapshotInterval: number;
-    heatmap: any | null;
     lastGridUpdate: number;
     visualizationMode: "particles" | "heatmap";
     boundingBox: Float32Array;
@@ -21,7 +20,6 @@ export const visualization: Visualization = $state({
     smoothLevel: 2,
     snapshotInterval: 2,
 
-    heatmap: null,
     lastGridUpdate: 0,
     visualizationMode: "particles",
     boundingBox: new Float32Array(),

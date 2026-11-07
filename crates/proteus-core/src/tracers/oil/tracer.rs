@@ -4,6 +4,7 @@ use super::{weathering, OilData, OilProperties, OilPropertiesJson};
 pub struct OilTracer {
     pub properties: OilProperties,
     pub data: OilData,
+    scratch: weathering::WeatheringScratch,
 }
 
 impl Tracer for OilTracer {
@@ -29,6 +30,7 @@ impl Tracer for OilTracer {
             wind_speeds,
             sst_celsius,
             dt,
+            &mut self.scratch,
         );
     }
 
@@ -82,6 +84,7 @@ impl OilTracer {
             "invalid emulsion water fraction temperature limits");
 
         Self {
+            scratch: weathering::WeatheringScratch::default(),
             properties: OilProperties {
                 mass_per_particle,
                 wind_factor: json.wind_factor,

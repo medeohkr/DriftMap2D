@@ -32,7 +32,7 @@ impl Tracer for LeewayTracer {
         let dt_hours = dt / 3600.0;
         let p_jibe = 1.0 - (1.0 - self.properties.jibe_probability).powf(dt_hours);
         
-        for &idx in indices {
+        for (pos, &idx) in indices.iter().enumerate() {
             if self.rng.gen::<f32>() < p_jibe {
                 self.data.orientation[idx] = !self.data.orientation[idx];
             }
@@ -41,7 +41,7 @@ impl Tracer for LeewayTracer {
                 continue;
             }
             
-            let wind = wind_speeds[idx];
+            let wind = wind_speeds[pos];
             let p_hour = 0.5 + 0.5 * ((wind - self.properties.capsize_threshold) / self.properties.capsize_sigma).tanh();
             let p_step = p_hour * dt_hours;
             

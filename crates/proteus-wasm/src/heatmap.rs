@@ -1,6 +1,7 @@
 // heatmap.rs builds smoothed concentration and probability contours
 
 mod contours;
+pub(crate) mod simulation;
 
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -50,39 +51,47 @@ pub struct EulerianGrid {
     // - concentration/weight for ordinary heatmaps; or
     // - probability mass for SAR mode.
     grid: Vec<f32>,
+    smoothed: Vec<f32>,
 
     smooth_kernel: [f32; 9],
 }
 
 impl EulerianGrid {
     pub fn new(lon_min: f64, lon_max: f64, lat_min: f64, lat_max: f64, cell_size: f64) -> Self {
+        let mut grid = Self {
+            lon_min: 0.0,
+            lat_min: 0.0,
+            cell_size: 1.0,
+            nx: 1,
+            ny: 1,
+            grid: Vec::new(),
+            smoothed: Vec::new(),
+            smooth_kernel: Self::default_kernel(),
+        };
+        grid.reset(lon_min, lon_max, lat_min, lat_max, cell_size);
+        grid
+    }
+
+    /// keep storage while preserving the bounds and cell alignment of a fresh grid
+    fn reset(&mut self, lon_min: f64, lon_max: f64, lat_min: f64, lat_max: f64, cell_size: f64) {
         let valid_bounds =
             lon_min < lon_max && lat_min < lat_max && cell_size.is_finite() && cell_size > 0.0;
 
         if !valid_bounds {
-            return Self {
-                lon_min: 0.0,
-                lat_min: 0.0,
-                cell_size: 1.0,
-                nx: 1,
-                ny: 1,
-                grid: vec![0.0],
-                smooth_kernel: Self::default_kernel(),
-            };
+            self.lon_min = 0.0;
+            self.lat_min = 0.0;
+            self.cell_size = 1.0;
+            self.nx = 1;
+            self.ny = 1;
+        } else {
+            self.lon_min = lon_min;
+            self.lat_min = lat_min;
+            self.cell_size = cell_size;
+            self.nx = (((lon_max - lon_min) / cell_size).ceil() as usize).max(2);
+            self.ny = (((lat_max - lat_min) / cell_size).ceil() as usize).max(2);
         }
-
-        let nx = (((lon_max - lon_min) / cell_size).ceil() as usize).max(2);
-        let ny = (((lat_max - lat_min) / cell_size).ceil() as usize).max(2);
-
-        Self {
-            lon_min,
-            lat_min,
-            cell_size,
-            nx,
-            ny,
-            grid: vec![0.0; nx * ny],
-            smooth_kernel: Self::default_kernel(),
-        }
+        self.grid.resize(self.nx * self.ny, 0.0);
+        self.grid.fill(0.0);
     }
 
     fn default_kernel() -> [f32; 9] {
@@ -244,7 +253,7 @@ impl EulerianGrid {
             return;
         }
 
-        let mut smoothed = vec![0.0; self.grid.len()];
+        self.smoothed.resize(self.grid.len(), 0.0);
 
         for iy in 0..self.ny {
             for ix in 0..self.nx {
@@ -264,11 +273,12 @@ impl EulerianGrid {
                     }
                 }
 
-                smoothed[self.grid_index(ix, iy)] = sum;
+                let index = self.grid_index(ix, iy);
+                self.smoothed[index] = sum;
             }
         }
 
-        self.grid = smoothed;
+        std::mem::swap(&mut self.grid, &mut self.smoothed);
     }
 
     // ========================================================================

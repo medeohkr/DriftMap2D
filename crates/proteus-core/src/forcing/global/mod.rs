@@ -3,10 +3,13 @@
 mod cache;
 mod format;
 mod grid;
+mod preload;
 
 use super::interpolation::GridSample;
 #[cfg(test)]
 use super::interpolation::{expand_nan_neighbors, interpolate_batch};
+use super::preload::PreloadPlan;
+use super::sampling::SamplingScratch;
 use super::{
     next_date, validate_hours, Forcing, ForcingFields, LoaderError, TileKey, TIME_EPSILON,
 };
@@ -29,6 +32,8 @@ pub struct GlobalForcing<F: TileFetcher> {
 
     cache: HashMap<TileKey, RefCell<Tile>>,
     pending: HashSet<TileKey>, // ensures tiles mid-download aren't requested
+    sampling: RefCell<SamplingScratch>,
+    preload: PreloadPlan,
 }
 
 impl<F: TileFetcher> GlobalForcing<F> {
@@ -39,14 +44,17 @@ impl<F: TileFetcher> GlobalForcing<F> {
             step: 1.0 / 12.0,
             step_wind: 1.0 / 4.0,
             tile_size: 10.0,
-            base_url: base_url.to_string(),
+            base_url: base_url.trim_end_matches('/').to_string(),
             fetcher,
             cache: HashMap::new(),
             pending: HashSet::new(),
+            sampling: RefCell::new(SamplingScratch::default()),
+            preload: PreloadPlan::default(),
         }
     }
 
     /// group positions from a generic iterator, avoiding extra vec allocation
+    #[cfg(test)]
     fn group_positions<I>(&self, iter: I, day: usize) -> HashMap<TileKey, Vec<(usize, f32, f32)>>
     where
         I: IntoIterator<Item = (usize, f32, f32)>,
@@ -79,18 +87,26 @@ impl<F: TileFetcher> GlobalForcing<F> {
     }
 
     /// sample each tile as a batch before converting current units
-    fn sample_groups(
+    fn sample_groups_into(
         &self,
-        groups: HashMap<TileKey, Vec<(usize, f32, f32)>>,
+        scratch: &mut SamplingScratch,
         count: usize,
         hour: f32,
         want_current: bool,
         want_wind: bool,
         want_sst: bool,
-    ) -> Vec<[f32; 5]> {
-        let mut results = vec![[f32::NAN; 5]; count];
-        let mut scratch = Vec::new();
-        for (mut key, group) in groups {
+        results: &mut Vec<[f32; 5]>,
+    ) {
+        results.clear();
+        results.resize(count, [f32::NAN; 5]);
+        let SamplingScratch {
+            groups,
+            samples,
+            values,
+            interpolation,
+        } = scratch;
+        for (key, group) in groups.iter() {
+            let mut key = key.clone();
             let sample_hour = if hour > 24.0 + TIME_EPSILON {
                 let Ok(next) = next_date(key.day) else {
                     continue;
@@ -105,25 +121,24 @@ impl<F: TileFetcher> GlobalForcing<F> {
             };
             let mut tile = cached.borrow_mut();
             if !sample_hour.is_finite() || sample_hour < 0.0 || sample_hour > 24.0 + TIME_EPSILON {
-                for &(index, _, _) in &group {
+                for &(index, _, _) in group {
                     results[index].fill(f32::NAN);
                 }
                 continue;
             }
             let (min_lon, min_lat) = self.tile_origin(&key);
-            let samples = |step: f32, origin: Option<(f32, f32)>| -> Vec<GridSample> {
-                let (min_lon, min_lat) = origin.unwrap_or((min_lon, min_lat));
-                group
-                    .iter()
-                    .map(|&(output_index, lon, lat)| GridSample {
+            let prepare_samples =
+                |step: f32, origin: Option<(f32, f32)>, samples: &mut Vec<GridSample>| {
+                    let (min_lon, min_lat) = origin.unwrap_or((min_lon, min_lat));
+                    samples.clear();
+                    samples.extend(group.iter().map(|&(output_index, lon, lat)| GridSample {
                         output_index,
                         x: (lon - min_lon) / step,
                         y: (lat - min_lat) / step,
-                    })
-                    .collect()
-            };
+                    }));
+                };
             if want_current {
-                let samples = samples(self.step, tile.current_origin);
+                prepare_samples(self.step, tile.current_origin, samples);
                 let grid = &mut tile.currents;
                 let last = (grid.sample_count - 1) as f32;
                 let time = if sample_hour <= last + TIME_EPSILON {
@@ -132,14 +147,14 @@ impl<F: TileFetcher> GlobalForcing<F> {
                     f32::NAN
                 };
                 for component in 0..2 {
-                    let values = grid.sample_field(component, time, &samples, &mut scratch);
-                    for (sample, value) in samples.iter().zip(values) {
+                    grid.sample_field_into(component, time, samples, values, interpolation);
+                    for (sample, value) in samples.iter().zip(values.iter().copied()) {
                         results[sample.output_index][component] = value;
                     }
                 }
             }
             if want_wind || want_sst {
-                let samples = samples(self.step_wind, tile.wind_origin);
+                prepare_samples(self.step_wind, tile.wind_origin, samples);
                 if let Some(grid) = &mut tile.atmosphere {
                     let last = (grid.sample_count - 1) as f32;
                     let time = if sample_hour <= last * 6.0 + TIME_EPSILON {
@@ -153,21 +168,39 @@ impl<F: TileFetcher> GlobalForcing<F> {
                         if !requested {
                             continue;
                         }
-                        let values = grid.sample_field(field, time, &samples, &mut scratch);
-                        for (sample, value) in samples.iter().zip(values) {
+                        grid.sample_field_into(field, time, samples, values, interpolation);
+                        for (sample, value) in samples.iter().zip(values.iter().copied()) {
                             results[sample.output_index][field + 2] = value;
                         }
                     }
                 }
             }
             if want_current {
-                for &(idx, _, lat) in &group {
+                for &(idx, _, lat) in group {
                     results[idx][0] = meters_per_degree_lon(results[idx][0], lat);
                     results[idx][1] = meters_per_degree_lat(results[idx][1], lat);
                 }
             }
         }
-        results
+    }
+
+    #[cfg(test)]
+    fn sample_groups(
+        &self,
+        groups: HashMap<TileKey, Vec<(usize, f32, f32)>>,
+        count: usize,
+        hour: f32,
+        current: bool,
+        wind: bool,
+        sst: bool,
+    ) -> Vec<[f32; 5]> {
+        let mut scratch = SamplingScratch {
+            groups,
+            ..Default::default()
+        };
+        let mut values = Vec::new();
+        self.sample_groups_into(&mut scratch, count, hour, current, wind, sst, &mut values);
+        values
     }
 
     // ===== Loading / tiling =====
@@ -306,11 +339,32 @@ impl<F: TileFetcher> Forcing for GlobalForcing<F> {
         hour: f32,
         duration_hours: f32,
     ) -> Result<(), LoaderError> {
+        self.prepare_forcing_slice(&positions, date, hour, duration_hours)
+            .await
+    }
+
+    async fn prepare_forcing_slice(
+        &mut self,
+        positions: &[f32],
+        date: usize,
+        hour: f32,
+        duration_hours: f32,
+    ) -> Result<(), LoaderError> {
         validate_hours(hour, duration_hours)?;
-        let current = self.tiles_for_positions(&positions, date);
+        let current = self.tiles_for_positions(positions, date);
+        self.update_preload(&current, date);
         let next = if hour + duration_hours > 24.0 + TIME_EPSILON {
             let date = next_date(date)?;
-            Some((date, self.tiles_for_positions(&positions, date)))
+            Some((
+                date,
+                current
+                    .iter()
+                    .map(|key| TileKey {
+                        day: date,
+                        ..key.clone()
+                    })
+                    .collect::<HashSet<_>>(),
+            ))
         } else {
             None
         };
@@ -346,19 +400,37 @@ impl<F: TileFetcher> Forcing for GlobalForcing<F> {
         hour: f32,
         fields: ForcingFields,
     ) -> Vec<[f32; 5]> {
+        let mut output = Vec::new();
+        self.sample_fields_into(positions, day, hour, fields, &mut output);
+        output
+    }
+
+    fn sample_fields_into(
+        &self,
+        positions: impl ExactSizeIterator<Item = (f32, f32)>,
+        day: usize,
+        hour: f32,
+        fields: ForcingFields,
+        output: &mut Vec<[f32; 5]>,
+    ) {
         let count = positions.len();
-        let groups = self.group_positions(
-            positions.enumerate().map(|(i, (lon, lat))| (i, lon, lat)),
-            day,
-        );
-        self.sample_groups(
-            groups,
+        let mut scratch = self.sampling.borrow_mut();
+        scratch.clear_groups();
+        for (i, (lon, lat)) in positions.enumerate() {
+            let lon = normalize_lon(lon);
+            let key = self.get_tile_key(lon, lat, day);
+            scratch.groups.entry(key).or_default().push((i, lon, lat));
+        }
+        scratch.groups.retain(|_, group| !group.is_empty());
+        self.sample_groups_into(
+            &mut scratch,
             count,
             hour,
             fields.current(),
             fields.wind(),
             fields.sst(),
-        )
+            output,
+        );
     }
 }
 

@@ -45,6 +45,10 @@ impl <F: TileFetcher>LandMaskLoader<F> {
     }
 
     pub fn update_tiles(&mut self, positions: Vec<f32>) -> HashSet<(usize, usize)> {
+        self.update_tiles_slice(&positions)
+    }
+
+    fn update_tiles_slice(&mut self, positions: &[f32]) -> HashSet<(usize, usize)> {
         let mut needed = HashSet::new();
         let edge_threshold = 0.1;
 
@@ -123,7 +127,12 @@ impl <F: TileFetcher>LandMaskLoader<F> {
     }
 
     pub async fn load_landmask_tiles(&mut self, positions: Vec<f32>) -> Result<(), String> {
-        let needed_landmask_tiles = self.update_tiles(positions);
+        self.load_landmask_tiles_slice(&positions).await
+    }
+
+    /// share the coordinate buffer already used to prepare forcing
+    pub async fn load_landmask_tiles_slice(&mut self, positions: &[f32]) -> Result<(), String> {
+        let needed_landmask_tiles = self.update_tiles_slice(positions);
 
         for (lon_idx, lat_idx) in needed_landmask_tiles {
             self.load_tile(lon_idx, lat_idx).await?;

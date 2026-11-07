@@ -5,7 +5,7 @@ import "geogrid-maplibre-gl/dist/geogrid.css";
 import { mount, unmount } from "svelte";
 import MapDisplay from "../components/MapDisplay.svelte";
 import { simulation, config, visualization, releaseConfig } from "./stores/index.svelte";
-import { preloader } from "./preloader";
+import { preload_forcing } from "../pkg/proteus_wasm";
 import { getReleasePositions, normalizeLongitude, getReleaseBounds, getReleaseColor, renderForcingCoverage } from "./utils";
 import { getGraticuleSpacing, formatGraticuleLabel, hideOverlappingGraticuleLabels } from "./utils";
 
@@ -165,7 +165,10 @@ export async function updateMarker() {
 
     const positions = new Float32Array(getReleasePositions());
     const currentDate = parseInt(config.startDate.replace(/-/g, ""));
-    void preloader.preloadOcean(currentDate, positions, config.forcingModel);
+    if (!simulation.simulationActive) {
+        void preload_forcing(positions, currentDate, config.forcingModel)
+            .catch(error => console.warn("forcing preload failed", error));
+    }
 
     pendingLandmaskPreload = positions;
     if (!landmaskPreloadInFlight) {

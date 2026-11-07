@@ -5,7 +5,7 @@ export interface Simulation {
     simulationActive: boolean;
     simulationRunning: boolean;
     simulationVersion: number;
-    animationId: number | null;
+    stepInFlight: boolean;
     stepCount: number;
     currentTime: string;
 }
@@ -15,7 +15,7 @@ export const simulation: Simulation = $state({
     simulationActive: false,
     simulationRunning: false,
     simulationVersion: 0,
-    animationId: null,
+    stepInFlight: false,
     stepCount: 0,
     currentTime: "",
 });

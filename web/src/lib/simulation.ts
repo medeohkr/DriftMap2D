@@ -7,7 +7,6 @@ import {
     history,
 } from "./stores/index.svelte";
 import { map, zoom } from "./map";
-import { preloader } from "./preloader";
 import {
     updateHeatmapVisualization,
     updateParticleVisualization,
@@ -15,8 +14,11 @@ import {
     updateConcentrationLayer,
     captureSnapshot,
     particleLayer,
+    resetVisualizationCaches,
+    getParticleFrame,
 } from "./visualization";
-import { Proteus } from "../pkg/proteus_wasm";
+import { SimulationLoop } from "./simulationLoop";
+import { Proteus, clear_preloads } from "../pkg/proteus_wasm";
 import { showToast } from "./stores/toast.svelte";
 import { getTotalDays, startDateTime, releasesToJson, getTracerJson, getCentroidPosition } from "./utils";
 import { validateSimulationStart } from "./validation";
@@ -24,6 +26,7 @@ import { validateSimulationStart } from "./validation";
 
 
 export function createProteus() {
+    resetVisualizationCaches();
     simulation.proteus = new Proteus(
         config.tracerType,
         getTracerJson(),
@@ -39,68 +42,64 @@ export function createProteus() {
 }
 
 
-export async function simulationStep(version: number) {
-    if (
-        !simulation.simulationRunning ||
-        version !== simulation.simulationVersion ||
-        !simulation.proteus
-    )
-        return;
+let loop: SimulationLoop | null = null;
+let loopVersion = -1;
+let loopEngine: Proteus | null = null;
 
-    try {
-        await simulation.proteus?.step(simulation.stepCount);
-    } catch (error) {
-        if (!simulation.simulationRunning || simulation.simulationVersion !== version) return;
-        resetSimulation();
-        showToast(String(error), 7000);
-        return;
-    }
-
-    if (simulation.simulationVersion !== version) {
-        return;
-    }
-
-    try {
-        const todayDateInt = simulation.proteus.get_current_date_int();
-        const model = config.forcingModel;
-        // native tiles span only 96 km so refresh their spatial margin each step
-        if (model === "norkyst" || simulation.stepCount % Math.floor(1440 / config.timeStepMin) === 0) {
-            void preloader.preloadOcean(todayDateInt, simulation.proteus.get_positions(), model, 1);
-            preloader.pruneBefore(preloader.addDays(todayDateInt, -1));
-        }
-        updateBoundingBox();
-
-        const finalStep = simulation.stepCount >= getTotalDays() * Math.floor(1440 / config.timeStepMin);
-        if (simulation.stepCount % visualization.snapshotInterval === 0 || finalStep) {
+export function simulationStep(version: number): Promise<void> {
+    const engine = simulation.proteus;
+    if (!simulation.simulationRunning || version !== simulation.simulationVersion || !engine)
+        return Promise.resolve();
+    if (loop && loopVersion === version && loopEngine === engine) return loop.start();
+    loop?.cancel();
+    loopVersion = version;
+    loopEngine = engine;
+    const current = () => version === simulation.simulationVersion && simulation.proteus === engine;
+    loop = new SimulationLoop({
+        isCurrent: current,
+        advance: async () => {
+            const step = simulation.stepCount;
+            simulation.stepInFlight = true;
+            try {
+                await engine.step(step);
+            } finally {
+                if (current()) simulation.stepInFlight = false;
+            }
+            if (!current()) return true;
+            simulation.stepCount = step + 1;
+            const finalStep = step >= getTotalDays() * Math.floor(1440 / config.timeStepMin);
+            if (step % visualization.snapshotInterval === 0 || finalStep) {
+                captureSnapshot(engine.current_day());
+            }
+            return finalStep;
+        },
+        render: force => {
+            if (!current()) return;
             updateStats();
-            captureSnapshot(simulation.proteus.current_day());
-        }
-
-        if (
-            visualization.visualizationMode === "heatmap" &&
-            performance.now() - visualization.lastGridUpdate >
-                visualization.gridUpdateInterval
-        ) {
-            updateHeatmapVisualization();
-            visualization.lastGridUpdate = performance.now();
-        } else if (visualization.visualizationMode !== "heatmap") {
-            updateParticleVisualization();
-        }
-
-        simulation.currentTime = simulation.proteus.current_time_str();
-        if (!finalStep) {
-            simulation.animationId = requestAnimationFrame(() =>
-                simulationStep(version)
-            );
-        } else {
+            updateBoundingBox();
+            if (visualization.visualizationMode === "heatmap") {
+                if (force || performance.now() - visualization.lastGridUpdate > visualization.gridUpdateInterval) {
+                    updateHeatmapVisualization();
+                    visualization.lastGridUpdate = performance.now();
+                }
+            } else {
+                updateParticleVisualization();
+            }
+            simulation.currentTime = engine.current_time_str();
+        },
+        complete: () => {
             simulation.simulationRunning = false;
             timeline.playbackMode = true;
             console.log(`total simulation time: ${((performance.now() - simulationStartedAt) / 1000).toFixed(3)} s`);
             console.log("centroid:", getCentroidPosition());
-        }
-    } finally {
-        simulation.stepCount++;
-    }
+        },
+        error: error => {
+            if (!current()) return;
+            void resetSimulation();
+            showToast(String(error), 7000);
+        },
+    });
+    return loop.start();
 }
 
 let startInFlight = false;
@@ -145,18 +144,26 @@ export async function startSimulation(): Promise<boolean> {
 
 export function stopSimulation() {
     simulation.simulationRunning = false;
-    if (simulation.animationId) cancelAnimationFrame(simulation.animationId);
+    loop?.pause();
 }
 
 export function resumeSimulation() {
     if (simulation.simulationRunning) return;
     simulation.simulationRunning = true;
-    simulation.simulationVersion++;
-    simulationStep(simulation.simulationVersion);
+    if (!simulation.simulationActive || timeline.playbackMode) {
+        simulation.simulationRunning = false;
+        return;
+    }
+    void simulationStep(simulation.simulationVersion);
 }
 
 export async function resetSimulation() {
-    if (simulation.animationId) cancelAnimationFrame(simulation.animationId);
+    loop?.cancel();
+    loop = null;
+    loopEngine = null;
+    simulation.stepInFlight = false;
+    clear_preloads();
+    resetVisualizationCaches();
 
     simulation.simulationActive = false;
     simulation.simulationRunning = false;
@@ -175,14 +182,6 @@ export async function resetSimulation() {
 }
 
 export function updateStats() {
-    stats.stranded =
-        simulation.proteus?.stranded_fraction()?.toFixed(1) ?? "0.0";
-    stats.emulsified =
-        simulation.proteus?.mass_weighted_emulsification()?.toFixed(1) ?? "0.0";
-    stats.evaporated =
-        simulation.proteus?.mass_weighted_evaporation()?.toFixed(1) ?? "0.0";
-    stats.totalMass =
-        simulation.proteus?.total_floating_mass_tons()?.toFixed(1) ?? "0.0";
-    stats.activeParticles =
-        simulation.proteus?.active_particle_count().toString() ?? "0.0";
+    const frame = getParticleFrame();
+    if (frame) Object.assign(stats, frame.stats);
 }

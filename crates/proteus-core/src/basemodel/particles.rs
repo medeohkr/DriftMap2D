@@ -1,4 +1,5 @@
 use crate::tracers::{Tracer, TracerKind};
+use std::borrow::Cow;
 
 pub struct Particles {
     pub lons: Vec<f32>,
@@ -9,6 +10,15 @@ pub struct Particles {
 }
 
 impl Particles {
+    /// collect active coordinates once for forcing and landmask preparation
+    pub fn active_positions_into(&self, output: &mut Vec<f32>) {
+        output.clear();
+        for i in 0..self.len {
+            if !self.stranded[i] {
+                output.extend_from_slice(&[self.lons[i], self.lats[i]]);
+            }
+        }
+    }
     // particle vector allocation
     pub fn new(capacity: usize, tracer: TracerKind) -> Self {
         Self {
@@ -56,7 +66,7 @@ impl Particles {
         ParticleView {
             lons: &self.lons,
             lats: &self.lats,
-            indices,
+            indices: Cow::Owned(indices),
         }
     }
 }
@@ -64,10 +74,18 @@ impl Particles {
 pub struct ParticleView<'a> {
     lons: &'a [f32],
     lats: &'a [f32],
-    pub indices: Vec<usize>,
+    pub indices: Cow<'a, [usize]>,
 }
 
-impl ParticleView<'_> {
+impl<'a> ParticleView<'a> {
+    pub(super) fn borrowed(lons: &'a [f32], lats: &'a [f32], indices: &'a [usize]) -> Self {
+        Self {
+            lons,
+            lats,
+            indices: Cow::Borrowed(indices),
+        }
+    }
+
     pub fn lon(&self, i: usize) -> f32 {
         self.lons[self.indices[i]]
     }

@@ -1,6 +1,15 @@
 // projection.rs maps geographic positions into a northern polar stereographic grid
 
 use serde::Deserialize;
+use std::cell::OnceCell;
+
+#[derive(Clone)]
+struct Constants {
+    e: f64,
+    e2: f64,
+    a_m_c: f64,
+    t_c: f64,
+}
 
 #[derive(Clone, Deserialize)]
 pub(super) struct PolarStereographic {
@@ -12,13 +21,35 @@ pub(super) struct PolarStereographic {
     semi_major_axis: f64,
     semi_minor_axis: f64,
     standard_parallel: f64,
+    #[serde(skip)]
+    constants: OnceCell<Constants>,
 }
 
 impl PolarStereographic {
+    fn constants(&self) -> &Constants {
+        self.constants.get_or_init(|| {
+            let e2 = 1.0 - (self.semi_minor_axis / self.semi_major_axis).powi(2);
+            let e = e2.sqrt();
+            let phi_c = self.standard_parallel.to_radians();
+            let m_c = phi_c.cos() / (1.0 - e * e * phi_c.sin().powi(2)).sqrt();
+            Constants {
+                e,
+                e2,
+                a_m_c: self.semi_major_axis * m_c,
+                t_c: Self::t(phi_c, e),
+            }
+        })
+    }
+
+    fn t(phi: f64, e: f64) -> f64 {
+        (std::f64::consts::FRAC_PI_4 - phi / 2.0).tan()
+            / ((1.0 - e * phi.sin()) / (1.0 + e * phi.sin())).powf(e / 2.0)
+    }
+
     pub(super) fn scale(&self, lat: f64) -> f64 {
         let lat = lat.min(89.999999);
         let phi = lat.to_radians();
-        let e2 = 1.0 - (self.semi_minor_axis / self.semi_major_axis).powi(2);
+        let e2 = self.constants().e2;
         let m = phi.cos() / (1.0 - e2 * phi.sin().powi(2)).sqrt();
         let (_, y) = self
             .project(self.straight_vertical_longitude_from_pole, lat)
@@ -46,6 +77,7 @@ impl PolarStereographic {
         {
             return Err("unsupported polar stereographic projection".into());
         }
+        self.constants();
         Ok(())
     }
 
@@ -53,14 +85,8 @@ impl PolarStereographic {
         if !lon.is_finite() || !lat.is_finite() || lat <= -90.0 || lat > 90.0 {
             return None;
         }
-        let e = (1.0 - (self.semi_minor_axis / self.semi_major_axis).powi(2)).sqrt();
-        let t = |phi: f64| {
-            (std::f64::consts::FRAC_PI_4 - phi / 2.0).tan()
-                / ((1.0 - e * phi.sin()) / (1.0 + e * phi.sin())).powf(e / 2.0)
-        };
-        let phi_c = self.standard_parallel.to_radians();
-        let m_c = phi_c.cos() / (1.0 - e * e * phi_c.sin().powi(2)).sqrt();
-        let rho = self.semi_major_axis * m_c * t(lat.to_radians()) / t(phi_c);
+        let c = self.constants();
+        let rho = c.a_m_c * Self::t(lat.to_radians(), c.e) / c.t_c;
         let angle = (lon - self.straight_vertical_longitude_from_pole).to_radians();
         Some((
             self.false_easting + rho * angle.sin(),

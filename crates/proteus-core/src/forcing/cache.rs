@@ -9,6 +9,27 @@ pub struct GridData<const N: usize> {
 }
 
 impl<const N: usize> GridData<N> {
+    pub(super) fn sample_field_into(
+        &mut self,
+        field: usize,
+        time: f32,
+        samples: &[super::interpolation::GridSample],
+        output: &mut Vec<f32>,
+        scratch: &mut super::interpolation::InterpolationScratch,
+    ) {
+        super::interpolation::interpolate_time_into(
+            &mut self.fields[field],
+            self.width,
+            self.height,
+            self.sample_count,
+            time,
+            samples,
+            output,
+            scratch,
+        );
+    }
+
+    #[cfg(test)]
     pub(super) fn sample_field(
         &mut self,
         field: usize,

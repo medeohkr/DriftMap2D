@@ -1,3 +1,5 @@
+// integrators.rs advances positions with reusable stage buffers
+
 use super::ParticleView;
 
 pub enum Integrator {
@@ -6,7 +8,58 @@ pub enum Integrator {
     RK4,
 }
 
+#[derive(Default)]
+pub struct IntegrationBuffers {
+    intermediate: Vec<(f32, f32)>,
+    k2: Vec<(f32, f32)>,
+    k3: Vec<(f32, f32)>,
+    k4: Vec<(f32, f32)>,
+}
+
 impl Integrator {
+    /// the initial velocity already includes tracer changes at the start of this step
+    pub fn integrate_into(
+        &self,
+        view: &ParticleView,
+        dt: f32,
+        k1: &[(f32, f32)],
+        mut sample: impl FnMut(&[(f32, f32)], f32, &mut Vec<(f32, f32)>),
+        buffers: &mut IntegrationBuffers,
+        output: &mut Vec<(f32, f32)>,
+    ) {
+        output.clear();
+        if matches!(self, Self::Euler) {
+            output.extend(
+                view.iter()
+                    .map(|(i, lon, lat)| (lon + dt * k1[i].0, lat + dt * k1[i].1)),
+            );
+            return;
+        }
+        intermediate_positions(view, 0.5 * dt, k1, &mut buffers.intermediate);
+        sample(&buffers.intermediate, 0.5 * dt, &mut buffers.k2);
+        if matches!(self, Self::Midpoint) {
+            output.extend(
+                view.iter()
+                    .map(|(i, lon, lat)| (lon + dt * buffers.k2[i].0, lat + dt * buffers.k2[i].1)),
+            );
+            return;
+        }
+        intermediate_positions(view, 0.5 * dt, &buffers.k2, &mut buffers.intermediate);
+        sample(&buffers.intermediate, 0.5 * dt, &mut buffers.k3);
+        intermediate_positions(view, dt, &buffers.k3, &mut buffers.intermediate);
+        sample(&buffers.intermediate, dt, &mut buffers.k4);
+        output.extend(view.iter().map(|(i, lon, lat)| {
+            (
+                lon + dt
+                    * (k1[i].0 + 2.0 * buffers.k2[i].0 + 2.0 * buffers.k3[i].0 + buffers.k4[i].0)
+                    / 6.0,
+                lat + dt
+                    * (k1[i].1 + 2.0 * buffers.k2[i].1 + 2.0 * buffers.k3[i].1 + buffers.k4[i].1)
+                    / 6.0,
+            )
+        }));
+    }
+
     pub fn integrate(
         &self,
         view: &ParticleView,
@@ -14,80 +67,59 @@ impl Integrator {
         get_velocities_view: impl Fn(&ParticleView) -> Vec<(f32, f32)>,
         get_velocities_slice: impl Fn(&[(f32, f32)], f32) -> Vec<(f32, f32)>,
     ) -> Vec<(f32, f32)> {
-        match self {
-            Integrator::Euler => euler_step(view, dt, get_velocities_view, get_velocities_slice),
-            Integrator::Midpoint => {
-                midpoint_step(view, dt, get_velocities_view, get_velocities_slice)
-            }
-            Integrator::RK4 => rk4_step(view, dt, get_velocities_view, get_velocities_slice),
-        }
+        let initial = get_velocities_view(view);
+        let mut output = Vec::new();
+        self.integrate_into(
+            view,
+            dt,
+            &initial,
+            |positions, elapsed, out| {
+                out.clear();
+                out.extend(get_velocities_slice(positions, elapsed));
+            },
+            &mut IntegrationBuffers::default(),
+            &mut output,
+        );
+        output
     }
+}
+
+fn intermediate_positions(
+    view: &ParticleView,
+    step: f32,
+    velocities: &[(f32, f32)],
+    output: &mut Vec<(f32, f32)>,
+) {
+    output.clear();
+    output.extend(
+        view.iter()
+            .map(|(i, lon, lat)| (lon + step * velocities[i].0, lat + step * velocities[i].1)),
+    );
 }
 
 pub fn euler_step(
     view: &ParticleView,
     dt: f32,
-    get_velocities_view: impl Fn(&ParticleView) -> Vec<(f32, f32)>,
-    _get_velocities_slice: impl Fn(&[(f32, f32)], f32) -> Vec<(f32, f32)>,
+    initial: impl Fn(&ParticleView) -> Vec<(f32, f32)>,
+    stages: impl Fn(&[(f32, f32)], f32) -> Vec<(f32, f32)>,
 ) -> Vec<(f32, f32)> {
-    let velocities = get_velocities_view(view);
-    view.iter()
-        .map(|(i, lon, lat)| (lon + dt * velocities[i].0, lat + dt * velocities[i].1))
-        .collect()
+    Integrator::Euler.integrate(view, dt, initial, stages)
 }
-
 pub fn midpoint_step(
     view: &ParticleView,
     dt: f32,
-    get_velocities_view: impl Fn(&ParticleView) -> Vec<(f32, f32)>,
-    get_velocities_slice: impl Fn(&[(f32, f32)], f32) -> Vec<(f32, f32)>,
+    initial: impl Fn(&ParticleView) -> Vec<(f32, f32)>,
+    stages: impl Fn(&[(f32, f32)], f32) -> Vec<(f32, f32)>,
 ) -> Vec<(f32, f32)> {
-    let k1 = get_velocities_view(view);
-    let k2 = get_velocities_slice(
-        &compute_intermediate_positions(view, 0.5 * dt, &k1),
-        0.5 * dt,
-    );
-
-    view.iter()
-        .map(|(i, lon, lat)| (lon + dt * k2[i].0, lat + dt * k2[i].1))
-        .collect()
+    Integrator::Midpoint.integrate(view, dt, initial, stages)
 }
-
 pub fn rk4_step(
     view: &ParticleView,
     dt: f32,
-    get_velocities_view: impl Fn(&ParticleView) -> Vec<(f32, f32)>,
-    get_velocities_slice: impl Fn(&[(f32, f32)], f32) -> Vec<(f32, f32)>,
+    initial: impl Fn(&ParticleView) -> Vec<(f32, f32)>,
+    stages: impl Fn(&[(f32, f32)], f32) -> Vec<(f32, f32)>,
 ) -> Vec<(f32, f32)> {
-    let k1 = get_velocities_view(view);
-    let k2 = get_velocities_slice(
-        &compute_intermediate_positions(view, 0.5 * dt, &k1),
-        0.5 * dt,
-    );
-    let k3 = get_velocities_slice(
-        &compute_intermediate_positions(view, 0.5 * dt, &k2),
-        0.5 * dt,
-    );
-    let k4 = get_velocities_slice(&compute_intermediate_positions(view, dt, &k3), dt);
-
-    view.iter()
-        .map(|(i, lon, lat)| {
-            (
-                lon + dt * (k1[i].0 + 2.0 * k2[i].0 + 2.0 * k3[i].0 + k4[i].0) / 6.0,
-                lat + dt * (k1[i].1 + 2.0 * k2[i].1 + 2.0 * k3[i].1 + k4[i].1) / 6.0,
-            )
-        })
-        .collect()
-}
-
-fn compute_intermediate_positions(
-    view: &ParticleView,
-    step: f32,
-    velocities: &Vec<(f32, f32)>,
-) -> Vec<(f32, f32)> {
-    view.iter()
-        .map(|(i, lon, lat)| (lon + step * velocities[i].0, lat + step * velocities[i].1))
-        .collect()
+    Integrator::RK4.integrate(view, dt, initial, stages)
 }
 
 #[cfg(test)]

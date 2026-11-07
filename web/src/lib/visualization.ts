@@ -7,11 +7,25 @@ import {
     stats,
     history,
 } from "./stores/index.svelte";
-import { HeatmapGenerator } from "../pkg/proteus_wasm";
+import { HeatmapCache } from "./heatmap";
+import { ParticleFrameCache } from "./particleFrame";
 import { ParticleLayer } from "./particleLayer";
 import { getAverageReleasePosition, getTotalReleaseMass } from "./utils";
 
 export const particleLayer = new ParticleLayer();
+const heatmapCache = new HeatmapCache();
+const frameCache = new ParticleFrameCache();
+
+export function resetVisualizationCaches() {
+    heatmapCache.clear();
+    frameCache.clear();
+}
+
+export function getParticleFrame() {
+    const source = simulation.proteus;
+    if (!source) return null;
+    return simulation.stepInFlight ? frameCache.peek(source) : frameCache.get(source);
+}
 
 export const COLORS = [
     "rgb(255, 255, 255)",
@@ -133,7 +147,8 @@ export function updateParticleVisualization() {
     }
     const proteus = simulation.proteus;
     if (proteus) {
-        particleLayer.setPositions(proteus.get_unstranded_positions(), proteus.get_stranded_positions());
+        const frame = getParticleFrame();
+        if (frame) particleLayer.setPositions(frame.activePositions, frame.strandedPositions);
     }
 }
 
@@ -150,106 +165,31 @@ export function updateHeatmapVisualization() {
     map.getSource("concentration").setData(geojson ?? { type: "FeatureCollection", features: [] });
 }
 
-export function buildHeatmap() {
-    const data =
-        simulation.proteus?.get_unstranded_positions_with_mass() ??
-        new Float32Array();
-
-    const { lonMin, lonMax, needsShift } = getShiftedBounds(data);
-
-    const padding = visualization.gridSize * (visualization.smoothLevel + 1);
-    visualization.heatmap = new HeatmapGenerator(
-        lonMin - padding,
-        lonMax + padding,
-        visualization.boundingBox[2] - padding,
-        visualization.boundingBox[3] + padding,
-        visualization.gridSize,
-    );
-
-    const lons = [],
-        lats = [],
-        masses = [];
-    for (let i = 0; i < data.length; i += 3) {
-        let lon = data[i];
-        if (needsShift && lon < 0) lon += 360;
-        lons.push(lon);
-        lats.push(data[i + 1]);
-        masses.push(data[i + 2]);
-    }
-
-    visualization.heatmap.clear();
-    visualization.heatmap.add_particles(lons, lats, masses);
-    visualization.heatmap.smooth(visualization.smoothLevel);
-
-    if (config.tracerType === "sar") {
-        visualization.heatmap.normalize_probability();
-    }
-}
-
 export function captureSnapshot(day: number) {
+    const frame = getParticleFrame();
     history.simulationHistory.push({
         day: day,
         dateStr: simulation.proteus?.current_time_str() ?? "",
-        activePositions: simulation.proteus?.get_unstranded_positions() ?? new Float32Array(),
-        strandedPositions: simulation.proteus?.get_stranded_positions() ?? new Float32Array(),
+        activePositions: frame?.activePositions ?? new Float32Array(),
+        strandedPositions: frame?.strandedPositions ?? new Float32Array(),
         heatmapGeojson: getHeatmapGeojson(),
         stats: {
-            activeParticles: stats.activeParticles,
-            stranded: stats.stranded,
-            emulsified: stats.emulsified,
-            evaporated: stats.evaporated,
-            totalMass: stats.totalMass,
+            ...(frame?.stats ?? stats),
         },
     });
 }
 
 export function getHeatmapGeojson() {
-    buildHeatmap();
-    if (config.tracerType === "sar") {
-        return JSON.parse(
-            visualization.heatmap.to_probability_contour_geojson(
-                new Float32Array(PROBABILTIES),
-            ),
-        );
-    } else {
-        return JSON.parse(
-            visualization.heatmap.to_contour_geojson(
-                getScaledConcentrations().map(tonsPerKm2ToTonsPerCell),
-            ),
-        );
-    }
-}
-
-export function getShiftedBounds(positions: Float32Array) {
-    let lonMin = visualization.boundingBox[0];
-    let lonMax = visualization.boundingBox[1];
-
-    if (lonMax - lonMin > 180) {
-        let shiftedMin = Infinity;
-        let shiftedMax = -Infinity;
-
-        for (let i = 0; i < positions.length; i += 3) {
-            let lon = positions[i];
-            if (lon < 0) lon += 360;
-            if (lon < shiftedMin) shiftedMin = lon;
-            if (lon > shiftedMax) shiftedMax = lon;
-        }
-
-        return {
-            lonMin: shiftedMin,
-            lonMax: shiftedMax,
-            needsShift: true,
-        };
-    }
-
-    return {
-        lonMin: visualization.boundingBox[0],
-        lonMax: visualization.boundingBox[1],
-        needsShift: false,
-    };
+    const proteus = simulation.proteus;
+    if (!proteus) return { type: "FeatureCollection", features: [] };
+    if (simulation.stepInFlight) return heatmapCache.peek(proteus) ?? { type: "FeatureCollection", features: [] };
+    const levels = config.tracerType === "sar"
+        ? PROBABILTIES
+        : getScaledConcentrations().map(tonsPerKm2ToTonsPerCell);
+    return heatmapCache.get(proteus, visualization.gridSize, visualization.smoothLevel, levels);
 }
 
 export function updateBoundingBox() {
     visualization.boundingBox =
-        simulation.proteus?.get_particle_bounding_box() ?? new Float32Array();
+        getParticleFrame()?.boundingBox ?? new Float32Array();
 }

@@ -11,6 +11,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:particles": "node --experimental-strip-types --test tests/particles.test.ts",
+    "test:heatmap": "node --experimental-strip-types --test tests/heatmap.test.ts",
+    "test:simulation": "node --experimental-strip-types --test tests/simulationLoop.test.ts tests/particleFrame.test.ts",
     "deploy": "npm run build && npx wrangler pages deploy --project-name driftmap dist"
   },
   "dependencies": {
