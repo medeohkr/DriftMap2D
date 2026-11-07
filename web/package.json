@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test:particles": "node --experimental-strip-types --test tests/particles.test.ts",
     "deploy": "npm run build && npx wrangler pages deploy --project-name driftmap dist"
   },
   "dependencies": {

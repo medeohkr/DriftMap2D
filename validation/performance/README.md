@@ -54,3 +54,25 @@ the same 100,000 particle benchmark after those changes gave
 the empty release check now makes zero allocation requests. combined with the reused diffusion buffer, this removes 2 MB of allocation traffic per step at 100,000 particles. runtime gains are primarily from the speed profile. differences of a few percent between separate timing runs should be treated as noise, not evidence of an isolated fast-path speedup.
 
 short deterministic Euler and RK4 runs were also compared through the actual CLI before and after optimization. all 17 snapshots in each case were exactly equal. stochastic realizations can change because disabled diffusion no longer consumes random draws, but the configured stochastic processes retain their probability distributions. tests cover positive diffusion, zero-buffer reuse, completed releases, and delayed scheduled releases.
+
+## particle visualization
+
+live rendering and playback now share an instanced WebGL circle layer with reusable buffers. positions stay in `Float32Array` snapshots instead of per-particle GeoJSON features. 100,000 coordinate pairs require 800,000 bytes per snapshot, excluding heatmap geometry and statistics. scenario files retain their existing MultiPoint format and convert only during import or export. playback updates only the visible view.
+
+the browser harness at `web/tests/particles.html` compares 100,000 particles on a blank Mercator basemap. a headless Chrome run on November 6, 2026 measured median update-to-idle latency of 16.9 ms for the custom layer and 533.6 ms for rebuilt GeoJSON, over eight updates per renderer. these numbers include frame scheduling and are not measurements of simulation runtime or guaranteed interactive frame rates. the harness also checks rotation, pitch, high zoom, antimeridian crossings, repeated worlds, visibility, reset, and WebGL context recovery. see `web/tests/README.md` for commands.
+
+## merged heatmap contours
+
+`crates/proteus-wasm/src/heatmap/contours.rs` stitches marching-squares boundaries with grid vertex identities. internal cell edges are omitted, reversed edges cancel, and touching boundaries split into simple closed rings. straight intermediate vertices are removed. clockwise holes attach to their smallest containing shell. each concentration or probability level exports one MultiPolygon feature, retaining disconnected patches and the previous level order and interpolation.
+
+the native geometry tests compare covered area and sample points against the old cell polygons. they cover all 16 marching-squares cases, all 19,683 three-by-three threshold configurations, larger plateaus, missing values, grid borders, holes, and nested islands. run them with `cargo test -p proteus-wasm heatmap`.
+
+a headless Chrome comparison of the previous and rebuilt release WASM on November 6, 2026 gave
+
+| example | old rings | merged rings | old GeoJSON bytes | merged GeoJSON bytes |
+| --- | ---: | ---: | ---: | ---: |
+| filled 100 by 100 grid, four levels | 39,204 | 4 | 7,145,069 | 773 |
+| region with a hole and an island | 74 | 3 | 12,227 | 469 |
+| smoothed two-cloud SAR example, four levels | 1,490 | 7 | 268,388 | 10,632 |
+
+the filled grid's median contour generation and serialization time fell from 85.5 ms to 0.8 ms over seven calls. this is a synthetic dense case, not a simulation speedup measurement. MapLibre pixel comparisons for the hole and SAR examples found no changed pixels, and SAR density thresholds were identical. local comparison inputs, previous WASM, and results are under ignored `data/heatmap_union/` and `web/data/heatmap_union/`.

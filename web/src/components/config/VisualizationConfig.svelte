@@ -47,17 +47,6 @@
         />
     </div>
     <div class="container-secondary">
-        <span>Render Delay (ms)</span>
-        <input
-            type="number"
-            class="field-primary"
-            bind:value={visualization.gridUpdateInterval}
-            step="any"
-            min="1"
-            use:numberInput={{ min: 1, max: 1e3 }}
-        />
-    </div>
-    <div class="container-secondary">
         <span>Steps Per Snapshot</span>
         <input
             type="number"

@@ -14,6 +14,7 @@ import {
     updateBoundingBox,
     updateConcentrationLayer,
     captureSnapshot,
+    particleLayer,
 } from "./visualization";
 import { Proteus } from "../pkg/proteus_wasm";
 import { showToast } from "./stores/toast.svelte";
@@ -69,7 +70,8 @@ export async function simulationStep(version: number) {
         }
         updateBoundingBox();
 
-        if (simulation.stepCount % visualization.snapshotInterval === 0) {
+        const finalStep = simulation.stepCount >= getTotalDays() * Math.floor(1440 / config.timeStepMin);
+        if (simulation.stepCount % visualization.snapshotInterval === 0 || finalStep) {
             updateStats();
             captureSnapshot(simulation.proteus.current_day());
         }
@@ -86,7 +88,7 @@ export async function simulationStep(version: number) {
         }
 
         simulation.currentTime = simulation.proteus.current_time_str();
-        if (simulation.stepCount < getTotalDays() * Math.floor(1440 / config.timeStepMin)) {
+        if (!finalStep) {
             simulation.animationId = requestAnimationFrame(() =>
                 simulationStep(version)
             );
@@ -123,8 +125,7 @@ export async function startSimulation(): Promise<boolean> {
         simulation.simulationRunning = true;
         activated = true;
         visualization.lastGridUpdate = 0;
-        map.setPaintProperty("unstranded-particles-layer", "circle-radius", visualization.particleRadius);
-        map.setPaintProperty("stranded-particles-layer", "circle-radius", visualization.particleRadius);
+        particleLayer.setRadius(visualization.particleRadius);
         updateConcentrationLayer();
         zoom();
         started = true;
@@ -169,14 +170,7 @@ export async function resetSimulation() {
             type: "FeatureCollection",
             features: [],
         });
-        map.getSource("particles-unstranded").setData({
-            type: "FeatureCollection",
-            features: [],
-        });
-        map.getSource("particles-stranded").setData({
-            type: "FeatureCollection",
-            features: [],
-        });
+        particleLayer.clear();
     }
 }
 

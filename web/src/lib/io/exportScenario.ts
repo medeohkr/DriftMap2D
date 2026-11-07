@@ -5,6 +5,7 @@ import { oilOverrides } from '$lib/stores/oil-overrides.svelte';
 import { objectOverrides } from '$lib/stores/object-overrides.svelte';
 import { genericOverrides } from '$lib/stores/generic-overrides.svelte';
 import { history } from '$lib/stores/history.svelte';
+import { exportSnapshot } from './snapshots';
 
 export interface DriftMap2DConfig {
     // Tracer
@@ -203,32 +204,7 @@ export function exportScenario(filename?: string): void {
             includesSnapshots: hasSnapshots,
             config,
         },
-        features: history.simulationHistory.map(snapshot => ({
-            type: "Feature",
-            properties: {
-                day: snapshot.day,
-                date: snapshot.dateStr,
-                stats: snapshot.stats,
-                heatmap: snapshot.heatmapGeojson,
-            },
-            geometry: {
-                type: "GeometryCollection",
-                geometries: [
-                    {
-                        type: "MultiPoint",
-                        coordinates: snapshot.unstrandedGeojson.features.map(
-                            (f: any) => f.geometry.coordinates
-                        ),
-                    },
-                    {
-                        type: "MultiPoint",
-                        coordinates: snapshot.strandedGeojson.features.map(
-                            (f: any) => f.geometry.coordinates
-                        ),
-                    },
-                ],
-            },
-        })),
+        features: history.simulationHistory.map(exportSnapshot),
     };
 
     const blob = new Blob([JSON.stringify(geojson)], {

@@ -32,3 +32,4 @@ catalogs/*.json
 catalogs/*.json.gz
 upload_landmask_to_r2.py
 demo.ipynb
+.ipynb_checkpoints/

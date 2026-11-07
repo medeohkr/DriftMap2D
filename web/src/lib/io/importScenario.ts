@@ -12,7 +12,8 @@ import { resetSimulation } from '$lib/simulation';
 import { zoom } from '$lib/map';
 import { simulation } from '$lib/stores/simulation.svelte';
 import { resetReleaseColors } from '$lib/utils';
-import { getScaledConcentrations, updateConcentrationLayer } from '$lib/visualization';
+import { updateConcentrationLayer } from '$lib/visualization';
+import { importSnapshot } from './snapshots';
 
 export function applyConfig(cfg: DriftMap2DConfig): void {
     simulationTimeState.version++;
@@ -81,32 +82,7 @@ export function applyConfig(cfg: DriftMap2DConfig): void {
 }
 
 export function loadSnapshots(geojson: DriftMap2DGeoJson): void {
-    history.simulationHistory = geojson.features.map((feature: any) => {
-        const geometries = feature.geometry.geometries;
-
-        const snapshot: any = {
-            day: feature.properties.day,
-            dateStr: feature.properties.date,
-            stats: feature.properties.stats,
-            unstrandedGeojson: {
-                type: "FeatureCollection",
-                features: geometries[0].coordinates.map((coord: number[]) => ({
-                    type: "Feature",
-                    geometry: { type: "Point", coordinates: coord },
-                })),
-            },
-            strandedGeojson: {
-                type: "FeatureCollection",
-                features: geometries[1].coordinates.map((coord: number[]) => ({
-                    type: "Feature",
-                    geometry: { type: "Point", coordinates: coord },
-                })),
-            },
-            heatmapGeojson: feature.properties.heatmap ?? null,
-        };
-
-        return snapshot;
-    });
+    history.simulationHistory = geojson.features.map(importSnapshot);
 }
 
 export async function importScenario(file: File): Promise<void> {

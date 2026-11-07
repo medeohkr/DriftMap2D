@@ -7,8 +7,11 @@ import {
     stats,
     history,
 } from "./stores/index.svelte";
-import { HeatmapGenerator } from "../pkg/proteus_wasm";;
+import { HeatmapGenerator } from "../pkg/proteus_wasm";
+import { ParticleLayer } from "./particleLayer";
 import { getAverageReleasePosition, getTotalReleaseMass } from "./utils";
+
+export const particleLayer = new ParticleLayer();
 
 export const COLORS = [
     "rgb(255, 255, 255)",
@@ -48,35 +51,8 @@ export function initGridLayer() {
             maxzoom: 24,
         });
 
-        map.addSource("particles-unstranded", {
-            type: "geojson",
-            data: { type: "FeatureCollection", features: [] },
-        });
-        map.addLayer({
-            id: "unstranded-particles-layer",
-            type: "circle",
-            source: "particles-unstranded",
-            paint: {
-                "circle-radius": visualization.particleRadius,
-                "circle-color": "white",
-                "circle-opacity": 0.7,
-            },
-        });
-
-        map.addSource("particles-stranded", {
-            type: "geojson",
-            data: { type: "FeatureCollection", features: [] },
-        });
-        map.addLayer({
-            id: "stranded-particles-layer",
-            type: "circle",
-            source: "particles-stranded",
-            paint: {
-                "circle-radius": visualization.particleRadius,
-                "circle-color": "rgb(255, 59, 20)",
-                "circle-opacity": 0.7,
-            },
-        });
+        map.addLayer(particleLayer);
+        particleLayer.setRadius(visualization.particleRadius);
 
         toggleVisualizationMode();
     });
@@ -129,16 +105,7 @@ export function toggleVisualizationMode() {
         "visibility",
         isHeatmap ? "visible" : "none",
     );
-    map.setLayoutProperty(
-        "unstranded-particles-layer",
-        "visibility",
-        isHeatmap ? "none" : "visible",
-    );
-    map.setLayoutProperty(
-        "stranded-particles-layer",
-        "visibility",
-        isHeatmap ? "none" : "visible",
-    );
+    particleLayer.setVisible(!isHeatmap);
 }
 
 export function toggleParticleMode() {
@@ -158,56 +125,29 @@ export function toggleHeatmapMode() {
 }
 
 export function updateParticleVisualization() {
+    particleLayer.setRadius(visualization.particleRadius);
     if (timeline.playbackMode) {
         const snapshot = history.simulationHistory[timeline.timelineDay];
-        if (snapshot) {
-            map.getSource("particles-unstranded").setData(snapshot.unstrandedGeojson);
-            map.getSource("particles-stranded").setData(snapshot.strandedGeojson);
-        }
+        if (snapshot) particleLayer.setPositions(snapshot.activePositions, snapshot.strandedPositions);
         return;
     }
-    const unstranded = simulation.proteus?.get_unstranded_positions();
-    const stranded = simulation.proteus?.get_stranded_positions();
-
-    const geojsonUnstranded = {
-        type: "FeatureCollection",
-        features: [] as any[],
-    };
-    const geojsonStranded = {
-        type: "FeatureCollection",
-        features: [] as any[],
-    };
-
-    if (unstranded && stranded) {
-        for (let i = 0; i < unstranded.length; i += 2) {
-            geojsonUnstranded.features.push({
-                type: "Feature",
-                geometry: {
-                    type: "Point",
-                    coordinates: [unstranded[i], unstranded[i + 1]],
-                },
-            });
-        }
-        for (let i = 0; i < stranded.length; i += 2) {
-            geojsonStranded.features.push({
-                type: "Feature",
-                geometry: {
-                    type: "Point",
-                    coordinates: [stranded[i], stranded[i + 1]],
-                },
-            });
-        }
+    const proteus = simulation.proteus;
+    if (proteus) {
+        particleLayer.setPositions(proteus.get_unstranded_positions(), proteus.get_stranded_positions());
     }
+}
 
-    map.getSource("particles-unstranded").setData(geojsonUnstranded);
-    map.getSource("particles-stranded").setData(geojsonStranded);
+/** update only the visible view when changing the playback snapshot */
+export function updateSnapshotVisualization() {
+    if (visualization.visualizationMode === "particles") updateParticleVisualization();
+    else updateHeatmapVisualization();
 }
 
 export function updateHeatmapVisualization() {
     const geojson = timeline.playbackMode
         ? history.simulationHistory[timeline.timelineDay]?.heatmapGeojson
         : getHeatmapGeojson();
-    if (geojson) map.getSource("concentration").setData(geojson);
+    map.getSource("concentration").setData(geojson ?? { type: "FeatureCollection", features: [] });
 }
 
 export function buildHeatmap() {
@@ -249,9 +189,9 @@ export function buildHeatmap() {
 export function captureSnapshot(day: number) {
     history.simulationHistory.push({
         day: day,
-        dateStr: simulation.proteus?.current_time_str(),
-        unstrandedGeojson: getUnstrandedGeojson(),
-        strandedGeojson: getStrandedGeojson(),
+        dateStr: simulation.proteus?.current_time_str() ?? "",
+        activePositions: simulation.proteus?.get_unstranded_positions() ?? new Float32Array(),
+        strandedPositions: simulation.proteus?.get_stranded_positions() ?? new Float32Array(),
         heatmapGeojson: getHeatmapGeojson(),
         stats: {
             activeParticles: stats.activeParticles,
@@ -261,38 +201,6 @@ export function captureSnapshot(day: number) {
             totalMass: stats.totalMass,
         },
     });
-}
-
-export function getUnstrandedGeojson() {
-    const positions = simulation.proteus?.get_unstranded_positions();
-    if (positions) {
-        return {
-            type: "FeatureCollection",
-            features: Array.from({ length: positions.length / 2 }, (_, i) => ({
-                type: "Feature",
-                geometry: {
-                    type: "Point",
-                    coordinates: [positions[i * 2], positions[i * 2 + 1]],
-                },
-            })),
-        };
-    }
-}
-
-export function getStrandedGeojson() {
-    const positions = simulation.proteus?.get_stranded_positions();
-    if (positions) {
-        return {
-            type: "FeatureCollection",
-            features: Array.from({ length: positions.length / 2 }, (_, i) => ({
-                type: "Feature",
-                geometry: {
-                    type: "Point",
-                    coordinates: [positions[i * 2], positions[i * 2 + 1]],
-                },
-            })),
-        };
-    }
 }
 
 export function getHeatmapGeojson() {

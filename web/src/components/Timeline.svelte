@@ -3,7 +3,7 @@
     import rewindBtn from "$lib/assets/images/RewindBtn.webp";
     import pauseBtn from "$lib/assets/images/PauseBtn.webp";
     import { config, stats, timeline, history, visualization} from "$lib/stores/index.svelte";
-    import { map } from "$lib/map";
+    import { updateSnapshotVisualization } from "$lib/visualization";
 
     const lastStep = $derived(timeline.playbackMode ? Math.max(0, history.simulationHistory.length - 1) : 0);
     let slider = $state<HTMLInputElement>();
@@ -19,7 +19,7 @@
 
     $effect(() => {
         if (timeline.playbackMode) {
-            updateDisplay(history.simulationHistory.length - 1);
+            untrack(() => updateDisplay(history.simulationHistory.length - 1));
         }
     });
 
@@ -43,9 +43,7 @@
         stats.evaporated = s.stats.evaporated;
         stats.totalMass = s.stats.totalMass;
 
-        map.getSource("particles-unstranded").setData(s.unstrandedGeojson);
-        map.getSource("particles-stranded").setData(s.strandedGeojson);
-        map.getSource("concentration").setData(s.heatmapGeojson);
+        updateSnapshotVisualization();
     }
 
     function advancePlayback(now: number) {

@@ -1,3 +1,7 @@
+// heatmap.rs builds smoothed concentration and probability contours
+
+mod contours;
+
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -8,7 +12,7 @@ const OCCUPIED_THRESHOLD_FACTOR: f32 = 1.0e-6;
 // Geometry
 // ============================================================================
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Point2D {
     pub x: f64, // longitude
     pub y: f64, // latitude
@@ -51,18 +55,9 @@ pub struct EulerianGrid {
 }
 
 impl EulerianGrid {
-    pub fn new(
-        lon_min: f64,
-        lon_max: f64,
-        lat_min: f64,
-        lat_max: f64,
-        cell_size: f64,
-    ) -> Self {
+    pub fn new(lon_min: f64, lon_max: f64, lat_min: f64, lat_max: f64, cell_size: f64) -> Self {
         let valid_bounds =
-            lon_min < lon_max &&
-            lat_min < lat_max &&
-            cell_size.is_finite() &&
-            cell_size > 0.0;
+            lon_min < lon_max && lat_min < lat_max && cell_size.is_finite() && cell_size > 0.0;
 
         if !valid_bounds {
             return Self {
@@ -113,11 +108,7 @@ impl EulerianGrid {
         iy * self.nx + ix
     }
 
-    fn coordinate_to_cell(
-        &self,
-        lon: f64,
-        lat: f64,
-    ) -> Option<(usize, usize)> {
+    fn coordinate_to_cell(&self, lon: f64, lat: f64) -> Option<(usize, usize)> {
         if !lon.is_finite() || !lat.is_finite() {
             return None;
         }
@@ -139,12 +130,7 @@ impl EulerianGrid {
         Some((ix, iy))
     }
 
-    pub fn add_particle(
-        &mut self,
-        lon: f64,
-        lat: f64,
-        weight: f32,
-    ) {
+    pub fn add_particle(&mut self, lon: f64, lat: f64, weight: f32) {
         if !weight.is_finite() || weight <= 0.0 {
             return;
         }
@@ -157,12 +143,7 @@ impl EulerianGrid {
         self.grid[index] += weight;
     }
 
-    pub fn add_particles(
-        &mut self,
-        lons: &[f64],
-        lats: &[f64],
-        weights: Option<&[f32]>,
-    ) {
+    pub fn add_particles(&mut self, lons: &[f64], lats: &[f64], weights: Option<&[f32]>) {
         let n = lons.len().min(lats.len());
 
         for i in 0..n {
@@ -205,10 +186,7 @@ impl EulerianGrid {
 
     // For equal-sized cells, probability mass and density have the same
     // ordering. This is appropriate for the current regular degree grid.
-    pub fn hdr_density_threshold(
-        &self,
-        target_probability: f32,
-    ) -> Option<f32> {
+    pub fn hdr_density_threshold(&self, target_probability: f32) -> Option<f32> {
         let mut values: Vec<f32> = self
             .grid
             .iter()
@@ -220,10 +198,7 @@ impl EulerianGrid {
             return None;
         }
 
-        values.sort_by(|a, b| {
-            b.partial_cmp(a)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        values.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
 
         let total: f32 = values.iter().sum();
 
@@ -277,22 +252,15 @@ impl EulerianGrid {
 
                 for ky in -1..=1 {
                     for kx in -1..=1 {
-                        let source_x = (ix as isize + kx)
-                            .clamp(0, self.nx as isize - 1)
-                            as usize;
+                        let source_x = (ix as isize + kx).clamp(0, self.nx as isize - 1) as usize;
 
-                        let source_y = (iy as isize + ky)
-                            .clamp(0, self.ny as isize - 1)
-                            as usize;
+                        let source_y = (iy as isize + ky).clamp(0, self.ny as isize - 1) as usize;
 
-                        let kernel_index =
-                            ((ky + 1) * 3 + (kx + 1)) as usize;
+                        let kernel_index = ((ky + 1) * 3 + (kx + 1)) as usize;
 
-                        let source_index =
-                            self.grid_index(source_x, source_y);
+                        let source_index = self.grid_index(source_x, source_y);
 
-                        sum += self.grid[source_index]
-                            * self.smooth_kernel[kernel_index];
+                        sum += self.grid[source_index] * self.smooth_kernel[kernel_index];
                     }
                 }
 
@@ -307,10 +275,7 @@ impl EulerianGrid {
     // Ordinary concentration contours
     // ========================================================================
 
-    pub fn generate_contours(
-        &self,
-        thresholds: &[f32],
-    ) -> Vec<Contour> {
+    pub fn generate_contours(&self, thresholds: &[f32]) -> Vec<Contour> {
         thresholds
             .iter()
             .copied()
@@ -327,35 +292,12 @@ impl EulerianGrid {
             .collect()
     }
 
-    pub fn to_contour_geojson(
-        &self,
-        thresholds: &[f32],
-    ) -> String {
+    pub fn to_contour_geojson(&self, thresholds: &[f32]) -> String {
         let contours = self.generate_contours(thresholds);
         let mut features = Vec::new();
 
         for contour in contours {
-            for ring in contour.rings {
-                if ring.len() < 3 {
-                    continue;
-                }
-
-                let coordinates: Vec<Vec<f64>> = ring
-                    .iter()
-                    .map(|point| vec![point.x, point.y])
-                    .collect();
-
-                features.push(serde_json::json!({
-                    "type": "Feature",
-                    "geometry": {
-                        "type": "Polygon",
-                        "coordinates": [coordinates]
-                    },
-                    "properties": {
-                        "concentration": contour.threshold
-                    }
-                }));
-            }
+            features.push(contours::feature(contour.rings, contour.threshold));
         }
 
         serde_json::json!({
@@ -369,10 +311,7 @@ impl EulerianGrid {
     // SAR probability contours
     // ========================================================================
 
-    pub fn generate_probability_contours(
-        &self,
-        probabilities: &[f32],
-    ) -> Vec<ProbabilityContour> {
+    pub fn generate_probability_contours(&self, probabilities: &[f32]) -> Vec<ProbabilityContour> {
         let mut contours = Vec::with_capacity(probabilities.len());
 
         for &probability in probabilities {
@@ -400,40 +339,16 @@ impl EulerianGrid {
         contours
     }
 
-    pub fn to_probability_contour_geojson(
-        &self,
-        probabilities: &[f32],
-    ) -> String {
+    pub fn to_probability_contour_geojson(&self, probabilities: &[f32]) -> String {
         let mut sorted_probabilities = probabilities.to_vec();
         sorted_probabilities.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
 
-        let contours =
-            self.generate_probability_contours(&sorted_probabilities);
+        let contours = self.generate_probability_contours(&sorted_probabilities);
 
         let mut features = Vec::new();
 
         for contour in contours {
-            for ring in contour.rings {
-                if ring.len() < 3 {
-                    continue;
-                }
-
-                let coordinates: Vec<Vec<f64>> = ring
-                    .iter()
-                    .map(|point| vec![point.x, point.y])
-                    .collect();
-
-                features.push(serde_json::json!({
-                    "type": "Feature",
-                    "geometry": {
-                        "type": "Polygon",
-                        "coordinates": [coordinates]
-                    },
-                    "properties": {
-                        "concentration": contour.probability,
-                    }
-                }));
-            }
+            features.push(contours::feature(contour.rings, contour.probability));
         }
 
         serde_json::json!({
@@ -443,170 +358,124 @@ impl EulerianGrid {
         .to_string()
     }
 
-
     // ========================================================================
     // Marching squares
     // ========================================================================
 
-    fn marching_squares(
-        &self,
-        threshold: f32,
-    ) -> Vec<Vec<Point2D>> {
+    fn marching_squares(&self, threshold: f32) -> Vec<Vec<Point2D>> {
         if self.nx < 2 || self.ny < 2 {
             return Vec::new();
         }
-
-        let mut polygons = Vec::new();
-
         let classified: Vec<u8> = self
             .grid
             .iter()
-            .map(|&value| {
-                if value.is_finite() && value >= threshold {
-                    1
-                } else {
-                    0
-                }
-            })
+            .map(|&value| u8::from(value.is_finite() && value >= threshold))
             .collect();
-
-        for y in 0..(self.ny - 1) {
-            for x in 0..(self.nx - 1) {
+        let mut boundaries = contours::Boundaries::default();
+        for y in 0..self.ny - 1 {
+            for x in 0..self.nx - 1 {
                 let idx = self.grid_index(x, y);
-                let next_row_idx = self.grid_index(x, y + 1);
-
-                let b0 = classified[idx];
-                let b1 = classified[self.grid_index(x + 1, y)];
-                let b2 = classified[self.grid_index(x + 1, y + 1)];
-                let b3 = classified[next_row_idx];
-
-                let config =
-                    b0 | (b1 << 1) | (b2 << 2) | (b3 << 3);
-
-                if config == 0 {
+                let [b0, b1, b2, b3] = [
+                    classified[idx],
+                    classified[idx + 1],
+                    classified[idx + self.nx + 1],
+                    classified[idx + self.nx],
+                ];
+                let config = b0 | (b1 << 1) | (b2 << 2) | (b3 << 3);
+                if config == 0
+                    || (config == 15 && x > 0 && y > 0 && x + 2 < self.nx && y + 2 < self.ny)
+                {
                     continue;
                 }
-
-                let lon = self.lon_min
-                    + x as f64 * self.cell_size;
-                let next_lon = lon + self.cell_size;
-
-                let lat = self.lat_min
-                    + y as f64 * self.cell_size;
-                let next_lat = lat + self.cell_size;
-
-                let p0 = Point2D { x: lon, y: lat };
-                let p1 = Point2D {
-                    x: next_lon,
-                    y: lat,
-                };
-                let p2 = Point2D {
-                    x: next_lon,
-                    y: next_lat,
-                };
-                let p3 = Point2D {
-                    x: lon,
-                    y: next_lat,
-                };
-
-                if config == 15 {
-                    polygons.push(vec![p0, p1, p2, p3]);
-                    continue;
+                let mb = self.crossing(x, y, true, threshold);
+                let mr = self.crossing(x + 1, y, false, threshold);
+                let mt = self.crossing(x, y + 1, true, threshold);
+                let ml = self.crossing(x, y, false, threshold);
+                // interior grid edges cancel by construction so only contour edges are retained
+                match config {
+                    1 => boundaries.edge(mb, ml),
+                    2 => boundaries.edge(mr, mb),
+                    3 => boundaries.edge(mr, ml),
+                    4 => boundaries.edge(mt, mr),
+                    5 => {
+                        boundaries.edge(mb, mr);
+                        boundaries.edge(mt, ml);
+                    }
+                    6 => boundaries.edge(mt, mb),
+                    7 => boundaries.edge(mt, ml),
+                    8 => boundaries.edge(ml, mt),
+                    9 => boundaries.edge(mb, mt),
+                    10 => {
+                        boundaries.edge(mr, mt);
+                        boundaries.edge(ml, mb);
+                    }
+                    11 => boundaries.edge(mr, mt),
+                    12 => boundaries.edge(ml, mr),
+                    13 => boundaries.edge(mb, mr),
+                    14 => boundaries.edge(ml, mb),
+                    _ => {}
                 }
-
-                let c0 = self.grid[idx];
-                let c1 = self.grid[self.grid_index(x + 1, y)];
-                let c2 = self.grid[self.grid_index(x + 1, y + 1)];
-                let c3 = self.grid[next_row_idx];
-
-                let mb = Self::interpolate(
-                    &p0,
-                    &p1,
-                    c0,
-                    c1,
-                    threshold,
-                );
-
-                let mr = Self::interpolate(
-                    &p1,
-                    &p2,
-                    c1,
-                    c2,
-                    threshold,
-                );
-
-                let mt = Self::interpolate(
-                    &p3,
-                    &p2,
-                    c3,
-                    c2,
-                    threshold,
-                );
-
-                let ml = Self::interpolate(
-                    &p0,
-                    &p3,
-                    c0,
-                    c3,
-                    threshold,
-                );
-
-                let polygon = match config {
-                    1 => vec![p0, mb, ml],
-                    2 => vec![p1, mr, mb],
-                    4 => vec![p2, mt, mr],
-                    8 => vec![p3, ml, mt],
-
-                    3 => vec![p0, p1, mr, ml],
-                    6 => vec![p1, p2, mt, mb],
-                    9 => vec![p0, p3, mt, mb],
-                    12 => vec![p2, p3, ml, mr],
-
-                    5 => vec![p0, mb, mr, p2, mt, ml],
-                    10 => vec![mb, p1, mr, mt, p3, ml],
-
-                    7 => vec![p0, p1, p2, mt, ml],
-                    11 => vec![p0, p1, mr, mt, p3],
-                    13 => vec![p0, mb, mr, p2, p3],
-                    14 => vec![mb, p1, p2, p3, ml],
-
-                    _ => Vec::new(),
-                };
-
-                if polygon.len() >= 3 {
-                    polygons.push(polygon);
+                if y == 0 {
+                    boundaries.border(self.corner(x, y), self.corner(x + 1, y), mb, b0, b1);
+                }
+                if x + 2 == self.nx {
+                    boundaries.border(self.corner(x + 1, y), self.corner(x + 1, y + 1), mr, b1, b2);
+                }
+                if y + 2 == self.ny {
+                    boundaries.border(self.corner(x + 1, y + 1), self.corner(x, y + 1), mt, b2, b3);
+                }
+                if x == 0 {
+                    boundaries.border(self.corner(x, y + 1), self.corner(x, y), ml, b3, b0);
                 }
             }
         }
-
-        polygons
+        boundaries
+            .finish()
+            .into_iter()
+            .map(|ring| {
+                ring.into_iter()
+                    .map(|p| Point2D {
+                        x: self.lon_min + p.x * self.cell_size,
+                        y: self.lat_min + p.y * self.cell_size,
+                    })
+                    .collect()
+            })
+            .collect()
     }
 
-    #[inline]
-    fn interpolate(
-        p1: &Point2D,
-        p2: &Point2D,
-        v1: f32,
-        v2: f32,
-        threshold: f32,
-    ) -> Point2D {
-        let difference = v2 - v1;
-
-        if !difference.is_finite()
-            || difference.abs() < 1.0e-10
-        {
-            return Point2D {
-                x: (p1.x + p2.x) * 0.5,
-                y: (p1.y + p2.y) * 0.5,
-            };
+    fn corner(&self, x: usize, y: usize) -> contours::Vertex {
+        contours::Vertex {
+            id: self.grid_index(x, y) * 3,
+            point: Point2D {
+                x: x as f64,
+                y: y as f64,
+            },
         }
+    }
 
-        let t = ((threshold - v1) / difference)
-            .clamp(0.0, 1.0) as f64;
-
-        Point2D {
-            x: p1.x + t * (p2.x - p1.x),
-            y: p1.y + t * (p2.y - p1.y),
+    /** shared edges and exact threshold corners use the same vertex identity */
+    fn crossing(&self, x: usize, y: usize, horizontal: bool, threshold: f32) -> contours::Vertex {
+        let [dx, dy] = if horizontal { [1, 0] } else { [0, 1] };
+        let start = self.grid_index(x, y);
+        let end = self.grid_index(x + dx, y + dy);
+        let difference = self.grid[end] - self.grid[start];
+        let t = if !difference.is_finite() || difference.abs() < 1.0e-10 {
+            0.5
+        } else {
+            ((threshold - self.grid[start]) / difference).clamp(0.0, 1.0) as f64
+        };
+        if t == 0.0 {
+            return self.corner(x, y);
+        }
+        if t == 1.0 {
+            return self.corner(x + dx, y + dy);
+        }
+        contours::Vertex {
+            id: start * 3 + if horizontal { 1 } else { 2 },
+            point: Point2D {
+                x: x as f64 + dx as f64 * t,
+                y: y as f64 + dy as f64 * t,
+            },
         }
     }
 }
@@ -623,21 +492,9 @@ pub struct HeatmapGenerator {
 #[wasm_bindgen]
 impl HeatmapGenerator {
     #[wasm_bindgen(constructor)]
-    pub fn new(
-        lon_min: f64,
-        lon_max: f64,
-        lat_min: f64,
-        lat_max: f64,
-        cell_size: f64,
-    ) -> Self {
+    pub fn new(lon_min: f64, lon_max: f64, lat_min: f64, lat_max: f64, cell_size: f64) -> Self {
         Self {
-            grid: EulerianGrid::new(
-                lon_min,
-                lon_max,
-                lat_min,
-                lat_max,
-                cell_size,
-            ),
+            grid: EulerianGrid::new(lon_min, lon_max, lat_min, lat_max, cell_size),
         }
     }
 
@@ -645,17 +502,8 @@ impl HeatmapGenerator {
         self.grid.clear();
     }
 
-    pub fn add_particles(
-        &mut self,
-        lons: &[f64],
-        lats: &[f64],
-        weights: Option<Vec<f32>>,
-    ) {
-        self.grid.add_particles(
-            lons,
-            lats,
-            weights.as_deref(),
-        );
+    pub fn add_particles(&mut self, lons: &[f64], lats: &[f64], weights: Option<Vec<f32>>) {
+        self.grid.add_particles(lons, lats, weights.as_deref());
     }
 
     pub fn normalize_probability(&mut self) {
@@ -668,38 +516,26 @@ impl HeatmapGenerator {
         }
     }
 
-    pub fn to_contour_geojson(
-        &self,
-        thresholds: &[f32],
-    ) -> String {
+    pub fn to_contour_geojson(&self, thresholds: &[f32]) -> String {
         self.grid.to_contour_geojson(thresholds)
     }
 
-    pub fn to_probability_contour_geojson(
-        &self,
-        probabilities: &[f32],
-    ) -> String {
-        self.grid
-            .to_probability_contour_geojson(probabilities)
+    pub fn to_probability_contour_geojson(&self, probabilities: &[f32]) -> String {
+        self.grid.to_probability_contour_geojson(probabilities)
     }
 
-    pub fn probability_thresholds(
-        &self,
-        probabilities: &[f32],
-    ) -> Vec<f32> {
+    pub fn probability_thresholds(&self, probabilities: &[f32]) -> Vec<f32> {
         probabilities
             .iter()
             .map(|&probability| {
                 if probability >= 0.999_999 {
-                    self.grid
-                        .occupied_threshold()
-                        .unwrap_or(0.0)
+                    self.grid.occupied_threshold().unwrap_or(0.0)
                 } else {
-                    self.grid
-                        .hdr_density_threshold(probability)
-                        .unwrap_or(0.0)
+                    self.grid.hdr_density_threshold(probability).unwrap_or(0.0)
                 }
             })
             .collect()
     }
 }
+#[cfg(test)]
+mod tests;
