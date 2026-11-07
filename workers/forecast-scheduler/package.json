@@ -1,0 +1,16 @@
+{
+  "name": "driftmap-forecast-scheduler",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test tests/scheduler.test.ts",
+    "check": "npx --yes wrangler@4.158.0 deploy --dry-run",
+    "deploy": "npx --yes wrangler@4.158.0 deploy",
+    "secret:github": "npx --yes wrangler@4.158.0 secret put GITHUB_TOKEN",
+    "logs": "npx --yes wrangler@4.158.0 tail",
+    "test:runtime": "node tests/runtime-check.mjs"
+  }
+}

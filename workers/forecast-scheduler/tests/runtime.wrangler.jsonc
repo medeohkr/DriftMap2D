@@ -1,0 +1,5 @@
+{
+  "name": "forecast-scheduler-runtime-test",
+  "main": "runtime-worker.ts",
+  "compatibility_date": "2026-11-06"
+}

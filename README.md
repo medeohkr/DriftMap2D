@@ -36,3 +36,6 @@ DriftMap2D currently serves processed tiles from the following global forcing pr
 
 There are plans to support higher-resolution regional forcing models in the future.
 
+
+
+Forecast update scheduling and Cloudflare Worker setup are documented in [workers/forecast-scheduler](workers/forecast-scheduler/README.md).
