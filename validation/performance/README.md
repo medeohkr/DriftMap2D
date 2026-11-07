@@ -213,3 +213,44 @@ physics advances once per `requestAnimationFrame`, with live rendering after eac
 pause and resume share a pending step rather than starting a second call into the same WASM object. reset cancels the driver and prevents old asynchronous results from publishing. view switching during a pending step uses the last completed cached frame or heatmap rather than borrowing the busy engine. queued animation frames are cancelled when a run is reset.
 
 all saved trajectories, statistics, and heatmaps matched exactly during the scheduling comparison before batching was reverted. the 18 CLI and WASM combinations of forcing, tracer, and integrator also matched their previous trajectories across midnight. the new frame export matched all standalone getters, and exported frames remained unchanged after later engine updates. unit and app checks cover pending-step pause and resume, reset, busy-view switching, missing final snapshots, and cleanup. local records are under ignored `data/shared_frames/` and `web/data/shared_frames/`.
+
+
+## component arrays and SIMD
+
+active particles are gathered once into compact longitude and latitude arrays. separate component buffers now carry initial velocities, RK stage positions and velocities, and final positions. the dense Euler and RK kernels access contiguous slices rather than gathering through active indices at every stage. final coordinates scatter back through the unchanged stable particle indices.
+
+`Forcing::sample_soa_into` accepts borrowed coordinate components and writes current u/v, wind u/v, and kelvin temperature into five retained arrays. global and NorKyst implement this directly without an intermediate per-particle field record. both storage layouts use the same tile grouping and interpolation implementation through static output dispatch. the existing tuple APIs remain as compatibility adapters. simulation diffusion and Smagorinsky probes also use separate coordinate and field arrays, while random draws retain their per-particle x/y ordering. tile preparation and WebGL exports keep their existing boundary formats. the extra compact starting-position buffer retains about 0.8 MB at 100,000 active particles.
+
+`.cargo/config.toml` enables `simd128` for the WASM target, and wasm-opt explicitly accepts SIMD. the release browser bundle therefore requires WebAssembly SIMD support and has no separate scalar fallback bundle. emitted native LLVM IR contains four-wide float multiply, add, and divide operations in the RK4 component kernel. inspection of the optimized WASM also confirms four-wide `f32x4` integration multiply/add loops. no fast-math reassociation or relaxed SIMD was enabled. projection, irregular grid reads, NaN retries, and random generation are not claimed to be fully vectorized.
+
+### native engine comparison
+
+measured with the same Rust CLI profile and cached November 5 local tiles at 59 N, 3 E, using the fixed offshore square from `compare_forcing`. values below are the mean of two warmed run medians, each with 50 repetitions after five warmups, in before/after/after/before order. 100,000 generic particles, 15-minute steps, 2 percent windage, identical restored coordinates. timed work includes physics and coastline checks but excludes forcing preparation, file reads, decompression, rendering, and history output. the updated example samples directly into component arrays.
+
+| forcing and update | before | component arrays | reduction |
+| --- | ---: | ---: | ---: |
+| global Euler, zero diffusion | 15.01 ms | 14.18 ms | 5.5% |
+| global Euler, diffusion 10 | 17.33 ms | 16.08 ms | 7.2% |
+| global RK4, zero diffusion | 58.99 ms | 55.95 ms | 5.2% |
+| global Euler, Smagorinsky 0.1 | 45.52 ms | 41.63 ms | 8.5% |
+| NorKyst Euler, zero diffusion | 15.79 ms | 15.17 ms | 3.9% |
+| NorKyst Euler, diffusion 10 | 17.71 ms | 16.94 ms | 4.4% |
+| NorKyst RK4, zero diffusion | 81.64 ms | 77.33 ms | 5.3% |
+| NorKyst Euler, Smagorinsky 0.1 | 77.10 ms | 74.04 ms | 4.0% |
+
+an earlier isolated comparison was noisier and included regressions, so these balanced results indicate a modest improvement rather than a large SIMD multiplier. the field sampler and coordinate transforms remain much more expensive than the integrator arithmetic.
+
+### browser engine comparison
+
+headless Chrome compared the previous release WASM against component arrays with SIMD enabled. each case ran before/after/after/before, with five warmup steps and 30 timed consecutive steps per run. 100,000 generic particles seeded at one point, zero diffusion, same frozen local forcing and start time. timers surround `Proteus.step`, including cached preparation and its promise, but exclude rendering and particle export. this differs from the native fixed-cloud experiment.
+
+| forcing and integrator | previous run medians | component run medians |
+| --- | ---: | ---: |
+| global Euler | 41.2 / 33.6 ms | 35.8 / 35.4 ms |
+| global RK4 | 96.1 / 112.0 ms | 94.6 / 93.8 ms |
+| NorKyst Euler | 48.3 / 44.6 ms | 46.6 / 45.7 ms |
+| NorKyst RK4 | 162.5 / 130.7 ms | 148.1 / 127.6 ms |
+
+browser timing ranges overlap substantially, especially for NorKyst. these runs establish SIMD execution and numerical parity, but do not establish a consistent browser throughput improvement or isolate layout effects from SIMD build flags.
+
+all 18 CLI and 18 browser combinations of forcing, tracer, and integrator preserved every deterministic particle snapshot and diagnostic exactly across midnight. browser checks also cover particle counts of 1, 3, 17, and 101 for scalar remainders. the 104 Rust tests include direct sampler output parity, unrequested fields, buffer reuse, changing active sets, empty clouds, and scalar-equivalent integration at odd lengths. random diffusion runs are throughput checks rather than bitwise trajectory comparisons. source snapshots, raw timing runs, compiler evidence, and parity outputs are under ignored `data/soa/` and `web/data/soa/`.

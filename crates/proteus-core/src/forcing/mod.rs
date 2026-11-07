@@ -9,6 +9,7 @@ mod preload;
 mod projection;
 mod sampling;
 
+use crate::arrays::{Coordinates, FieldBuffers, FieldOutput};
 use crate::fetch::TileFetcher;
 pub use cache::GridData;
 pub use global::GlobalForcing;
@@ -110,6 +111,24 @@ pub trait Forcing {
     ) {
         output.clear();
         output.extend(self.sample_fields(positions, day, hour, fields));
+    }
+
+    /// sample directly into separate field arrays in compact coordinate order
+    fn sample_soa_into(
+        &self,
+        positions: Coordinates<'_>,
+        day: usize,
+        hour: f32,
+        fields: ForcingFields,
+        output: &mut FieldBuffers,
+    ) {
+        let values = self.sample_fields(positions.iter(), day, hour, fields);
+        output.reset(values.len());
+        for (i, value) in values.iter().enumerate() {
+            for (field, &v) in value.iter().enumerate() {
+                output.set(field, i, v);
+            }
+        }
     }
 
     /// physical grid cell area for the diffusion scheme, in square metres
@@ -269,6 +288,20 @@ impl<F: TileFetcher> Forcing for ForcingKind<F> {
         match self {
             Self::Global(source) => source.cell_area_m2(lat),
             Self::Norkyst(source) => source.cell_area_m2(lat),
+        }
+    }
+
+    fn sample_soa_into(
+        &self,
+        positions: Coordinates<'_>,
+        day: usize,
+        hour: f32,
+        fields: ForcingFields,
+        output: &mut FieldBuffers,
+    ) {
+        match self {
+            Self::Global(source) => source.sample_soa_into(positions, day, hour, fields, output),
+            Self::Norkyst(source) => source.sample_soa_into(positions, day, hour, fields, output),
         }
     }
 

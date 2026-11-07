@@ -2,8 +2,9 @@
 use super::integrators::IntegrationBuffers;
 use super::{
     meters_per_degree_lat, meters_per_degree_lon, normalize_lon, Diffusion, Integrator,
-    LandMaskLoader, ParticleView, Particles, ReleaseManager,
+    LandMaskLoader, Particles, ReleaseManager,
 };
+use crate::arrays::{Coordinates, FieldBuffers, VectorBuffer};
 use crate::forcing::{Forcing, ForcingFields};
 use crate::tracers::{GenericTracer, LeewayTracer, OilTracer, Tracer, TracerKind};
 use crate::TileFetcher;
@@ -108,6 +109,7 @@ impl Simulation {
             wind_speeds,
             sst_celsius,
             initial_velocities,
+            starting_positions,
             positions,
             integration,
         } = &mut self.buffers;
@@ -118,13 +120,14 @@ impl Simulation {
         }
         let oil = matches!(self.particles.tracer, TracerKind::Oil(_));
         let generic = matches!(self.particles.tracer, TracerKind::Generic(_));
-        let starting_positions = || {
+        starting_positions.clear();
+        starting_positions.extend(
             indices
                 .iter()
-                .map(|&i| (self.particles.lons[i], self.particles.lats[i]))
-        };
-        forcing.sample_fields_into(
-            starting_positions(),
+                .map(|&i| (self.particles.lons[i], self.particles.lats[i])),
+        );
+        forcing.sample_soa_into(
+            starting_positions.as_coordinates(),
             current_day,
             hour,
             if oil {
@@ -138,80 +141,62 @@ impl Simulation {
         sst_celsius.clear();
         if !generic {
             wind_speeds.extend(
-                environment
+                environment.components[2]
                     .iter()
-                    .map(|v| (v[2] * v[2] + v[3] * v[3]).sqrt()),
+                    .zip(&environment.components[3])
+                    .map(|(&u, &v)| (u * u + v * v).sqrt()),
             );
         }
         if oil {
-            sst_celsius.extend(environment.iter().map(|v| v[4] - 273.15));
+            sst_celsius.extend(environment.components[4].iter().map(|v| v - 273.15));
         }
         self.particles
             .tracer
             .step(indices, wind_speeds, sst_celsius, dt);
-        let unstranded_view =
-            ParticleView::borrowed(&self.particles.lons, &self.particles.lats, indices);
-        // the previous two queries retried missing wind twice, so retain that behavior
-        if environment
+        // retain the second wind retry and tracer update order used by the original path
+        if environment.components[2]
             .iter()
-            .any(|v| !v[2].is_finite() || !v[3].is_finite())
+            .chain(&environment.components[3])
+            .any(|v| !v.is_finite())
         {
-            forcing.sample_fields_into(
-                unstranded_view.iter().map(|(_, lon, lat)| (lon, lat)),
+            forcing.sample_soa_into(
+                starting_positions.as_coordinates(),
                 current_day,
                 hour,
                 ForcingFields::Wind,
                 stage_environment,
             );
-            for (value, retry) in environment.iter_mut().zip(stage_environment.iter()) {
-                value[2] = retry[2];
-                value[3] = retry[3];
-            }
+            environment.components[2].copy_from_slice(&stage_environment.components[2]);
+            environment.components[3].copy_from_slice(&stage_environment.components[3]);
         }
         let tracer = &self.particles.tracer;
-        initial_velocities.clear();
-        initial_velocities.extend(environment.iter().enumerate().map(|(i, v)| {
-            Self::calculate_total_velocity(
-                tracer,
-                indices[i],
-                unstranded_view.lat(i),
-                v[0],
-                v[1],
-                v[2],
-                v[3],
-            )
-        }));
-        self.integrator.integrate_into(
-            &unstranded_view,
-            dt,
+        total_velocities(
+            tracer,
+            indices,
+            starting_positions.as_coordinates(),
+            environment,
             initial_velocities,
+        );
+        self.integrator.integrate_soa_into(
+            starting_positions.as_coordinates(),
+            dt,
+            initial_velocities.as_coordinates(),
             |positions, elapsed, velocities| {
-                forcing.sample_fields_into(
-                    positions.iter().copied(),
+                forcing.sample_soa_into(
+                    positions,
                     current_day,
                     hour + elapsed / 3600.0,
                     ForcingFields::CurrentsWind,
                     stage_environment,
                 );
-                velocities.clear();
-                velocities.extend(stage_environment.iter().enumerate().map(|(i, v)| {
-                    Self::calculate_total_velocity(
-                        tracer,
-                        indices[i],
-                        positions[i].1,
-                        v[0],
-                        v[1],
-                        v[2],
-                        v[3],
-                    )
-                }));
+                total_velocities(tracer, indices, positions, stage_environment, velocities);
             },
             integration,
             positions,
         );
-        self.diffusion.diffusion_step_in_place(
+        self.diffusion.diffusion_soa_in_place(
             forcing,
-            &unstranded_view,
+            starting_positions.as_coordinates(),
             positions,
             current_day,
             dt_days,
@@ -219,7 +204,7 @@ impl Simulation {
         );
 
         for (i, &idx) in indices.iter().enumerate() {
-            let (mut lon, mut lat) = positions[i];
+            let (mut lon, mut lat) = (positions.x[i], positions.y[i]);
 
             lon = normalize_lon(lon);
             lat = lat.clamp(-80.0, 90.0);
@@ -243,15 +228,40 @@ impl Simulation {
     }
 }
 
+fn total_velocities(
+    tracer: &TracerKind,
+    indices: &[usize],
+    positions: Coordinates<'_>,
+    environment: &FieldBuffers,
+    output: &mut VectorBuffer,
+) {
+    output.resize(indices.len());
+    let [u, v, wind_u, wind_v, _] = &environment.components;
+    for i in 0..indices.len() {
+        let velocity = Simulation::calculate_total_velocity(
+            tracer,
+            indices[i],
+            positions.y[i],
+            u[i],
+            v[i],
+            wind_u[i],
+            wind_v[i],
+        );
+        output.x[i] = velocity.0;
+        output.y[i] = velocity.1;
+    }
+}
+
 #[derive(Default)]
 struct StepBuffers {
     indices: Vec<usize>,
-    environment: Vec<[f32; 5]>,
-    stage_environment: Vec<[f32; 5]>,
+    environment: FieldBuffers,
+    stage_environment: FieldBuffers,
     wind_speeds: Vec<f32>,
     sst_celsius: Vec<f32>,
-    initial_velocities: Vec<(f32, f32)>,
-    positions: Vec<(f32, f32)>,
+    initial_velocities: VectorBuffer,
+    starting_positions: VectorBuffer,
+    positions: VectorBuffer,
     integration: IntegrationBuffers,
 }
 

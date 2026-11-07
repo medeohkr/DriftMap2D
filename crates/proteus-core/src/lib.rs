@@ -1,3 +1,4 @@
+pub mod arrays;
 pub mod basemodel;
 pub mod fetch;
 pub mod forcing;

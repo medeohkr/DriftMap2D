@@ -8,6 +8,7 @@ mod preload;
 use super::preload::{tile_url, PreloadPlan};
 use super::sampling::SamplingScratch;
 use super::{interpolation::GridSample, Forcing, ForcingFields, LoaderError, TileKey};
+use crate::arrays::{Coordinates, FieldBuffers, FieldOutput};
 use crate::{
     fetch::{FetchError, TileFetcher},
     utils::{meters_per_degree_lat, meters_per_degree_lon, normalize_lon},
@@ -49,6 +50,57 @@ async fn fetch<F: TileFetcher>(fetcher: &F, url: &str) -> Result<Vec<u8>, Loader
 }
 
 impl<F: TileFetcher> NorkystForcing<F> {
+    fn sample_positions_into(
+        &self,
+        positions: impl ExactSizeIterator<Item = (f32, f32)>,
+        day: usize,
+        hour: f32,
+        fields: ForcingFields,
+        output: &mut impl FieldOutput,
+    ) {
+        let count = positions.len();
+        let mut scratch = self.sampling.borrow_mut();
+        scratch.clear_groups();
+        let Some(manifest) = &self.manifest else {
+            output.reset(count);
+            return;
+        };
+        for (i, (lon, lat)) in positions.enumerate() {
+            let lon = normalize_lon(lon);
+            // only reuse preparation coordinates when the input position matches exactly
+            let projected = self
+                .prepared
+                .get(i)
+                .filter(|p| p.lon.to_bits() == lon.to_bits() && p.lat.to_bits() == lat.to_bits())
+                .map(|p| (p.x, p.y))
+                .or_else(|| manifest.grid.position(lon, lat));
+            let Some((x, y)) = projected else {
+                continue;
+            };
+            let key = TileKey {
+                lon_idx: x as usize / 120,
+                lat_idx: y as usize / 120,
+                day,
+            };
+            let sample = NativeSample {
+                output_index: i,
+                lat,
+                x: (x - (key.lon_idx * 120) as f64 + 1.0) as f32,
+                y: (y - (key.lat_idx * 120) as f64 + 1.0) as f32,
+            };
+            scratch.groups.entry(key).or_default().push(sample);
+        }
+        scratch.groups.retain(|_, group| !group.is_empty());
+        self.sample_into(
+            &mut scratch,
+            count,
+            hour,
+            fields.current(),
+            fields.wind(),
+            fields.sst(),
+            output,
+        );
+    }
     pub fn new(base_url: &str, fetcher: F) -> Self {
         Self {
             fetcher,
@@ -137,10 +189,9 @@ impl<F: TileFetcher> NorkystForcing<F> {
         current: bool,
         wind: bool,
         sst: bool,
-        results: &mut Vec<[f32; 5]>,
+        results: &mut impl FieldOutput,
     ) {
-        results.clear();
-        results.resize(count, [f32::NAN; 5]);
+        results.reset(count);
         let SamplingScratch {
             groups,
             samples,
@@ -213,14 +264,14 @@ impl<F: TileFetcher> NorkystForcing<F> {
                     interpolation,
                 );
                 for (sample, value) in samples.iter().zip(values.iter().copied()) {
-                    results[sample.output_index][field] = value;
+                    results.set(field, sample.output_index, value);
                 }
             }
             if current {
                 for p in group {
                     let i = p.output_index;
-                    results[i][0] = meters_per_degree_lon(results[i][0], p.lat);
-                    results[i][1] = meters_per_degree_lat(results[i][1], p.lat);
+                    results.set(0, i, meters_per_degree_lon(results.get(0, i), p.lat));
+                    results.set(1, i, meters_per_degree_lat(results.get(1, i), p.lat));
                 }
             }
         }
@@ -303,49 +354,18 @@ impl<F: TileFetcher> Forcing for NorkystForcing<F> {
         fields: ForcingFields,
         output: &mut Vec<[f32; 5]>,
     ) {
-        let count = positions.len();
-        let mut scratch = self.sampling.borrow_mut();
-        scratch.clear_groups();
-        let Some(manifest) = &self.manifest else {
-            output.clear();
-            output.resize(count, [f32::NAN; 5]);
-            return;
-        };
-        for (i, (lon, lat)) in positions.enumerate() {
-            let lon = normalize_lon(lon);
-            // only reuse preparation coordinates when the input position matches exactly
-            let projected = self
-                .prepared
-                .get(i)
-                .filter(|p| p.lon.to_bits() == lon.to_bits() && p.lat.to_bits() == lat.to_bits())
-                .map(|p| (p.x, p.y))
-                .or_else(|| manifest.grid.position(lon, lat));
-            let Some((x, y)) = projected else {
-                continue;
-            };
-            let key = TileKey {
-                lon_idx: x as usize / 120,
-                lat_idx: y as usize / 120,
-                day,
-            };
-            let sample = NativeSample {
-                output_index: i,
-                lat,
-                x: (x - (key.lon_idx * 120) as f64 + 1.0) as f32,
-                y: (y - (key.lat_idx * 120) as f64 + 1.0) as f32,
-            };
-            scratch.groups.entry(key).or_default().push(sample);
-        }
-        scratch.groups.retain(|_, group| !group.is_empty());
-        self.sample_into(
-            &mut scratch,
-            count,
-            hour,
-            fields.current(),
-            fields.wind(),
-            fields.sst(),
-            output,
-        );
+        self.sample_positions_into(positions, day, hour, fields, output);
+    }
+
+    fn sample_soa_into(
+        &self,
+        positions: Coordinates<'_>,
+        day: usize,
+        hour: f32,
+        fields: ForcingFields,
+        output: &mut FieldBuffers,
+    ) {
+        self.sample_positions_into(positions.iter(), day, hour, fields, output);
     }
 }
 

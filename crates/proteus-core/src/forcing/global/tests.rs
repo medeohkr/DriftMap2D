@@ -671,3 +671,66 @@ fn loader_batches_currents_wind_and_sst_into_output_order() {
     );
     assert!(output.iter().flatten().all(|v| v.is_nan()));
 }
+
+#[tokio::test]
+async fn component_samples_match_tuple_outputs_and_reuse_storage() {
+    let mut loader = GlobalForcing::new("", 0.0, 0.0, UnusedFetcher);
+    loader.cache.insert(
+        TileKey {
+            lon_idx: 0,
+            lat_idx: 0,
+            day: 20261023,
+        },
+        RefCell::new(Tile::parse(&counted_global_tile(25, 5)).unwrap()),
+    );
+    let points = [(0.02, 0.03), (0.04, 0.06)];
+    let mut coordinates = crate::arrays::VectorBuffer::default();
+    coordinates.extend(points.iter().copied().rev());
+    let mut output = FieldBuffers::default();
+    for fields in [
+        ForcingFields::All,
+        ForcingFields::Wind,
+        ForcingFields::CurrentsWind,
+        ForcingFields::Currents,
+        ForcingFields::WindTemperature,
+    ] {
+        let expected =
+            loader.sample_fields(coordinates.as_coordinates().iter(), 20261023, 0.5, fields);
+        loader.sample_soa_into(
+            coordinates.as_coordinates(),
+            20261023,
+            0.5,
+            fields,
+            &mut output,
+        );
+        for (i, value) in expected.iter().enumerate() {
+            for (field, &value) in value.iter().enumerate() {
+                assert!(
+                    value.to_bits() == output.components[field][i].to_bits()
+                        || (value.is_nan() && output.components[field][i].is_nan())
+                );
+            }
+        }
+    }
+    let pointers = output.components.each_ref().map(|v| v.as_ptr());
+    coordinates.x.truncate(1);
+    coordinates.y.truncate(1);
+    loader.sample_soa_into(
+        coordinates.as_coordinates(),
+        20261023,
+        0.5,
+        ForcingFields::All,
+        &mut output,
+    );
+    assert_eq!(output.len(), 1);
+    assert_eq!(pointers, output.components.each_ref().map(|v| v.as_ptr()));
+    coordinates.clear();
+    loader.sample_soa_into(
+        coordinates.as_coordinates(),
+        20261023,
+        0.5,
+        ForcingFields::All,
+        &mut output,
+    );
+    assert!(output.components.iter().all(Vec::is_empty));
+}

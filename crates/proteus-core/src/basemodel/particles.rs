@@ -78,14 +78,6 @@ pub struct ParticleView<'a> {
 }
 
 impl<'a> ParticleView<'a> {
-    pub(super) fn borrowed(lons: &'a [f32], lats: &'a [f32], indices: &'a [usize]) -> Self {
-        Self {
-            lons,
-            lats,
-            indices: Cow::Borrowed(indices),
-        }
-    }
-
     pub fn lon(&self, i: usize) -> f32 {
         self.lons[self.indices[i]]
     }

@@ -13,6 +13,7 @@ use super::sampling::SamplingScratch;
 use super::{
     next_date, validate_hours, Forcing, ForcingFields, LoaderError, TileKey, TIME_EPSILON,
 };
+use crate::arrays::{Coordinates, FieldBuffers, FieldOutput};
 use crate::fetch::{FetchError, TileFetcher};
 use crate::utils::{meters_per_degree_lat, meters_per_degree_lon, normalize_lon};
 pub use cache::Tile;
@@ -37,6 +38,33 @@ pub struct GlobalForcing<F: TileFetcher> {
 }
 
 impl<F: TileFetcher> GlobalForcing<F> {
+    fn sample_positions_into(
+        &self,
+        positions: impl ExactSizeIterator<Item = (f32, f32)>,
+        day: usize,
+        hour: f32,
+        fields: ForcingFields,
+        output: &mut impl FieldOutput,
+    ) {
+        let count = positions.len();
+        let mut scratch = self.sampling.borrow_mut();
+        scratch.clear_groups();
+        for (i, (lon, lat)) in positions.enumerate() {
+            let lon = normalize_lon(lon);
+            let key = self.get_tile_key(lon, lat, day);
+            scratch.groups.entry(key).or_default().push((i, lon, lat));
+        }
+        scratch.groups.retain(|_, group| !group.is_empty());
+        self.sample_groups_into(
+            &mut scratch,
+            count,
+            hour,
+            fields.current(),
+            fields.wind(),
+            fields.sst(),
+            output,
+        );
+    }
     pub fn new(base_url: &str, min_lon: f32, min_lat: f32, fetcher: F) -> Self {
         Self {
             min_lon,
@@ -95,10 +123,9 @@ impl<F: TileFetcher> GlobalForcing<F> {
         want_current: bool,
         want_wind: bool,
         want_sst: bool,
-        results: &mut Vec<[f32; 5]>,
+        results: &mut impl FieldOutput,
     ) {
-        results.clear();
-        results.resize(count, [f32::NAN; 5]);
+        results.reset(count);
         let SamplingScratch {
             groups,
             samples,
@@ -122,7 +149,9 @@ impl<F: TileFetcher> GlobalForcing<F> {
             let mut tile = cached.borrow_mut();
             if !sample_hour.is_finite() || sample_hour < 0.0 || sample_hour > 24.0 + TIME_EPSILON {
                 for &(index, _, _) in group {
-                    results[index].fill(f32::NAN);
+                    for field in 0..5 {
+                        results.set(field, index, f32::NAN);
+                    }
                 }
                 continue;
             }
@@ -149,7 +178,7 @@ impl<F: TileFetcher> GlobalForcing<F> {
                 for component in 0..2 {
                     grid.sample_field_into(component, time, samples, values, interpolation);
                     for (sample, value) in samples.iter().zip(values.iter().copied()) {
-                        results[sample.output_index][component] = value;
+                        results.set(component, sample.output_index, value);
                     }
                 }
             }
@@ -170,15 +199,15 @@ impl<F: TileFetcher> GlobalForcing<F> {
                         }
                         grid.sample_field_into(field, time, samples, values, interpolation);
                         for (sample, value) in samples.iter().zip(values.iter().copied()) {
-                            results[sample.output_index][field + 2] = value;
+                            results.set(field + 2, sample.output_index, value);
                         }
                     }
                 }
             }
             if want_current {
                 for &(idx, _, lat) in group {
-                    results[idx][0] = meters_per_degree_lon(results[idx][0], lat);
-                    results[idx][1] = meters_per_degree_lat(results[idx][1], lat);
+                    results.set(0, idx, meters_per_degree_lon(results.get(0, idx), lat));
+                    results.set(1, idx, meters_per_degree_lat(results.get(1, idx), lat));
                 }
             }
         }
@@ -413,24 +442,18 @@ impl<F: TileFetcher> Forcing for GlobalForcing<F> {
         fields: ForcingFields,
         output: &mut Vec<[f32; 5]>,
     ) {
-        let count = positions.len();
-        let mut scratch = self.sampling.borrow_mut();
-        scratch.clear_groups();
-        for (i, (lon, lat)) in positions.enumerate() {
-            let lon = normalize_lon(lon);
-            let key = self.get_tile_key(lon, lat, day);
-            scratch.groups.entry(key).or_default().push((i, lon, lat));
-        }
-        scratch.groups.retain(|_, group| !group.is_empty());
-        self.sample_groups_into(
-            &mut scratch,
-            count,
-            hour,
-            fields.current(),
-            fields.wind(),
-            fields.sst(),
-            output,
-        );
+        self.sample_positions_into(positions, day, hour, fields, output);
+    }
+
+    fn sample_soa_into(
+        &self,
+        positions: Coordinates<'_>,
+        day: usize,
+        hour: f32,
+        fields: ForcingFields,
+        output: &mut FieldBuffers,
+    ) {
+        self.sample_positions_into(positions.iter(), day, hour, fields, output);
     }
 }
 

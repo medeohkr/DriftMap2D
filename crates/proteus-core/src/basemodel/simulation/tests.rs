@@ -143,10 +143,10 @@ fn step_buffers_keep_capacity_when_active_particles_shrink_and_reappear() {
     let pointers = |b: &StepBuffers| {
         (
             b.indices.as_ptr(),
-            b.environment.as_ptr(),
-            b.stage_environment.as_ptr(),
-            b.initial_velocities.as_ptr(),
-            b.positions.as_ptr(),
+            b.environment.components[0].as_ptr(),
+            b.stage_environment.components[0].as_ptr(),
+            b.initial_velocities.x.as_ptr(),
+            b.positions.x.as_ptr(),
         )
     };
     let original = pointers(&simulation.buffers);

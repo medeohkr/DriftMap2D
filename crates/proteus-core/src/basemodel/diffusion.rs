@@ -1,6 +1,7 @@
-// diffusion.rs applies stochastic displacements with reusable probe storage
+// diffusion.rs applies stochastic displacements to compact component arrays
 
 use super::{normalize_lon, ParticleView};
+use crate::arrays::{Coordinates, FieldBuffers, VectorBuffer};
 use crate::forcing::{Forcing, ForcingFields};
 use rand::prelude::*;
 use rand_distr::{Distribution, Normal};
@@ -14,25 +15,43 @@ pub struct Diffusion {
     diffusion_scheme: DiffusionScheme,
     normal: Normal<f32>,
     rng: ThreadRng,
-    probes: Vec<(f32, f32)>,
-    samples: Vec<[f32; 5]>,
+    probes: VectorBuffer,
+    samples: FieldBuffers,
 }
 
 impl Diffusion {
     pub fn new(scheme: &str, diffusion_coeffs: Vec<f32>) -> Self {
-        let diffusion_scheme = match scheme {
-            "smagorinsky" => DiffusionScheme::Smagorinsky(diffusion_coeffs[1]),
-            _ => DiffusionScheme::Constant(diffusion_coeffs[0]),
-        };
         Self {
-            diffusion_scheme,
+            diffusion_scheme: match scheme {
+                "smagorinsky" => DiffusionScheme::Smagorinsky(diffusion_coeffs[1]),
+                _ => DiffusionScheme::Constant(diffusion_coeffs[0]),
+            },
             normal: Normal::new(0.0, 1.0).unwrap(),
             rng: rand::thread_rng(),
-            probes: Vec::new(),
-            samples: Vec::new(),
+            probes: VectorBuffer::default(),
+            samples: FieldBuffers::default(),
         }
     }
 
+    pub fn diffusion_soa_in_place(
+        &mut self,
+        forcing: &impl Forcing,
+        old: Coordinates<'_>,
+        positions: &mut VectorBuffer,
+        day: usize,
+        dt_days: f32,
+        hour: f32,
+    ) {
+        match self.diffusion_scheme {
+            DiffusionScheme::Constant(0.0) | DiffusionScheme::Smagorinsky(0.0) => {}
+            DiffusionScheme::Constant(k) => self.constant_soa(positions, dt_days, k),
+            DiffusionScheme::Smagorinsky(cs) => {
+                self.smagorinsky_soa(forcing, old, positions, day, dt_days, hour, cs)
+            }
+        }
+    }
+
+    /// tuple adapters remain available without adding conversions to engine steps
     pub fn diffusion_step(
         &mut self,
         forcing: &impl Forcing,
@@ -45,7 +64,6 @@ impl Diffusion {
         self.diffusion_step_in_place(forcing, old_view, &mut positions, day, dt_days, hour);
         positions
     }
-
     pub fn diffusion_step_in_place(
         &mut self,
         forcing: &impl Forcing,
@@ -55,29 +73,36 @@ impl Diffusion {
         dt_days: f32,
         hour: f32,
     ) {
-        match self.diffusion_scheme {
-            DiffusionScheme::Constant(0.0) | DiffusionScheme::Smagorinsky(0.0) => {}
-            DiffusionScheme::Constant(k) => self.constant_in_place(positions, dt_days, k),
-            DiffusionScheme::Smagorinsky(cs) => {
-                self.smagorinsky_in_place(forcing, old_view, positions, day, dt_days, hour, cs)
-            }
+        if matches!(
+            self.diffusion_scheme,
+            DiffusionScheme::Constant(0.0) | DiffusionScheme::Smagorinsky(0.0)
+        ) {
+            return;
+        }
+        let mut old = VectorBuffer::default();
+        old.extend(old_view.iter().map(|(_, x, y)| (x, y)));
+        let mut next = VectorBuffer::default();
+        next.extend(positions.iter().copied());
+        self.diffusion_soa_in_place(forcing, old.as_coordinates(), &mut next, day, dt_days, hour);
+        for (out, point) in positions.iter_mut().zip(next.as_coordinates().iter()) {
+            *out = point;
         }
     }
-
     pub fn constant_diffusion_step(
         &mut self,
         positions: &[(f32, f32)],
         dt_days: f32,
         k: f32,
     ) -> Vec<(f32, f32)> {
-        let mut result = positions.to_vec();
-        self.constant_in_place(&mut result, dt_days, k);
-        result
+        let mut next = VectorBuffer::default();
+        next.extend(positions.iter().copied());
+        self.constant_soa(&mut next, dt_days, k);
+        next.as_coordinates().iter().collect()
     }
-
-    fn constant_in_place(&mut self, positions: &mut [(f32, f32)], dt_days: f32, k: f32) {
+    fn constant_soa(&mut self, positions: &mut VectorBuffer, dt_days: f32, k: f32) {
         let sigma = (2.0 * k * (dt_days * 86400.0)).sqrt();
-        for (lon, lat) in positions {
+        for (lon, lat) in positions.x.iter_mut().zip(&mut positions.y) {
+            // preserve the interleaved random draw order for each particle
             let dx = self.normal.sample(&mut self.rng) * sigma;
             let dy = self.normal.sample(&mut self.rng) * sigma;
             let scale = METERS_PER_DEGREE * lat.to_radians().cos();
@@ -85,7 +110,6 @@ impl Diffusion {
             *lat += dy / METERS_PER_DEGREE;
         }
     }
-
     pub fn smagorinsky_step(
         &mut self,
         forcing: &impl Forcing,
@@ -96,16 +120,26 @@ impl Diffusion {
         hour: f32,
         cs: f32,
     ) -> Vec<(f32, f32)> {
-        let mut result = positions.to_vec();
-        self.smagorinsky_in_place(forcing, old_view, &mut result, day, dt_days, hour, cs);
-        result
+        let mut old = VectorBuffer::default();
+        old.extend(old_view.iter().map(|(_, x, y)| (x, y)));
+        let mut next = VectorBuffer::default();
+        next.extend(positions.iter().copied());
+        self.smagorinsky_soa(
+            forcing,
+            old.as_coordinates(),
+            &mut next,
+            day,
+            dt_days,
+            hour,
+            cs,
+        );
+        next.as_coordinates().iter().collect()
     }
-
-    fn smagorinsky_in_place(
+    fn smagorinsky_soa(
         &mut self,
         forcing: &impl Forcing,
-        old_view: &ParticleView,
-        positions: &mut [(f32, f32)],
+        old: Coordinates<'_>,
+        positions: &mut VectorBuffer,
         day: usize,
         dt_days: f32,
         hour: f32,
@@ -114,29 +148,36 @@ impl Diffusion {
         let dx = 0.01;
         let dy = 0.01;
         self.probes.clear();
-        for (i, &(lon, lat)) in positions.iter().enumerate() {
-            let mid_lon = (old_view.lon(i) + lon) / 2.0;
-            let mid_lat = (old_view.lat(i) + lat) / 2.0;
-            self.probes.extend_from_slice(&[
-                (normalize_lon(mid_lon - dx), mid_lat),
-                (normalize_lon(mid_lon + dx), mid_lat),
-                (mid_lon, (mid_lat - dy).clamp(-80.0, 90.0)),
-                (mid_lon, (mid_lat + dy).clamp(-80.0, 90.0)),
+        for i in 0..positions.len() {
+            let mid_lon = (old.x[i] + positions.x[i]) / 2.0;
+            let mid_lat = (old.y[i] + positions.y[i]) / 2.0;
+            self.probes.x.extend_from_slice(&[
+                normalize_lon(mid_lon - dx),
+                normalize_lon(mid_lon + dx),
+                mid_lon,
+                mid_lon,
+            ]);
+            self.probes.y.extend_from_slice(&[
+                mid_lat,
+                mid_lat,
+                (mid_lat - dy).clamp(-80.0, 90.0),
+                (mid_lat + dy).clamp(-80.0, 90.0),
             ]);
         }
-        forcing.sample_fields_into(
-            self.probes.iter().copied(),
+        forcing.sample_soa_into(
+            self.probes.as_coordinates(),
             day,
             hour,
             ForcingFields::Currents,
             &mut self.samples,
         );
-        for (i, (lon, lat)) in positions.iter_mut().enumerate() {
+        let [u, v, _, _, _] = &self.samples.components;
+        for (i, (lon, lat)) in positions.x.iter_mut().zip(&mut positions.y).enumerate() {
             let b = i * 4;
-            let dudx = (self.samples[b + 1][0] - self.samples[b][0]) / (2.0 * dx);
-            let dudy = (self.samples[b + 3][0] - self.samples[b + 2][0]) / (2.0 * dy);
-            let dvdx = (self.samples[b + 1][1] - self.samples[b][1]) / (2.0 * dx);
-            let dvdy = (self.samples[b + 3][1] - self.samples[b + 2][1]) / (2.0 * dy);
+            let dudx = (u[b + 1] - u[b]) / (2.0 * dx);
+            let dudy = (u[b + 3] - u[b + 2]) / (2.0 * dy);
+            let dvdx = (v[b + 1] - v[b]) / (2.0 * dx);
+            let dvdy = (v[b + 3] - v[b + 2]) / (2.0 * dy);
             let strain = (dudx.powi(2) + 0.5 * (dudy + dvdx).powi(2) + dvdy.powi(2)).sqrt();
             let k = cs * forcing.cell_area_m2(*lat) * strain;
             let sigma = (2.0 * k * (dt_days * 86400.0)).sqrt();
@@ -281,8 +322,8 @@ mod tests {
         assert_eq!(positions, original);
         assert_eq!(diffusion.probes.len(), 8);
         let pointers = (
-            diffusion.probes.as_ptr(),
-            diffusion.samples.as_ptr(),
+            diffusion.probes.x.as_ptr(),
+            diffusion.samples.components[0].as_ptr(),
             positions.as_ptr(),
         );
         diffusion.diffusion_step_in_place(
@@ -296,8 +337,8 @@ mod tests {
         assert_eq!(
             pointers,
             (
-                diffusion.probes.as_ptr(),
-                diffusion.samples.as_ptr(),
+                diffusion.probes.x.as_ptr(),
+                diffusion.samples.components[0].as_ptr(),
                 positions.as_ptr()
             )
         );

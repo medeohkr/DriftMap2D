@@ -378,3 +378,67 @@ fn metadata_rejects_unsupported_geometry_and_invalid_timestamps() {
     manifest["days"][0]["timestamps"][1] = serde_json::json!(0);
     assert!(Manifest::parse(&serde_json::to_vec(&manifest).unwrap()).is_err());
 }
+
+#[tokio::test]
+async fn component_samples_match_tuple_outputs_and_reuse_storage() {
+    let points: Vec<_> = reference().iter().map(point).collect();
+    let mut loader = NorkystForcing::new("fixture", MockFetcher);
+    loader
+        .prepare_forcing(
+            points.iter().flat_map(|&(x, y)| [x, y]).collect(),
+            20261023,
+            0.5,
+            0.0,
+        )
+        .await
+        .unwrap();
+    let mut coordinates = crate::arrays::VectorBuffer::default();
+    coordinates.extend(points.iter().copied().rev());
+    let mut output = FieldBuffers::default();
+    for fields in [
+        ForcingFields::All,
+        ForcingFields::Wind,
+        ForcingFields::CurrentsWind,
+        ForcingFields::Currents,
+        ForcingFields::WindTemperature,
+    ] {
+        let expected =
+            loader.sample_fields(coordinates.as_coordinates().iter(), 20261023, 0.5, fields);
+        loader.sample_soa_into(
+            coordinates.as_coordinates(),
+            20261023,
+            0.5,
+            fields,
+            &mut output,
+        );
+        for (i, value) in expected.iter().enumerate() {
+            for (field, &value) in value.iter().enumerate() {
+                assert!(
+                    value.to_bits() == output.components[field][i].to_bits()
+                        || (value.is_nan() && output.components[field][i].is_nan())
+                );
+            }
+        }
+    }
+    let pointers = output.components.each_ref().map(|v| v.as_ptr());
+    coordinates.x.truncate(1);
+    coordinates.y.truncate(1);
+    loader.sample_soa_into(
+        coordinates.as_coordinates(),
+        20261023,
+        0.5,
+        ForcingFields::All,
+        &mut output,
+    );
+    assert_eq!(output.len(), 1);
+    assert_eq!(pointers, output.components.each_ref().map(|v| v.as_ptr()));
+    coordinates.clear();
+    loader.sample_soa_into(
+        coordinates.as_coordinates(),
+        20261023,
+        0.5,
+        ForcingFields::All,
+        &mut output,
+    );
+    assert!(output.components.iter().all(Vec::is_empty));
+}

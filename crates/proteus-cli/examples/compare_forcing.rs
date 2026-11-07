@@ -8,6 +8,7 @@ mod projection;
 
 use anyhow::Result;
 use proteus_core::{
+    arrays::{FieldBuffers, VectorBuffer},
     basemodel::{LandMaskLoader, Simulation},
     forcing::{Forcing, ForcingFields, ForcingKind},
 };
@@ -91,17 +92,19 @@ async fn compare(
         .load_landmask_tiles(flat.clone())
         .await
         .map_err(anyhow::Error::msg)?;
-    let mut output = Vec::new();
+    let mut coordinates = VectorBuffer::default();
+    coordinates.extend(points.iter().copied());
+    let mut output = FieldBuffers::default();
     for hour in [12.0, 12.25] {
-        forcing.sample_fields_into(
-            points.iter().copied(),
+        forcing.sample_soa_into(
+            coordinates.as_coordinates(),
             date,
             hour,
             ForcingFields::All,
             &mut output,
         );
         anyhow::ensure!(
-            output.iter().flatten().all(|v| v.is_finite()),
+            output.components.iter().flatten().all(|v| v.is_finite()),
             "missing {model} samples at {hour}"
         );
         for (name, fields) in [
@@ -110,7 +113,13 @@ async fn compare(
             ("all", ForcingFields::All),
         ] {
             let result = measure(repeats, || {
-                forcing.sample_fields_into(points.iter().copied(), date, hour, fields, &mut output);
+                forcing.sample_soa_into(
+                    coordinates.as_coordinates(),
+                    date,
+                    hour,
+                    fields,
+                    &mut output,
+                );
                 black_box(&output);
             });
             println!(
