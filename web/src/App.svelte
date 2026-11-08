@@ -122,7 +122,8 @@
         .map-ui {
             --mobile-sidebar-top: 102px;
             --ui-width: 768px;
-            --width-sidebar: max(300px, calc(180px / var(--ui-scale, 1)));
+            --sidebar-scale: max(1, calc(0.56 / var(--ui-scale, 1)));
+            --width-sidebar: calc(300px * var(--sidebar-scale));
             width: var(--ui-width);
         }
     }

@@ -134,10 +134,13 @@
 
 @media (max-width: 768px) {
     .sidebar {
+        --width-sidebar: 300px;
+        transform-origin: top left;
+        transform: scale(var(--sidebar-scale, 1));
         top: var(--mobile-sidebar-top, 80px);
         bottom: auto;
-        height: var(--mobile-sidebar-height, min(700px, calc(var(--ui-height, 100dvh) - var(--mobile-sidebar-top, 80px) - 140px)));
-        max-height: var(--mobile-sidebar-height, calc(var(--ui-height, 100dvh) - var(--mobile-sidebar-top, 80px) - 140px));
+        height: calc(var(--mobile-sidebar-height, min(700px, calc(var(--ui-height, 100dvh) - var(--mobile-sidebar-top, 80px) - 140px))) / var(--sidebar-scale, 1));
+        max-height: calc(var(--mobile-sidebar-height, calc(var(--ui-height, 100dvh) - var(--mobile-sidebar-top, 80px) - 140px)) / var(--sidebar-scale, 1));
     }
 }
 .sidebar.stage-1 {
