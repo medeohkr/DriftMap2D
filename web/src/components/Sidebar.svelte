@@ -136,8 +136,8 @@
     .sidebar {
         top: var(--mobile-sidebar-top, 80px);
         bottom: auto;
-        height: var(--mobile-sidebar-height, min(700px, calc(100dvh - var(--mobile-sidebar-top, 80px) - 140px)));
-        max-height: var(--mobile-sidebar-height, calc(100dvh - var(--mobile-sidebar-top, 80px) - 140px));
+        height: var(--mobile-sidebar-height, min(700px, calc(var(--ui-height, 100dvh) - var(--mobile-sidebar-top, 80px) - 140px)));
+        max-height: var(--mobile-sidebar-height, calc(var(--ui-height, 100dvh) - var(--mobile-sidebar-top, 80px) - 140px));
     }
 }
 .sidebar.stage-1 {

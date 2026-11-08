@@ -12,24 +12,34 @@
     import Toast from "./components/Toast.svelte";
     import { simulation, visualization, config } from "$lib/stores/index.svelte";
     import { setMarkerVisible, updateForcingCoverage } from "$lib/map";
+    let appElement: HTMLDivElement;
+    let uiScale = $state(1);
+    let uiHeight = $state(0);
     let sidebarHeight = $state<number | null>(null);
     let sidebarBottom = $state<number | null>(null);
 
     $effect(() => {
         const observer = new ResizeObserver(measureSidebar);
         let cancelled = false;
-        function measureSidebar() {
+        async function measureSidebar() {
+            if (!appElement) return;
+            const viewport = appElement.getBoundingClientRect();
+            uiScale = Math.min(1, Math.max(1, viewport.width) / 768);
+            uiHeight = viewport.height / uiScale;
+            await tick();
+            if (cancelled) return;
             const sidebar = document.querySelector('.sidebar');
             const playback = document.getElementById('timeline-container');
-            if (window.innerWidth > 768 || !sidebar || !playback) {
+            if (viewport.width > 768 || !sidebar || !playback) {
                 sidebarHeight = null;
                 sidebarBottom = null;
                 return;
             }
+            // browser rectangles are scaled pixels while overlay styles use logical pixels
             const top = sidebar.getBoundingClientRect().top;
-            const bottom = playback.getBoundingClientRect().top - 24;
-            sidebarHeight = Math.max(0, bottom - top);
-            sidebarBottom = Math.max(0, window.innerHeight - bottom);
+            const bottom = playback.getBoundingClientRect().top - 24 * uiScale;
+            sidebarHeight = Math.max(0, (bottom - top) / uiScale);
+            sidebarBottom = Math.max(0, (viewport.bottom - bottom) / uiScale);
         }
         tick().then(() => {
             if (cancelled) return;
@@ -65,31 +75,55 @@
     });
 </script>
 
-<div class="app"
-    style:--mobile-sidebar-height={sidebarHeight === null ? undefined : `${sidebarHeight}px`}
-    style:--mobile-sidebar-bottom={sidebarBottom === null ? undefined : `${sidebarBottom}px`}
->
+<div class="app" bind:this={appElement}>
     <MapView />
-    <Sidebar />
-    <VisualizationToggles />
-    <Stats />
-    <Legend />
-    <Timeline />
-    <CurrentDay />
-    <Toast />
+    <div class="map-ui"
+        style:--ui-scale={uiScale}
+        style:--ui-height={uiHeight ? `${uiHeight}px` : undefined}
+        style:--mobile-sidebar-height={sidebarHeight === null ? undefined : `${sidebarHeight}px`}
+        style:--mobile-sidebar-bottom={sidebarBottom === null ? undefined : `${sidebarBottom}px`}
+    >
+        <Sidebar />
+        <VisualizationToggles />
+        <Stats />
+        <Legend />
+        <Timeline />
+        <CurrentDay />
+        <Toast />
+    </div>
 </div>
 
 <style>
     .app {
         display: flex;
         height: 100vh;
+        height: 100dvh;
         width: 100vw;
         overflow: hidden;
         position: relative;
         background: var(--bg-primary);
     }
 
+    .map-ui {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: var(--ui-height, 100%);
+        pointer-events: none;
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+        transform-origin: top left;
+        transform: scale(var(--ui-scale, 1));
+    }
+
+    .map-ui > :global(*) { pointer-events: auto; }
+
     @media (max-width: 768px) {
-        .app { --mobile-sidebar-top: 102px; }
+        .map-ui {
+            --mobile-sidebar-top: 102px;
+            --ui-width: 768px;
+            --width-sidebar: max(300px, calc(180px / var(--ui-scale, 1)));
+            width: var(--ui-width);
+        }
     }
 </style>

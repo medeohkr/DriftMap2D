@@ -67,7 +67,7 @@
             left: var(--spacing-sm);
             right: auto;
             width: var(--width-sidebar);
-            max-width: calc(100vw - 2 * var(--spacing-sm));
+            max-width: calc(var(--ui-width, 100vw) - 2 * var(--spacing-sm));
             grid-template-rows: repeat(3, 14px);
             grid-auto-flow: column;
             grid-auto-columns: minmax(0, 1fr);
