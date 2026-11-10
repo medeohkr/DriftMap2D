@@ -16,3 +16,5 @@ using the same raw record matters because OpenDrift's bundled database can conta
 the forcing inputs are the SMOC NetCDF and ECMWF GRIB files in `validation/forcing/`. `--tile-url` selects the matching CLI tiles and defaults to the `validation-tiles` CDN prefix.
 
 `reference.py` contains the independent OpenDrift property extractor used by catalog regression tests. the simulation runner does not pass those extracted properties to Proteus.
+
+rebuild matching validation tiles from the saved source files with `python scripts/validation/download_testing_data.py`. install `numpy`, `xarray`, `netCDF4`, and `zstandard` in that environment. the generator uses the saved oil wind NetCDF when available, includes one-cell current and atmospheric halos, preserves NaNs, and writes float16 PRT3 tiles compressed with zstd level 3. `--output` selects another tile directory and `--wind` selects the source explicitly. local comparisons can use `--tile-url file:///absolute/path/to/validation/forcing/tiles`.

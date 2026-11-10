@@ -12,14 +12,12 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 /// (`proteus-wasm` and `proteus-cli`).
 ///
 /// The trait deliberately does **not** require `Send`: the browser has one
-/// thread, and the CLI awaits everything inline without spawning.
+/// thread, and native background tasks may run on a local executor.
 pub trait TileFetcher {
     /// Fetch the raw bytes at `url`.
     fn fetch_bytes<'a>(&'a self, url: &'a str) -> BoxFuture<'a, Result<Vec<u8>, FetchError>>;
 
-    /// Optional synchronous preload hook. The WASM fetcher overrides this to
-    /// pull from a JS-side cache; the native fetcher inherits the default
-    /// (`None`) and always goes to the network.
+    /// optional synchronous lookup used by the shared Rust preload cache
     fn preloaded(&self, _url: &str) -> Option<Vec<u8>> {
         None
     }

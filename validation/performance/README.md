@@ -254,3 +254,12 @@ headless Chrome compared the previous release WASM against component arrays with
 browser timing ranges overlap substantially, especially for NorKyst. these runs establish SIMD execution and numerical parity, but do not establish a consistent browser throughput improvement or isolate layout effects from SIMD build flags.
 
 all 18 CLI and 18 browser combinations of forcing, tracer, and integrator preserved every deterministic particle snapshot and diagnostic exactly across midnight. browser checks also cover particle counts of 1, 3, 17, and 101 for scalar remainders. the 104 Rust tests include direct sampler output parity, unrequested fields, buffer reuse, changing active sets, empty clouds, and scalar-equivalent integration at odd lengths. random diffusion runs are throughput checks rather than bitwise trajectory comparisons. source snapshots, raw timing runs, compiler evidence, and parity outputs are under ignored `data/soa/` and `web/data/soa/`.
+
+
+## shared native and browser preloading
+
+`proteus-core::Preloader<F>` now owns the byte cache, shared in-flight requests, four background download slots, plan revisions, and metadata expiry. the WASM adapter supplies Gloo, `spawn_local`, and the browser clock. the CLI supplies Reqwest, a Tokio local executor, and the native clock. both use the existing forcing-specific spatial and date plans.
+
+the CLI enables preloading automatically for global and NorKyst forcing, including `file://` fixtures. cached steps yield before physics so background I/O can progress. physics remains single-threaded and background requests do not run during a synchronous physics update. failed background requests remain retryable on demand.
+
+all 109 Rust tests pass, including worker limits, request sharing, failed-request retries, stale plans, and native file caching. all 18 deterministic CLI and 18 browser combinations of forcing, tracer, and integrator preserve every particle snapshot and diagnostic exactly across midnight. release CLI, WASM, and web builds also pass.

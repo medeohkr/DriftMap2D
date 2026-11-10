@@ -18,6 +18,7 @@ rand = { workspace = true }
 rand_distr = { workspace = true }
 log = { workspace = true }
 ruzstd = "0.9.1"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 # For unit tests using a mock fetcher

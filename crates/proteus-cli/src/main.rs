@@ -55,7 +55,7 @@ async fn main() -> Result<()> {
     }
     if let Some(path) = args.particle_output { config.particle_output = Some(path); }
     if let Some(interval) = args.snapshot_every { config.snapshot_every = interval; }
-    run(config, config_dir).await
+    tokio::task::LocalSet::new().run_until(run(config, config_dir)).await
 }
 
 async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
@@ -94,9 +94,10 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
     );
 
     let base_url = resolve_tile_base_url(config.tile_url.as_deref(), config.forcing_model);
+    let fetcher = ReqwestFetcher::new();
     let mut forcing = match config.forcing_model {
-        ForcingModel::Global => ForcingKind::global(&base_url, MIN_LON, MIN_LAT, ReqwestFetcher::new()),
-        ForcingModel::Norkyst => ForcingKind::norkyst(&base_url, ReqwestFetcher::new()),
+        ForcingModel::Global => ForcingKind::global(&base_url, MIN_LON, MIN_LAT, fetcher.clone()),
+        ForcingModel::Norkyst => ForcingKind::norkyst(&base_url, fetcher.clone()),
     };
     log::info!("forcing model={:?} root={}", config.forcing_model, base_url);
     let mut landmask = LandMaskLoader::new(
@@ -104,7 +105,7 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
         MIN_LON,
         -90.0,
         90.0,
-        ReqwestFetcher::new(),
+        fetcher.clone(),
     );
 
     // One centroid per step, plus the initial seed position at step 0.
@@ -143,13 +144,17 @@ async fn run(config: Config, config_dir: &std::path::Path) -> Result<()> {
         simulation.release_particles(step_count);
 
         simulation.particles.active_positions_into(&mut preparation_positions);
+        let preload_revision = fetcher.begin_plan();
         forcing
             .prepare_forcing_slice(&preparation_positions, current_date_int, hour, dt_days * 24.0)
             .await
             .with_context(|| format!("failed to prepare forcing for step {step_count}"))?;
         forcing.validate_forcing_interval(current_date_int, hour, dt_days * 24.0)?;
+        fetcher.finish_plan(preload_revision, forcing.preload_urls());
         landmask.load_landmask_tiles_slice(&preparation_positions).await.map_err(anyhow::Error::msg)?;
 
+        // cached steps also yield so native background downloads can make progress
+        tokio::task::yield_now().await;
         simulation.update_particles_batch(dt_days, &forcing, current_date_int, hour, &landmask);
         if particle_output::should_snapshot(step_count, config.steps, config.snapshot_every) {
             if let Some(writer) = &mut particle_file {

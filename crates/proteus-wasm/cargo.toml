@@ -30,7 +30,6 @@ log = { workspace = true }
 
 # Init logging in browser
 console_log = "1.0"
-futures-util = { version = "0.3", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 tokio = { workspace = true }

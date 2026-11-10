@@ -130,6 +130,20 @@ mod tests {
     }
 
     #[test]
+    fn emulsification_damping_matches_opendrift_end_of_step_age() {
+        let mut oil = oil(1e-6, -999.0);
+        oil.step(&[0], &[7.827742], &[15.0], 3600.0);
+        assert_eq!(oil.data.y_w[0], 0.0);
+
+        // OpenDrift run_058 uses ages 7200 and 10800 for these wind samples
+        for (wind, expected) in [(7.680872, 0.2986296), (7.551399, 0.4552078)] {
+            oil.step(&[0], &[wind], &[15.0], 3600.0);
+            assert!((oil.data.y_w[0] - expected).abs() < 2e-7);
+        }
+        assert_eq!(oil.data.age[0], 10800.0);
+    }
+
+    #[test]
     fn reported_fraction_uses_current_mass_and_age_advances_after_weathering() {
         let mut oil = oil(1.0, -999.0);
         oil.step(&[0], &[5.0], &[15.0], 3600.0);
@@ -425,7 +439,8 @@ pub(super) fn step_particle_weathering(
                 // the element's bulltime (zero for a fresh release).
                 particles.emulsification_start_age[idx] = oil.bulltime.max(0.0);
             }
-            let age_since_start = particles.age[idx] - particles.emulsification_start_age[idx];
+            // OpenDrift advances element age before calculating water uptake
+            let age_since_start = particles.age[idx] + dt - particles.emulsification_start_age[idx];
             update_emulsification(
                 &mut particles.y_w[idx],
                 &mut particles.interfacial_area[idx],
