@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 
 def published_manifest(client, bucket, key):
@@ -54,10 +54,31 @@ def newer_source_update(source, published):
     return current > previous or (current == previous and source != published)
 
 
-def newer_norkyst_cycle(source, reference, published):
-    """compare available cycles with published cycles without requiring today's date."""
+def norkyst_cycle(reference):
+    """restore the midnight cycle after source timestamp quantization."""
+    if reference.tzinfo is None:
+        raise ValueError('NorKyst forecast reference has no timezone')
+    reference = reference.astimezone(timezone.utc)
+    midnight = reference.replace(hour=0, minute=0, second=0, microsecond=0)
+    if reference.hour >= 12:
+        midnight += timedelta(days=1)
+    if abs(reference - midnight) > timedelta(hours=2):
+        raise ValueError(f'NorKyst forecast reference is not near midnight: {reference.isoformat()}')
+    return midnight
+
+
+def norkyst_update_available(source, reference, latest_valid_time, published):
+    """detect a new cycle or additional hours from the published cycle."""
     grid = published.get('grid', {})
     previous = grid.get('source_forecast_reference_time')
     if grid.get('source') != source or not previous:
         return True
-    return reference > datetime.fromisoformat(previous.replace('Z', '+00:00'))
+    current_cycle = norkyst_cycle(reference)
+    previous_cycle = norkyst_cycle(datetime.fromisoformat(previous.replace('Z', '+00:00')))
+    if current_cycle != previous_cycle:
+        return current_cycle > previous_cycle
+    previous_last = grid.get('source_last_time')
+    if previous_last is None:
+        days = published.get('days', [])
+        previous_last = max((max(day['timestamps']) for day in days), default=None)
+    return previous_last is None or latest_valid_time > int(previous_last)

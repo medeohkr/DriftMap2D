@@ -17,6 +17,8 @@ import netCDF4
 import numpy as np
 import zstandard as zstd
 
+from scripts.forecast_updates import norkyst_cycle
+
 
 SOURCE = 'https://thredds.met.no/thredds/dodsC/fou-hi/norkystv3_800m_m00_be'
 ROOT = Path(__file__).resolve().parent
@@ -56,7 +58,7 @@ def forecast_reference_time(dataset):
         calendar=getattr(variable, 'calendar', 'standard'),
         only_use_cftime_datetimes=False, only_use_python_datetimes=True,
     )
-    return reference.replace(tzinfo=timezone.utc)
+    return norkyst_cycle(reference.replace(tzinfo=timezone.utc))
 
 
 def open_fresh_source(source, expected_date, wait_seconds=7200, poll_seconds=900):
@@ -141,6 +143,20 @@ def read_block(variable, index, splits=0):
             time.sleep(2 ** attempt)
 
 
+def source_timeline(dataset):
+    """decode every source valid time without reading spatial fields."""
+    clock = dataset.variables['time']
+    clock_values = np.ma.asarray(clock[:])
+    if clock_values.ndim != 1 or np.ma.getmaskarray(clock_values).any() or not np.isfinite(clock_values).all():
+        raise ValueError('expected a finite unmasked source timeline')
+    dates = netCDF4.num2date(clock_values, clock.units, calendar=getattr(clock, 'calendar', 'standard'),
+                            only_use_cftime_datetimes=False, only_use_python_datetimes=True)
+    seconds = np.array([int(d.replace(tzinfo=timezone.utc).timestamp()) for d in dates], dtype=np.int64)
+    if len(seconds) < 2:
+        raise ValueError('expected at least two source timestamps')
+    return seconds
+
+
 def describe(dataset):
     """validate native axes and record the actual source timeline."""
     axes = [read(dataset.variables[name], slice(None)).astype(np.float64) for name in ('X', 'Y')]
@@ -151,17 +167,9 @@ def describe(dataset):
     if not np.all(np.isfinite(depth)) or np.any(depth < 0):
         raise ValueError('expected finite nonnegative depths')
     surface = int(np.argmin(depth))
-    clock = dataset.variables['time']
-    clock_values = np.ma.asarray(clock[:])
-    if clock_values.ndim != 1 or np.ma.getmaskarray(clock_values).any() or not np.isfinite(clock_values).all():
-        raise ValueError('expected a finite unmasked source timeline')
-    dates = netCDF4.num2date(clock_values, clock.units, calendar=getattr(clock, 'calendar', 'standard'),
-                            only_use_cftime_datetimes=False, only_use_python_datetimes=True)
-    seconds = np.array([int(d.replace(tzinfo=timezone.utc).timestamp()) for d in dates], dtype=np.int64)
-    if len(seconds) < 2:
-        raise ValueError('expected at least two source timestamps')
+    seconds = source_timeline(dataset)
     xdim, ydim = dataset.variables['X'].dimensions[0], dataset.variables['Y'].dimensions[0]
-    tdim, zdim = clock.dimensions[0], dataset.variables['depth'].dimensions[0]
+    tdim, zdim = dataset.variables['time'].dimensions[0], dataset.variables['depth'].dimensions[0]
     for field, name in FIELDS.items():
         expected = (tdim, zdim, ydim, xdim) if field in ('u', 'v', 'temperature_k') else (tdim, ydim, xdim)
         if dataset.variables[name].dimensions != expected:
@@ -391,7 +399,7 @@ def cleanup(client, bucket, prefix, cutoff):
 
 def main():
     """generate forcing locally or publish complete days to the NorKyst prefix."""
-    from scripts.forecast_updates import published_manifest, newer_norkyst_cycle
+    from scripts.forecast_updates import published_manifest, norkyst_update_available
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', default=SOURCE)
     parser.add_argument('--output', type=Path, default=ROOT / 'data' / 'norkyst')
@@ -418,8 +426,11 @@ def main():
             if not args.local_only:
                 client = r2_client()
                 previous = published_manifest(client, 'driftmap-tiles', 'norkyst/manifest.json')
-                if not args.refresh_hindcast and not newer_norkyst_cycle(args.source, reference, previous):
-                    logging.info('source cycle %s is already published, no tiles changed', reference.isoformat())
+                latest_valid_time = int(source_timeline(dataset).max())
+                if not args.refresh_hindcast and not norkyst_update_available(
+                        args.source, reference, latest_valid_time, previous):
+                    logging.info('source cycle %s through %s is already published, no tiles changed',
+                                 reference.isoformat(), datetime.fromtimestamp(latest_valid_time, timezone.utc).isoformat())
                     return
         metadata, seconds, surface = describe(dataset)
         metadata['source'] = args.source

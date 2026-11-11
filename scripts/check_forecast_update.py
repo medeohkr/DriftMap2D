@@ -9,7 +9,7 @@ from pathlib import Path
 import boto3
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from scripts.forecast_updates import cmems_update, published_manifest, newer_source_update, newer_norkyst_cycle
+from scripts.forecast_updates import cmems_update, published_manifest, newer_source_update, norkyst_update_available
 
 
 def main():
@@ -31,13 +31,14 @@ def main():
         ready = newer_source_update(source, previous.get('source_update'))
     else:
         import netCDF4
-        from norkyst_cron import SOURCE, forecast_reference_time
+        from norkyst_cron import SOURCE, forecast_reference_time, source_timeline
         with netCDF4.Dataset(SOURCE) as dataset:
             reference = forecast_reference_time(dataset)
+            latest_valid_time = int(source_timeline(dataset).max())
         if reference.date() > today:
             raise ValueError('NorKyst forecast reference date is in the future')
         previous = published_manifest(client, 'driftmap-tiles', 'norkyst/manifest.json')
-        ready = newer_norkyst_cycle(SOURCE, reference, previous)
+        ready = norkyst_update_available(SOURCE, reference, latest_valid_time, previous)
     print(f'{args.model} new completed update available={ready}')
     if os.environ.get('GITHUB_OUTPUT'):
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:

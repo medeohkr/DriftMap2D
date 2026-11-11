@@ -1,6 +1,6 @@
 # forecast scheduler
 
-this Cloudflare Worker checks both forcing workflows every 30 minutes, at minutes 17 and 47 UTC. GitHub performs the existing forecast-reference checks and only generates tiles for newer source data. the original GitHub schedules remain as backup triggers.
+this Cloudflare Worker checks both forcing workflows every 30 minutes, at minutes 17 and 47 UTC. GitHub checks the source cycle and available forcing coverage, then generates tiles when either advances. the original GitHub schedules remain as backup triggers.
 
 the Worker checks queued, running, waiting, pending, and requested runs on `main` before dispatching each workflow. one model failing does not prevent the other from being checked. existing GitHub concurrency groups handle races with manual or backup triggers and never cancel an active generation.
 

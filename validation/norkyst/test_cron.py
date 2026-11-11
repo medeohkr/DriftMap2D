@@ -35,9 +35,13 @@ class ForecastFreshness(unittest.TestCase):
     def test_reference_decoding(self):
         self.assertEqual(cron.forecast_reference_time(self.dataset(24)),
                          datetime(2026, 10, 28, tzinfo=timezone.utc))
+        self.assertEqual(cron.forecast_reference_time(self.dataset(24 - 3712 / 3600)),
+                         datetime(2026, 10, 28, tzinfo=timezone.utc))
         for invalid in (np.nan, [0, 24], np.ma.masked):
             with self.subTest(value=invalid), self.assertRaises(ValueError):
                 cron.forecast_reference_time(self.dataset(invalid))
+        with self.assertRaisesRegex(ValueError, 'not near midnight'):
+            cron.forecast_reference_time(self.dataset(27))
         with self.assertRaisesRegex(ValueError, 'no forecast_reference_time'):
             cron.forecast_reference_time(SimpleNamespace(variables={}))
 
@@ -125,6 +129,28 @@ class NativeTiles(unittest.TestCase):
             self.assertEqual(values[0, 0, 1, 1], 0)
             self.assertEqual(values[4, 0, 1, 1], np.float16(283.15))
             self.assertTrue(np.isnan(values[:, :, 2, 2]).all())
+
+    def test_describe_reads_the_source_timeline(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            with netCDF4.Dataset(Path(temporary) / 'source.nc', 'w') as dataset:
+                for name, count in [('time', 2), ('depth', 1), ('Y', 2), ('X', 2)]:
+                    dataset.createDimension(name, count)
+                for name in ('X', 'Y'):
+                    dataset.createVariable(name, 'f8', (name,))[:] = [0, 800]
+                dataset.createVariable('depth', 'f8', ('depth',))[:] = [0]
+                clock = dataset.createVariable('time', 'f8', ('time',))
+                clock.units = 'hours since 2026-10-27 00:00:00'
+                clock[:] = [0, 1]
+                dataset.createVariable('projection_stere', 'i4')
+                for field, name in cron.FIELDS.items():
+                    dims = ('time', 'depth', 'Y', 'X') if field in ('u', 'v', 'temperature_k') else ('time', 'Y', 'X')
+                    variable = dataset.createVariable(name, 'f4', dims)
+                    if field == 'temperature_k':
+                        variable.units = 'Celsius'
+                metadata, seconds, surface = cron.describe(dataset)
+            self.assertEqual(metadata['source_last_time'], int(datetime(2026, 10, 27, 1, tzinfo=timezone.utc).timestamp()))
+            self.assertEqual(seconds.tolist(), [metadata['source_first_time'], metadata['source_last_time']])
+            self.assertEqual(surface, 0)
 
     def test_days_overlap_and_keep_partial_forecast(self):
         today = date(2026, 10, 23)

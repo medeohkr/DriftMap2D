@@ -42,19 +42,22 @@ python validation/norkyst/test_cron.py
 Paths resolve relative to the script. Local output goes to `data/norkyst/`.
 Publishing uses the existing `ACCOUNT_ID`, `ACCESS_KEY`, and `SECRET_KEY` secrets
 and the `driftmap-tiles` bucket under `norkyst/YYYY/MM/DD/`. The separate workflow
-runs hourly at minute 17 UTC. Publishing is not enabled until the workflow is committed
-and deployed to GitHub. A full first run backfills seven days and can transfer
+runs through the Cloudflare scheduler every 30 minutes, with GitHub schedules as
+backup. Publishing is not enabled until the workflow is committed and deployed
+to GitHub. A full first run backfills seven days and can transfer
 many gigabytes. Subsequent runs reuse completed older hindcast days and refresh
 yesterday onward. `--refresh-hindcast` forces their regeneration.
 
-scheduled runs use `--check-for-update`. they probe the scalar reference time
-and published manifest before reading the grid or downloading current fields.
-stale and already published cycles exit successfully without tile generation.
-the next hourly run checks again. workflow concurrency prevents overlapping
+scheduled runs use `--check-for-update`. they compare the midnight cycle and
+latest source valid time with the published manifest before reading the grid
+or downloading current fields. the source reference is rounded to midnight
+because upstream compression reduces its precision. new hours from the same
+cycle trigger publication. already published coverage exits successfully, and
+the next scheduler run checks again. workflow concurrency prevents overlapping
 generators. ordinary manual runs omit that flag to force regeneration.
 
 before generating or publishing tiles, the cron requires the source
-`forecast_reference_time` to belong to the current UTC date. stale sources are
+`forecast_reference_time` to identify the current UTC cycle. stale sources are
 closed and reopened every 15 minutes for up to two hours in manual mode. expiry fails without
 publishing or deleting tiles. `--forecast-wait-minutes 0` fails immediately.
 `--inspect` reports the source without waiting or enforcing freshness.

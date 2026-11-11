@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch
 from botocore.exceptions import ClientError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from scripts.forecast_updates import cmems_update, published_manifest, newer_source_update, newer_norkyst_cycle
+from scripts.forecast_updates import cmems_update, published_manifest, newer_source_update, norkyst_update_available
 from scripts import check_forecast_update as check
 
 
@@ -43,12 +43,34 @@ class SourceUpdates(unittest.TestCase):
         self.assertFalse(newer_source_update(source, source))
         self.assertFalse(newer_source_update(old, source))
         reference = datetime(2026, 10, 28, tzinfo=timezone.utc)
+        last = int(datetime(2026, 11, 1, tzinfo=timezone.utc).timestamp())
         manifest = {'grid': {'source': 'norkyst',
-                            'source_forecast_reference_time': '2026-10-27T00:00:00+00:00'}}
-        self.assertTrue(newer_norkyst_cycle('norkyst', reference, manifest))
+                            'source_forecast_reference_time': '2026-10-27T00:00:00+00:00',
+                            'source_last_time': last - 86400}}
+        self.assertTrue(norkyst_update_available('norkyst', reference, last, manifest))
         manifest['grid']['source_forecast_reference_time'] = reference.isoformat()
-        self.assertFalse(newer_norkyst_cycle('norkyst', reference, manifest))
-        self.assertFalse(newer_norkyst_cycle('norkyst', reference.replace(day=27), manifest))
+        self.assertTrue(norkyst_update_available('norkyst', reference, last, manifest))
+        manifest['grid']['source_last_time'] = last
+        self.assertFalse(norkyst_update_available('norkyst', reference, last, manifest))
+        self.assertFalse(norkyst_update_available('norkyst', reference.replace(day=27), last + 86400, manifest))
+
+    def test_quantized_norkyst_reference_and_extended_same_cycle(self):
+        nominal = datetime(2026, 11, 10, tzinfo=timezone.utc)
+        rounded = nominal.timestamp() - 3712
+        from scripts.forecast_updates import norkyst_cycle
+        self.assertEqual(norkyst_cycle(datetime.fromtimestamp(rounded, timezone.utc)), nominal)
+        old = int(datetime(2026, 11, 14, tzinfo=timezone.utc).timestamp())
+        manifest = {'grid': {'source': 'norkyst',
+                            'source_forecast_reference_time': nominal.isoformat(),
+                            'source_last_time': old}}
+        reference = datetime.fromtimestamp(rounded, timezone.utc)
+        self.assertTrue(norkyst_update_available('norkyst', reference, old + 86400, manifest))
+        self.assertFalse(norkyst_update_available('norkyst', reference, old, manifest))
+        del manifest['grid']['source_last_time']
+        manifest['days'] = [{'timestamps': [old - 86400, old]}]
+        self.assertTrue(norkyst_update_available('norkyst', reference, old + 86400, manifest))
+        manifest['grid']['source_forecast_reference_time'] = datetime(2026, 11, 11, tzinfo=timezone.utc).isoformat()
+        self.assertFalse(norkyst_update_available('norkyst', reference, old + 86400, manifest))
 
     def test_missing_future_or_ambiguous_metadata_fails(self):
         for updated in (None, '2026-10-29T00:00:00Z', '2026-10-28T00:00:00'):
@@ -85,6 +107,31 @@ class SourceUpdates(unittest.TestCase):
                         patch.object(check, 'published_manifest', return_value=previous):
                     check.main()
                 self.assertEqual(output.read_text(), f'ready={expected}\n')
+
+    def test_norkyst_workflow_detects_later_hours_from_same_cycle(self):
+        reference = datetime(2026, 11, 10, tzinfo=timezone.utc)
+        last = int(datetime(2026, 11, 15, tzinfo=timezone.utc).timestamp())
+        fake_cron = SimpleNamespace(SOURCE='norkyst',
+                                    forecast_reference_time=lambda dataset: reference,
+                                    source_timeline=lambda dataset: SimpleNamespace(max=lambda: last))
+        dataset = Mock()
+        dataset.__enter__ = Mock(return_value=dataset)
+        dataset.__exit__ = Mock(return_value=False)
+        fake_netcdf = SimpleNamespace(Dataset=lambda source: dataset)
+        manifest = {'grid': {'source': 'norkyst',
+                            'source_forecast_reference_time': reference.isoformat(),
+                            'source_last_time': last - 86400}}
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / 'output'
+            environment = {'ACCOUNT_ID': 'test', 'ACCESS_KEY': 'test',
+                           'SECRET_KEY': 'test', 'GITHUB_OUTPUT': str(output)}
+            with patch.dict('os.environ', environment), \
+                    patch.object(sys, 'argv', ['check', 'norkyst']), \
+                    patch.dict(sys.modules, {'netCDF4': fake_netcdf, 'norkyst_cron': fake_cron}), \
+                    patch.object(check.boto3, 'client', return_value=Mock()), \
+                    patch.object(check, 'published_manifest', return_value=manifest):
+                check.main()
+            self.assertEqual(output.read_text(), 'ready=true\n')
 
 
 if __name__ == '__main__':
