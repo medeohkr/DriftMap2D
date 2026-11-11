@@ -67,9 +67,9 @@ import { importScenario } from "$lib/io/importScenario";
 
         oilOverrides.query = "Generic Light Crude";
         oilOverrides.id = "GN00006";
-        oilOverrides.windFactor = 3.5;
-        oilOverrides.windDeflection = 20.0;
-        oilOverrides.deflectionScheme = "samuels";
+        oilOverrides.windFactor = 3.0;
+        oilOverrides.windDeflection = 0.0;
+        oilOverrides.deflectionScheme = "constant";
         oilOverrides.emulOnset = "oil";
         oilOverrides.bullwinkleFrac = 0;
         oilOverrides.bulltime = 0;
